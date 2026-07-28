@@ -202,6 +202,20 @@ One repo, one local domain (`localhost:3000`); Next.js rewrites `/api/*` to the 
 
 ---
 
+## Branching model
+
+Three long-lived branches, promoted in one direction:
+
+```
+feature/phase-N-*  ──PR──▶  develop  ──PR──▶  staging  ──PR──▶  main
+   (daily work)            (integration)       (QA/test)      (stable/production)
+```
+
+- **develop** — integration branch; every phase is a short-lived `feature/*` branch
+  merged here via pull request (CI must be green).
+- **staging** — pre-release testing; only receives merges from `develop`.
+- **main** — always deployable; only receives merges from `staging`.
+
 ## Roadmap
 
 Each phase is a self-contained, reviewable increment — good commits, good PR history.
