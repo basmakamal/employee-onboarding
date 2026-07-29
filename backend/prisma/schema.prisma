@@ -1,0 +1,191 @@
+// Prisma schema — Employee Onboarding & Insurance Workflow
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Staff roles. Employees being onboarded are NOT users — they act through
+/// signed, expiring link tokens (see LinkToken).
+enum Role {
+  CREATOR
+  REVIEWER
+  INSURANCE
+  ADMIN
+}
+
+/// The onboarding state machine. Transitions are enforced in code
+/// (src/workflow) — the DB stores the current state only.
+enum OnboardingStatus {
+  CREATED
+  DOCUMENT_UPLOADED
+  MISSING_DOCUMENT
+  INSURANCE_PENDING
+  INSURANCE_COMPLETED
+  EQUIPMENT_PENDING
+  COMPLETED
+}
+
+enum DocumentStatus {
+  UPLOADED
+  APPROVED
+  REJECTED
+}
+
+enum ReviewOutcome {
+  APPROVED
+  MISSING_DOCUMENT
+}
+
+enum EquipmentStatus {
+  PENDING
+  RECEIVED
+}
+
+enum LinkPurpose {
+  DOCUMENT_UPLOAD
+  STATUS_VIEW
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+/// Staff account (creator / reviewer / insurance / admin).
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         Role
+  passwordHash String? // set in Phase 5 (auth)
+  createdAt    DateTime @default(now())
+
+  employeesCreated  Employee[]      @relation("EmployeeCreatedBy")
+  reviews           Review[]
+  equipmentReceived EquipmentItem[]
+  auditEntries      AuditLog[]
+
+  @@map("users")
+}
+
+/// The onboarding record — one row per new hire.
+model Employee {
+  id        String           @id @default(cuid())
+  firstName String
+  lastName  String
+  email     String           @unique
+  phone     String?
+  status    OnboardingStatus @default(CREATED)
+
+  createdBy   User   @relation("EmployeeCreatedBy", fields: [createdById], references: [id])
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents  Document[]
+  reviews    Review[]
+  equipment  EquipmentItem[]
+  linkTokens LinkToken[]
+  auditLogs  AuditLog[]
+
+  @@index([status])
+  @@map("employees")
+}
+
+/// An uploaded file. The file itself lives outside the webroot (Phase 6);
+/// storageKey points to it.
+model Document {
+  id         String         @id @default(cuid())
+  employee   Employee       @relation(fields: [employeeId], references: [id])
+  employeeId String
+  type       String // e.g. PASSPORT, NATIONAL_ID, CONTRACT — validated by Zod at the edge
+  storageKey String
+  mimeType   String
+  sizeBytes  Int
+  status     DocumentStatus @default(UPLOADED)
+  uploadedAt DateTime       @default(now())
+
+  @@index([employeeId])
+  @@map("documents")
+}
+
+/// One reviewer decision. A record can accumulate several reviews
+/// (flag missing -> re-upload -> approve).
+model Review {
+  id         String        @id @default(cuid())
+  employee   Employee      @relation(fields: [employeeId], references: [id])
+  employeeId String
+  reviewer   User          @relation(fields: [reviewerId], references: [id])
+  reviewerId String
+  outcome    ReviewOutcome
+  notes      String?
+  createdAt  DateTime      @default(now())
+
+  @@index([employeeId])
+  @@map("reviews")
+}
+
+/// Equipment checklist item (laptop, headphone, ...). Created with the
+/// employee; every confirmation is individually audited. All `required`
+/// items must be RECEIVED before the record can reach COMPLETED.
+model EquipmentItem {
+  id         String          @id @default(cuid())
+  employee   Employee        @relation(fields: [employeeId], references: [id])
+  employeeId String
+  type       String // e.g. LAPTOP, HEADPHONE — configurable list, not an enum
+  required   Boolean         @default(true)
+  status     EquipmentStatus @default(PENDING)
+
+  receivedBy   User?     @relation(fields: [receivedById], references: [id])
+  receivedById String?
+  receivedAt   DateTime?
+
+  @@unique([employeeId, type])
+  @@map("equipment_items")
+}
+
+/// Signed single-purpose link for the employee (no account needed).
+/// Only a hash of the token is stored — the raw token exists only in the
+/// email we send.
+model LinkToken {
+  id         String      @id @default(cuid())
+  employee   Employee    @relation(fields: [employeeId], references: [id])
+  employeeId String
+  purpose    LinkPurpose
+  tokenHash  String      @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime    @default(now())
+
+  @@index([employeeId])
+  @@map("link_tokens")
+}
+
+/// Append-only audit trail: every status transition and every equipment
+/// confirmation. Never updated, never deleted.
+model AuditLog {
+  id         String   @id @default(cuid())
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId String
+  action     String // e.g. STATUS_TRANSITION, EQUIPMENT_RECEIVED, LINK_SENT
+  fromStatus String?
+  toStatus   String?
+  actorType  String // USER | EMPLOYEE_LINK | SYSTEM
+  actor      User?    @relation(fields: [actorId], references: [id])
+  actorId    String?
+  metadata   Json?
+  at         DateTime @default(now())
+
+  @@index([employeeId, at])
+  @@map("audit_logs")
+}
