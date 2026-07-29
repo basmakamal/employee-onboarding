@@ -11,6 +11,11 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      JWT_ACCESS_SECRET: ci-only-access-secret
+      JWT_REFRESH_SECRET: ci-only-refresh-secret
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
