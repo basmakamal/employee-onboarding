@@ -139,8 +139,8 @@ on-hold reason) · `Asset` (registry, unique serials) · `AssetForm` + `AssetFor
 
 - [x] **Phase A — Re-foundation.** MySQL (XAMPP-friendly), Vue 3 + Vuetify scaffold
   with i18n/RTL/themes/animations, CI, README v2. *(this commit)*
-- [ ] **Phase B — Data layer v2.** Full BRD schema + migrations + seed + repositories.
-- [ ] **Phase C — Workflow engine.** The four state machines + guards + reopen +
+- [x] **Phase B — Data layer v2.** Full BRD schema + migrations + seed + repositories.
+- [x] **Phase C — Workflow engine.** The four state machines + guards + reopen +
   audit, unit-tested in isolation.
 - [ ] **Phase D — SLA scheduler + notifications.** Config-driven timers, bilingual
   email + in-app bell, every send audited.
