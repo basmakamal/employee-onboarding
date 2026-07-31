@@ -1,27 +1,37 @@
 import type { Db } from '../../common/prisma.js';
-import type { OnboardingStatus } from '../../generated/prisma/enums.js';
+import type { EmployeeStatus } from '../../generated/prisma/enums.js';
 
 export interface CreateEmployeeData {
+  employeeNo: string;
   firstName: string;
   lastName: string;
   email: string;
   phone?: string;
-  createdById: string;
-  /** Equipment checklist created together with the employee, e.g. ['LAPTOP', 'HEADPHONE']. */
-  equipmentTypes: string[];
+  nationalId?: string;
+  birthDate?: Date;
+  department?: string;
+  project?: string;
+  jobTitle?: string;
+  hireDate: Date;
+  traineeId?: string;
 }
 
 export class EmployeeRepository {
   constructor(private readonly db: Db) {}
 
+  /**
+   * Creates the employee together with its three Stage-2 process rows —
+   * the BRD's "employee file" starts with all tracks open.
+   */
   create(data: CreateEmployeeData) {
-    const { equipmentTypes, ...employee } = data;
     return this.db.employee.create({
       data: {
-        ...employee,
-        equipment: { create: equipmentTypes.map((type) => ({ type })) },
+        ...data,
+        gosi: { create: {} },
+        medical: { create: {} },
+        criminalRecord: { create: {} },
       },
-      include: { equipment: true },
+      include: { gosi: true, medical: true, criminalRecord: true },
     });
   }
 
@@ -29,14 +39,16 @@ export class EmployeeRepository {
     return this.db.employee.findUnique({ where: { id } });
   }
 
-  /** Full record for GET /api/employees/:id — documents, checklist, history. */
+  /** The employee-file page: processes, assets, offboarding, timeline. */
   findWithDetails(id: string) {
     return this.db.employee.findUnique({
       where: { id },
       include: {
-        documents: { orderBy: { uploadedAt: 'desc' } },
-        reviews: { orderBy: { createdAt: 'desc' } },
-        equipment: true,
+        gosi: true,
+        medical: true,
+        criminalRecord: true,
+        assetForms: { include: { items: true }, orderBy: { createdAt: 'desc' } },
+        offboardings: { orderBy: { createdAt: 'desc' } },
         auditLogs: { orderBy: { at: 'asc' } },
       },
     });
@@ -46,12 +58,13 @@ export class EmployeeRepository {
     return this.db.employee.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
-  /**
-   * Concurrency-safe status move: only succeeds if the row is still in
-   * `from`. Returns true when exactly one row changed — the state machine
-   * uses this to reject stale/duplicate transitions.
-   */
-  async moveStatus(id: string, from: OnboardingStatus, to: OnboardingStatus): Promise<boolean> {
+  /** Used to allocate the next EMP-XXXX employee number. */
+  count(): Promise<number> {
+    return this.db.employee.count();
+  }
+
+  /** Guarded status flip (Active ↔ Inactive at file closure). */
+  async moveStatus(id: string, from: EmployeeStatus, to: EmployeeStatus): Promise<boolean> {
     const result = await this.db.employee.updateMany({
       where: { id, status: from },
       data: { status: to },
