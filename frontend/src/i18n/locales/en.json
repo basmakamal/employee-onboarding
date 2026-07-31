@@ -1,0 +1,34 @@
+{
+  "app": {
+    "title": "HR System",
+    "tagline": "Trainee onboarding, employee file, and offboarding — one auditable workflow."
+  },
+  "nav": {
+    "home": "Home"
+  },
+  "home": {
+    "welcome": "Welcome",
+    "apiStatus": "API status",
+    "checking": "Checking…",
+    "up": "Connected",
+    "down": "Unavailable",
+    "stages": {
+      "trainee": {
+        "title": "Trainee Management",
+        "desc": "Data collection, contract creation and electronic approval — with automatic reminders and deadlines."
+      },
+      "profile": {
+        "title": "Employee File",
+        "desc": "GOSI, medical insurance, criminal record certificate, and asset custody — four independent tracks."
+      },
+      "offboarding": {
+        "title": "Offboarding",
+        "desc": "Exit interview, asset return, termination notice, and final settlement — down to file closure."
+      }
+    }
+  },
+  "actions": {
+    "toggleTheme": "Toggle dark mode",
+    "language": "العربية"
+  }
+}

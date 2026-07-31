@@ -1,4 +1,4 @@
-import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient, Prisma } from '../generated/prisma/client.js';
 import { config } from './config.js';
 
@@ -8,7 +8,7 @@ import { config } from './config.js';
  * PrismaClient ad hoc, or you leak connection pools.
  */
 export const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: config.DATABASE_URL }),
+  adapter: new PrismaMariaDb(config.DATABASE_URL),
 });
 
 /**

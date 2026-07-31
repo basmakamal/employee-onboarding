@@ -17,6 +17,12 @@ next-env.d.ts
 # uploads (local storage, outside webroot in prod)
 backend/storage/
 
+# AI tooling (never committed)
+.claude/
+.windsurf/
+.agents/
+skills-lock.json
+
 # logs & OS noise
 *.log
 .DS_Store
