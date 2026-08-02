@@ -5,7 +5,87 @@
   },
   "nav": {
     "home": "Dashboard",
-    "trainees": "Trainees"
+    "trainees": "Trainees",
+    "employees": "Employees"
+  },
+  "employees": {
+    "title": "Employees",
+    "subtitle": "Stage 2 — the employee file: GOSI, insurance, criminal record, assets",
+    "no": "Employee no.",
+    "empty": "No employees yet — they are created automatically when a trainee's contract is approved.",
+    "hired": "Hired",
+    "holdReason": "Hold reason",
+    "holdNote": "Note (optional)",
+    "statuses": { "ACTIVE": "Active", "INACTIVE": "Inactive" }
+  },
+  "processes": {
+    "gosi": "GOSI",
+    "medical": "Medical Insurance",
+    "criminal": "Criminal Record"
+  },
+  "processStatus": {
+    "PENDING": "Pending",
+    "DONE": "Done",
+    "ON_HOLD": "On hold",
+    "CANCELLED": "Cancelled",
+    "TRAINING": "In training",
+    "REQUEST_SENT": "Request sent"
+  },
+  "processActions": {
+    "COMPLETE": "Mark done",
+    "HOLD": "Put on hold",
+    "RESUME": "Resume",
+    "CANCEL": "Cancel",
+    "SEND_REQUEST": "Send request",
+    "MARK_PENDING": "Awaiting certificate"
+  },
+  "holdReasons": {
+    "OPTIONAL_SUBSCRIPTION": "Optional subscription",
+    "GOVERNMENT_EMPLOYEE": "Government employee",
+    "DOB_MISMATCH": "Birth date mismatch",
+    "ID_MISMATCH": "ID number mismatch",
+    "INCOMPLETE_DATA": "Incomplete data",
+    "ELM_DATA_ISSUE": "Elm data issue",
+    "OTHER_INSURANCE_EXISTS": "Other insurance exists",
+    "EMPLOYEE_DECLINED": "Employee declined",
+    "AWAITING_INSURER": "Awaiting insurance company",
+    "OTHER": "Other"
+  },
+  "assets": {
+    "title": "Asset custody",
+    "newForm": "New custody form",
+    "empty": "No custody forms yet.",
+    "items": "item(s)",
+    "type": "Type",
+    "name": "Name",
+    "serial": "Serial no.",
+    "qty": "Qty",
+    "condition": "Condition",
+    "notes": "Notes",
+    "deliveryDate": "Delivery date",
+    "addItem": "Add item",
+    "rejectReason": "Rejection reason",
+    "linkSent": "Approval link sent",
+    "linkHint": "The employee received this link by email (in development it is also shown here).",
+    "actions": { "send": "Send for approval", "cancel": "Cancel", "revise": "Revise" }
+  },
+  "assetStatus": {
+    "DRAFT": "Draft",
+    "SENT": "Sent",
+    "PENDING_EMPLOYEE_APPROVAL": "Awaiting employee",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "CANCELLED": "Cancelled"
+  },
+  "conditions": { "NEW": "New", "USED": "Used" },
+  "entities": {
+    "TRAINEE": "Trainee",
+    "EMPLOYEE": "Employee",
+    "GOSI": "GOSI",
+    "MEDICAL_INSURANCE": "Medical insurance",
+    "CRIMINAL_RECORD": "Criminal record",
+    "ASSET_FORM": "Asset custody",
+    "OFFBOARDING": "Offboarding"
   },
   "common": {
     "cancel": "Cancel",

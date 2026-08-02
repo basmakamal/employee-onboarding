@@ -5,7 +5,87 @@
   },
   "nav": {
     "home": "الرئيسية",
-    "trainees": "المتدربون"
+    "trainees": "المتدربون",
+    "employees": "الموظفون"
+  },
+  "employees": {
+    "title": "الموظفون",
+    "subtitle": "المرحلة الثانية — ملف الموظف: التأمينات، التأمين الطبي، خلو السوابق، العهد",
+    "no": "الرقم الوظيفي",
+    "empty": "لا يوجد موظفون بعد — يُنشأ ملف الموظف تلقائيًا عند اعتماد عقد المتدرب.",
+    "hired": "تاريخ التعيين",
+    "holdReason": "سبب التعليق",
+    "holdNote": "ملاحظة (اختياري)",
+    "statuses": { "ACTIVE": "نشط", "INACTIVE": "غير نشط" }
+  },
+  "processes": {
+    "gosi": "التأمينات الاجتماعية",
+    "medical": "التأمين الطبي",
+    "criminal": "خلو السوابق"
+  },
+  "processStatus": {
+    "PENDING": "قيد الانتظار",
+    "DONE": "مكتمل",
+    "ON_HOLD": "معلّق",
+    "CANCELLED": "ملغي",
+    "TRAINING": "في فترة التدريب",
+    "REQUEST_SENT": "تم إرسال الطلب"
+  },
+  "processActions": {
+    "COMPLETE": "إكمال",
+    "HOLD": "تعليق",
+    "RESUME": "استئناف",
+    "CANCEL": "إلغاء",
+    "SEND_REQUEST": "إرسال الطلب",
+    "MARK_PENDING": "بانتظار الشهادة"
+  },
+  "holdReasons": {
+    "OPTIONAL_SUBSCRIPTION": "اشتراك اختياري",
+    "GOVERNMENT_EMPLOYEE": "موظف حكومي",
+    "DOB_MISMATCH": "اختلاف تاريخ الميلاد",
+    "ID_MISMATCH": "اختلاف رقم الهوية",
+    "INCOMPLETE_DATA": "بيانات غير مكتملة",
+    "ELM_DATA_ISSUE": "مشكلة في بيانات عِلم",
+    "OTHER_INSURANCE_EXISTS": "يوجد تأمين طبي آخر",
+    "EMPLOYEE_DECLINED": "الموظف لا يرغب بالانضمام",
+    "AWAITING_INSURER": "بانتظار شركة التأمين",
+    "OTHER": "أخرى"
+  },
+  "assets": {
+    "title": "إدارة العهد",
+    "newForm": "نموذج عهدة جديد",
+    "empty": "لا توجد نماذج عهدة بعد.",
+    "items": "عنصر",
+    "type": "نوع العهدة",
+    "name": "اسم العهدة",
+    "serial": "الرقم التسلسلي",
+    "qty": "الكمية",
+    "condition": "الحالة",
+    "notes": "ملاحظات",
+    "deliveryDate": "تاريخ التسليم",
+    "addItem": "إضافة عهدة",
+    "rejectReason": "سبب الرفض",
+    "linkSent": "تم إرسال رابط الاعتماد",
+    "linkHint": "استلم الموظف هذا الرابط عبر البريد الإلكتروني (في بيئة التطوير يظهر هنا أيضًا).",
+    "actions": { "send": "إرسال للاعتماد", "cancel": "إلغاء", "revise": "تعديل" }
+  },
+  "assetStatus": {
+    "DRAFT": "مسودة",
+    "SENT": "أُرسل",
+    "PENDING_EMPLOYEE_APPROVAL": "بانتظار اعتماد الموظف",
+    "APPROVED": "معتمد",
+    "REJECTED": "مرفوض",
+    "CANCELLED": "ملغي"
+  },
+  "conditions": { "NEW": "جديدة", "USED": "مستخدمة" },
+  "entities": {
+    "TRAINEE": "المتدرب",
+    "EMPLOYEE": "الموظف",
+    "GOSI": "التأمينات الاجتماعية",
+    "MEDICAL_INSURANCE": "التأمين الطبي",
+    "CRIMINAL_RECORD": "خلو السوابق",
+    "ASSET_FORM": "العهدة",
+    "OFFBOARDING": "إنهاء الخدمة"
   },
   "common": {
     "cancel": "إلغاء",

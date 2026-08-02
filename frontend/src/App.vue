@@ -17,6 +17,7 @@ const isPublicPage = () =>
 const NAV = [
   { to: '/', icon: 'mdi-view-dashboard', key: 'nav.home' },
   { to: '/trainees', icon: 'mdi-school', key: 'nav.trainees' },
+  { to: '/employees', icon: 'mdi-badge-account', key: 'nav.employees' },
 ];
 
 const initials = computed(() =>
