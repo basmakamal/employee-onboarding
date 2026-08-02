@@ -87,6 +87,18 @@ const T: Record<string, Record<Locale, Template>> = {
     }),
   },
 
+  /** HR notice — trainee approved the contract; employee profile created. */
+  'hr.contract_approved': {
+    ar: (p) => ({
+      subject: `تم اعتماد العقد: ${p.name ?? ''}`,
+      text: `اعتمد المتدرب ${p.name ?? ''} عقد العمل إلكترونيًا، وتم إنشاء ملف الموظف تلقائيًا ونقل جميع البيانات إليه.`,
+    }),
+    en: (p) => ({
+      subject: `Contract approved: ${p.name ?? ''}`,
+      text: `Trainee ${p.name ?? ''} approved the employment contract electronically. The employee profile was created automatically with all data transferred.`,
+    }),
+  },
+
   /** HR notice — a request expired (BRD: notify HR on Expired). */
   'hr.trainee_expired': {
     ar: (p) => ({

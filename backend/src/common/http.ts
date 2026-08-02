@@ -3,6 +3,18 @@ import { ZodError, type ZodType } from 'zod';
 import { DomainError } from '../workflow/errors.js';
 import { logger } from './logger.js';
 
+/**
+ * Strip keys whose value is `undefined` — bridges Zod optionals
+ * (`string | undefined`) to exactOptionalPropertyTypes-strict inputs.
+ */
+export function compact<T extends object>(
+  obj: T,
+): { [K in keyof T]: Exclude<T[K], undefined> } {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined),
+  ) as { [K in keyof T]: Exclude<T[K], undefined> };
+}
+
 /** Express 4 does not catch async errors — this wrapper forwards them. */
 export function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>,

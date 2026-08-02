@@ -1,15 +1,25 @@
+import { Router } from 'express';
 import { config } from './common/config.js';
 import { logger } from './common/logger.js';
 import { createApp } from './app.js';
 import { buildContainer } from './container.js';
 import { startSlaScheduler } from './workflow/sla-scheduler.js';
+import { actorFromHeader } from './auth/actor.middleware.js';
+import { traineeRouter } from './modules/trainees/trainee.routes.js';
+import { linkRouter } from './modules/trainees/link.routes.js';
 
 const container = buildContainer();
+
+const staffApi = Router();
+staffApi.use(actorFromHeader(container.repos.users));
+staffApi.use(traineeRouter(container.traineeService));
 
 const app = createApp({
   checkReady: async () => {
     await container.prisma.$queryRaw`SELECT 1`;
   },
+  traineeRouter: staffApi,
+  linkRouter: linkRouter(container.traineeService),
 });
 
 const server = app.listen(config.PORT, () => {

@@ -72,4 +72,16 @@ export class TraineeRepository {
   markReminded(id: string, at: Date) {
     return this.db.trainee.update({ where: { id }, data: { lastReminderAt: at } });
   }
+
+  /** Fields the trainee may update through the signed data form. */
+  updatePersonal(id: string, fields: { phone?: string; nationalId?: string; birthDate?: Date }) {
+    return this.db.trainee.update({
+      where: { id },
+      data: {
+        ...(fields.phone !== undefined ? { phone: fields.phone } : {}),
+        ...(fields.nationalId !== undefined ? { nationalId: fields.nationalId } : {}),
+        ...(fields.birthDate !== undefined ? { birthDate: fields.birthDate } : {}),
+      },
+    });
+  }
 }
