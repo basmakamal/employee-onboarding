@@ -12,7 +12,9 @@ const drawer = ref(true);
 
 /** Public pages (signed links, login) render without the staff chrome. */
 const isPublicPage = () =>
-  ['/form/', '/approve-contract/', '/login'].some((p) => route.path.startsWith(p));
+  ['/form/', '/approve-contract/', '/approve-assets/', '/login'].some((p) =>
+    route.path.startsWith(p),
+  );
 
 const NAV = [
   { to: '/', icon: 'mdi-view-dashboard', key: 'nav.home' },

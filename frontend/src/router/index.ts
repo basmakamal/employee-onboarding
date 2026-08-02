@@ -32,6 +32,12 @@ export const router = createRouter({
       component: () => import('../pages/public/ContractApprovalPage.vue'),
       meta: { public: true },
     },
+    {
+      path: '/approve-assets/:token',
+      name: 'public-asset-approval',
+      component: () => import('../pages/public/AssetApprovalPage.vue'),
+      meta: { public: true },
+    },
   ],
 });
 
