@@ -1,28 +1,57 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import { usePreferencesStore } from './stores/preferences';
 
 const prefs = usePreferencesStore();
+const route = useRoute();
+const drawer = ref(true);
+
+/** Public signed-link pages render without the staff chrome. */
+const isPublicPage = () => ['/form/', '/approve-contract/'].some((p) => route.path.startsWith(p));
+
+const NAV = [
+  { to: '/', icon: 'mdi-view-dashboard', key: 'nav.home' },
+  { to: '/trainees', icon: 'mdi-school', key: 'nav.trainees' },
+];
+
 onMounted(() => prefs.apply());
 </script>
 
 <template>
   <v-app>
-    <v-app-bar flat border density="comfortable">
-      <v-app-bar-title class="font-weight-bold">
-        <v-icon icon="mdi-account-group" color="primary" class="me-2" />
-        {{ $t('app.title') }}
-      </v-app-bar-title>
+    <template v-if="!isPublicPage()">
+      <v-app-bar flat border density="comfortable">
+        <v-app-bar-nav-icon class="d-md-none" @click="drawer = !drawer" />
+        <v-app-bar-title class="font-weight-bold">
+          <v-icon icon="mdi-account-group" color="primary" class="me-2" />
+          {{ $t('app.title') }}
+        </v-app-bar-title>
 
-      <v-btn variant="text" prepend-icon="mdi-translate" @click="prefs.toggleLocale()">
-        {{ $t('actions.language') }}
-      </v-btn>
-      <v-btn
-        :icon="prefs.dark ? 'mdi-weather-sunny' : 'mdi-weather-night'"
-        :aria-label="$t('actions.toggleTheme')"
-        @click="prefs.toggleTheme()"
-      />
-    </v-app-bar>
+        <v-btn variant="text" prepend-icon="mdi-translate" @click="prefs.toggleLocale()">
+          {{ $t('actions.language') }}
+        </v-btn>
+        <v-btn
+          :icon="prefs.dark ? 'mdi-weather-sunny' : 'mdi-weather-night'"
+          :aria-label="$t('actions.toggleTheme')"
+          @click="prefs.toggleTheme()"
+        />
+      </v-app-bar>
+
+      <v-navigation-drawer v-model="drawer" :permanent="$vuetify.display.mdAndUp">
+        <v-list nav density="comfortable">
+          <v-list-item
+            v-for="item in NAV"
+            :key="item.to"
+            :to="item.to"
+            :prepend-icon="item.icon"
+            :title="$t(item.key)"
+            exact
+            rounded="xl"
+          />
+        </v-list>
+      </v-navigation-drawer>
+    </template>
 
     <v-main>
       <router-view v-slot="{ Component }">

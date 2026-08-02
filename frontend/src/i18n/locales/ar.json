@@ -4,7 +4,18 @@
     "tagline": "إدارة المتدربين وملف الموظف وإنهاء الخدمة — في مسار عمل واحد قابل للتدقيق."
   },
   "nav": {
-    "home": "الرئيسية"
+    "home": "الرئيسية",
+    "trainees": "المتدربون"
+  },
+  "common": {
+    "cancel": "إلغاء",
+    "create": "إنشاء",
+    "save": "حفظ",
+    "send": "إرسال",
+    "saved": "تم الحفظ",
+    "done": "تم",
+    "error": "حدث خطأ ما",
+    "submit": "إرسال"
   },
   "home": {
     "welcome": "مرحبًا",
@@ -27,8 +38,84 @@
       }
     }
   },
+  "trainees": {
+    "title": "المتدربون",
+    "subtitle": "المرحلة الأولى — من إنشاء السجل حتى اعتماد العقد",
+    "new": "متدرب جديد",
+    "empty": "لا يوجد متدربون بعد — أنشئ أول سجل.",
+    "name": "الاسم",
+    "firstName": "الاسم الأول",
+    "lastName": "اسم العائلة",
+    "email": "البريد الإلكتروني",
+    "phone": "الجوال",
+    "nationalId": "رقم الهوية",
+    "birthDate": "تاريخ الميلاد",
+    "department": "القسم",
+    "jobTitle": "المسمى الوظيفي",
+    "status": "الحالة",
+    "docsHint": "يتم إنشاء قائمة المستندات الافتراضية تلقائيًا (الهوية، المؤهل، الصورة، شهادة الآيبان).",
+    "info": "البيانات الشخصية",
+    "documents": "قائمة المستندات",
+    "uploaded": "تم الرفع",
+    "missing": "لم يُرفع",
+    "optional": "اختياري",
+    "contract": "العقد",
+    "timeline": "السجل الزمني",
+    "missingNotes": "ما هي النواقص؟ (تُرسل للمتدرب)",
+    "becameEmployee": "تم اعتماد العقد — وأُنشئ ملف الموظف {no} تلقائيًا."
+  },
+  "contract": {
+    "salary": "الراتب",
+    "durationMonths": "المدة (بالأشهر)",
+    "startDate": "تاريخ المباشرة",
+    "terms": "الشروط",
+    "none": "لا يوجد عقد بعد.",
+    "edit": "تعديل العقد",
+    "createBtn": "إنشاء العقد",
+    "sentAt": "أُرسل",
+    "approvedAt": "اعتُمد"
+  },
+  "status": {
+    "CREATED": "جديد",
+    "AWAITING_FORM": "بانتظار استكمال النموذج",
+    "FORM_RECEIVED": "تم استلام النموذج",
+    "CONTRACT_CREATION": "إنشاء العقد",
+    "AWAITING_CONTRACT_APPROVAL": "بانتظار موافقة العقد",
+    "EMPLOYEE_CREATED": "تم إنشاء ملف الموظف",
+    "EXPIRED": "انتهت المهلة"
+  },
   "actions": {
     "toggleTheme": "الوضع الداكن",
-    "language": "English"
+    "language": "English",
+    "SEND_FORM": "إرسال نموذج البيانات",
+    "REQUEST_MISSING": "طلب النواقص",
+    "ACCEPT_DOCUMENTS": "قبول المستندات",
+    "SEND_CONTRACT": "إرسال العقد",
+    "REOPEN": "إعادة فتح"
+  },
+  "audit": {
+    "CREATE": "إنشاء السجل",
+    "STATUS_TRANSITION": "تغيير الحالة",
+    "LINK_SENT": "إرسال رابط",
+    "SLA_REMINDER": "تذكير تلقائي",
+    "SEND_FORM": "إرسال نموذج البيانات",
+    "SUBMIT_FORM": "استلام النموذج",
+    "REQUEST_MISSING": "طلب النواقص",
+    "ACCEPT_DOCUMENTS": "قبول المستندات",
+    "SEND_CONTRACT": "إرسال العقد",
+    "APPROVE_CONTRACT": "اعتماد العقد",
+    "EXPIRE": "انتهاء المهلة",
+    "REOPEN": "إعادة فتح"
+  },
+  "actors": {
+    "USER": "موظف النظام",
+    "LINK": "المتدرب (رابط موقّع)",
+    "SYSTEM": "النظام"
+  },
+  "docTypes": {
+    "NATIONAL_ID": "الهوية الوطنية",
+    "QUALIFICATION": "شهادة المؤهل",
+    "PHOTO": "الصورة الشخصية",
+    "IBAN_LETTER": "شهادة الآيبان"
   }
 }

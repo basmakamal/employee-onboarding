@@ -4,7 +4,18 @@
     "tagline": "Trainee onboarding, employee file, and offboarding — one auditable workflow."
   },
   "nav": {
-    "home": "Home"
+    "home": "Dashboard",
+    "trainees": "Trainees"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "create": "Create",
+    "save": "Save",
+    "send": "Send",
+    "saved": "Saved",
+    "done": "Done",
+    "error": "Something went wrong",
+    "submit": "Submit"
   },
   "home": {
     "welcome": "Welcome",
@@ -27,8 +38,84 @@
       }
     }
   },
+  "trainees": {
+    "title": "Trainees",
+    "subtitle": "Stage 1 — from record creation to contract approval",
+    "new": "New trainee",
+    "empty": "No trainees yet — create the first one.",
+    "name": "Name",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email",
+    "phone": "Phone",
+    "nationalId": "National ID",
+    "birthDate": "Birth date",
+    "department": "Department",
+    "jobTitle": "Job title",
+    "status": "Status",
+    "docsHint": "The default document checklist (ID, qualification, photo, IBAN letter) is created automatically.",
+    "info": "Personal information",
+    "documents": "Document checklist",
+    "uploaded": "Uploaded",
+    "missing": "Not uploaded",
+    "optional": "optional",
+    "contract": "Contract",
+    "timeline": "Timeline",
+    "missingNotes": "What is missing? (sent to the trainee)",
+    "becameEmployee": "Contract approved — employee profile {no} was created automatically."
+  },
+  "contract": {
+    "salary": "Salary",
+    "durationMonths": "Duration (months)",
+    "startDate": "Start date",
+    "terms": "Terms",
+    "none": "No contract yet.",
+    "edit": "Edit contract",
+    "createBtn": "Create contract",
+    "sentAt": "Sent",
+    "approvedAt": "Approved"
+  },
+  "status": {
+    "CREATED": "Created",
+    "AWAITING_FORM": "Awaiting form",
+    "FORM_RECEIVED": "Form received",
+    "CONTRACT_CREATION": "Contract creation",
+    "AWAITING_CONTRACT_APPROVAL": "Awaiting approval",
+    "EMPLOYEE_CREATED": "Employee created",
+    "EXPIRED": "Expired"
+  },
   "actions": {
     "toggleTheme": "Toggle dark mode",
-    "language": "العربية"
+    "language": "العربية",
+    "SEND_FORM": "Send data form",
+    "REQUEST_MISSING": "Request missing documents",
+    "ACCEPT_DOCUMENTS": "Accept documents",
+    "SEND_CONTRACT": "Send contract",
+    "REOPEN": "Reopen"
+  },
+  "audit": {
+    "CREATE": "Record created",
+    "STATUS_TRANSITION": "Status changed",
+    "LINK_SENT": "Link sent",
+    "SLA_REMINDER": "Automatic reminder",
+    "SEND_FORM": "Data form sent",
+    "SUBMIT_FORM": "Form submitted",
+    "REQUEST_MISSING": "Missing documents requested",
+    "ACCEPT_DOCUMENTS": "Documents accepted",
+    "SEND_CONTRACT": "Contract sent",
+    "APPROVE_CONTRACT": "Contract approved",
+    "EXPIRE": "Deadline expired",
+    "REOPEN": "Reopened"
+  },
+  "actors": {
+    "USER": "Staff",
+    "LINK": "Trainee (signed link)",
+    "SYSTEM": "System"
+  },
+  "docTypes": {
+    "NATIONAL_ID": "National ID",
+    "QUALIFICATION": "Qualification certificate",
+    "PHOTO": "Personal photo",
+    "IBAN_LETTER": "IBAN letter"
   }
 }
