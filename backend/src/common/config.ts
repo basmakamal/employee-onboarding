@@ -16,6 +16,12 @@ const envSchema = z
     MAIL_FROM: z.string().optional(),
     /** SLA engine tick interval; 0 disables the scheduler (tests). */
     SLA_TICK_MINUTES: z.coerce.number().int().min(0).default(5),
+    /** Public base URL of the frontend — signed links point here. */
+    APP_URL: z.string().url().default('http://localhost:3000'),
+    /** Uploaded files live here — outside the webroot, gitignored. */
+    UPLOAD_DIR: z.string().default('./storage'),
+    /** Signed-link lifetime in hours. */
+    LINK_TTL_HOURS: z.coerce.number().int().positive().default(240),
   })
   .refine((env) => env.NOTIFIER !== 'smtp' || (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS), {
     message: 'NOTIFIER=smtp requires SMTP_HOST, SMTP_USER and SMTP_PASS',
