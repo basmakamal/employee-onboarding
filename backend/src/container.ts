@@ -17,6 +17,7 @@ import { SmtpNotifier } from './notifications/smtp.notifier.js';
 import { buildTraineeWorkflow } from './workflow/trainee-workflow.js';
 import { SlaScheduler } from './workflow/sla-scheduler.js';
 import { TraineeService } from './modules/trainees/trainee.service.js';
+import { AuthService } from './auth/auth.service.js';
 
 /**
  * Composition root — the ONLY place where concrete implementations are
@@ -49,6 +50,11 @@ export function buildContainer() {
     notifications,
   });
 
+  const authService = new AuthService(users, {
+    access: config.JWT_ACCESS_SECRET,
+    refresh: config.JWT_REFRESH_SECRET,
+  });
+
   const linkTokenService = new LinkTokenService(linkTokens, config.APP_URL, config.LINK_TTL_HOURS);
   const traineeService = new TraineeService(
     { trainees, documents, contracts, employees, audit },
@@ -77,6 +83,7 @@ export function buildContainer() {
     slaScheduler,
     linkTokenService,
     traineeService,
+    authService,
   };
 }
 

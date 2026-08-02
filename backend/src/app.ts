@@ -1,4 +1,5 @@
 import express, { type Router } from 'express';
+import cookieParser from 'cookie-parser';
 import { pinoHttp } from 'pino-http';
 import { logger } from './common/logger.js';
 import { errorHandler } from './common/http.js';
@@ -6,7 +7,9 @@ import { errorHandler } from './common/http.js';
 export interface AppDeps {
   /** Resolves when dependencies (DB) are reachable; rejects otherwise. */
   checkReady?: () => Promise<void>;
-  /** Staff API surface, already wrapped with the actor middleware. */
+  /** Login/refresh/logout/me. */
+  authRouter?: Router;
+  /** Staff API surface, already wrapped with auth middleware. */
   traineeRouter?: Router;
   /** Public signed-link surface — token IS the auth. */
   linkRouter?: Router;
@@ -17,6 +20,7 @@ export function createApp(deps: AppDeps = {}) {
 
   app.disable('x-powered-by');
   app.use(express.json());
+  app.use(cookieParser());
   app.use(pinoHttp({ logger }));
 
   // Liveness: the process is up.
@@ -39,6 +43,7 @@ export function createApp(deps: AppDeps = {}) {
       });
   });
 
+  if (deps.authRouter) app.use('/api/auth', deps.authRouter);
   if (deps.linkRouter) app.use('/api/link', deps.linkRouter);
   if (deps.traineeRouter) app.use('/api/trainees', deps.traineeRouter);
 
