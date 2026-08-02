@@ -9,8 +9,8 @@ export interface AppDeps {
   checkReady?: () => Promise<void>;
   /** Login/refresh/logout/me. */
   authRouter?: Router;
-  /** Staff API surface, already wrapped with auth middleware. */
-  traineeRouter?: Router;
+  /** Staff API surface (mounted at /api), already wrapped with auth middleware. */
+  staffRouter?: Router;
   /** Public signed-link surface — token IS the auth. */
   linkRouter?: Router;
 }
@@ -45,7 +45,7 @@ export function createApp(deps: AppDeps = {}) {
 
   if (deps.authRouter) app.use('/api/auth', deps.authRouter);
   if (deps.linkRouter) app.use('/api/link', deps.linkRouter);
-  if (deps.traineeRouter) app.use('/api/trainees', deps.traineeRouter);
+  if (deps.staffRouter) app.use('/api', deps.staffRouter);
 
   app.use(errorHandler);
   return app;

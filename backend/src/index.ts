@@ -7,6 +7,7 @@ import { startSlaScheduler } from './workflow/sla-scheduler.js';
 import { requireAuth, requireRole } from './auth/require-auth.middleware.js';
 import { authRouter } from './auth/auth.routes.js';
 import { traineeRouter } from './modules/trainees/trainee.routes.js';
+import { employeeRouter } from './modules/employees/employee.routes.js';
 import { linkRouter } from './modules/trainees/link.routes.js';
 
 const container = buildContainer();
@@ -14,14 +15,15 @@ const container = buildContainer();
 const staffApi = Router();
 staffApi.use(requireAuth(container.authService));
 staffApi.use(requireRole('HR', 'ADMIN'));
-staffApi.use(traineeRouter(container.traineeService));
+staffApi.use('/trainees', traineeRouter(container.traineeService));
+staffApi.use('/employees', employeeRouter(container.employeeService));
 
 const app = createApp({
   checkReady: async () => {
     await container.prisma.$queryRaw`SELECT 1`;
   },
   authRouter: authRouter(container.authService),
-  traineeRouter: staffApi,
+  staffRouter: staffApi,
   linkRouter: linkRouter(container.traineeService),
 });
 

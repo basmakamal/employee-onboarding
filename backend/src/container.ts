@@ -17,6 +17,10 @@ import { SmtpNotifier } from './notifications/smtp.notifier.js';
 import { buildTraineeWorkflow } from './workflow/trainee-workflow.js';
 import { SlaScheduler } from './workflow/sla-scheduler.js';
 import { TraineeService } from './modules/trainees/trainee.service.js';
+import { EmployeeService } from './modules/employees/employee.service.js';
+import { GosiRepository } from './modules/processes/gosi.repository.js';
+import { MedicalInsuranceRepository } from './modules/processes/medical-insurance.repository.js';
+import { CriminalRecordRepository } from './modules/processes/criminal-record.repository.js';
 import { AuthService } from './auth/auth.service.js';
 
 /**
@@ -28,6 +32,9 @@ export function buildContainer() {
   const documents = new TraineeDocumentRepository(prisma);
   const contracts = new ContractRepository(prisma);
   const employees = new EmployeeRepository(prisma);
+  const gosi = new GosiRepository(prisma);
+  const medical = new MedicalInsuranceRepository(prisma);
+  const criminal = new CriminalRecordRepository(prisma);
   const users = new UserRepository(prisma);
   const linkTokens = new LinkTokenRepository(prisma);
   const audit = new AuditLogRepository(prisma);
@@ -63,6 +70,8 @@ export function buildContainer() {
     notifications,
   );
 
+  const employeeService = new EmployeeService({ employees, gosi, medical, criminal, audit });
+
   return {
     prisma,
     eventBus,
@@ -71,6 +80,9 @@ export function buildContainer() {
       documents,
       contracts,
       employees,
+      gosi,
+      medical,
+      criminal,
       users,
       linkTokens,
       audit,
@@ -83,6 +95,7 @@ export function buildContainer() {
     slaScheduler,
     linkTokenService,
     traineeService,
+    employeeService,
     authService,
   };
 }
