@@ -142,7 +142,7 @@ on-hold reason) · `Asset` (registry, unique serials) · `AssetForm` + `AssetFor
 - [x] **Phase B — Data layer v2.** Full BRD schema + migrations + seed + repositories.
 - [x] **Phase C — Workflow engine.** The four state machines + guards + reopen +
   audit, unit-tested in isolation.
-- [ ] **Phase D — SLA scheduler + notifications.** Config-driven timers, bilingual
+- [x] **Phase D — SLA scheduler + notifications.** Config-driven timers, bilingual
   email + in-app bell, every send audited.
 - [ ] **Phase E — Stage 1 end-to-end.** Trainee API + HR screens + trainee
   signed-link form + contract e-approval.
