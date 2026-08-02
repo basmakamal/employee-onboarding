@@ -87,6 +87,38 @@ const T: Record<string, Record<Locale, Template>> = {
     }),
   },
 
+  /** Employee — a custody form awaits their electronic approval. */
+  'employee.asset_approval': {
+    ar: (p) => ({
+      subject: 'نموذج عهدة بانتظار اعتمادك',
+      text:
+        `مرحبًا ${p.name ?? ''},\n\n` +
+        `تم إسناد عهدة جديدة إليك، ويلزم اعتمادها إلكترونيًا.` +
+        (p.linkUrl ? `\n\nرابط الاعتماد: ${p.linkUrl}` : '') +
+        `\n\nقسم الموارد البشرية`,
+    }),
+    en: (p) => ({
+      subject: 'Asset custody form awaiting your approval',
+      text:
+        `Hello ${p.name ?? ''},\n\n` +
+        `New assets have been assigned to you and require your electronic approval.` +
+        (p.linkUrl ? `\n\nApproval link: ${p.linkUrl}` : '') +
+        `\n\nHR Department`,
+    }),
+  },
+
+  /** HR notice — the employee decided on a custody form. */
+  'hr.asset_decided': {
+    ar: (p) => ({
+      subject: `قرار عهدة: ${p.name ?? ''}`,
+      text: `قام الموظف ${p.name ?? ''} بالبت في نموذج العهدة. راجع النظام للتفاصيل.`,
+    }),
+    en: (p) => ({
+      subject: `Asset custody decision: ${p.name ?? ''}`,
+      text: `Employee ${p.name ?? ''} has decided on the custody form. Check the system for details.`,
+    }),
+  },
+
   /** HR notice — trainee approved the contract; employee profile created. */
   'hr.contract_approved': {
     ar: (p) => ({

@@ -8,6 +8,7 @@ import { requireAuth, requireRole } from './auth/require-auth.middleware.js';
 import { authRouter } from './auth/auth.routes.js';
 import { traineeRouter } from './modules/trainees/trainee.routes.js';
 import { employeeRouter } from './modules/employees/employee.routes.js';
+import { assetRouter } from './modules/assets/asset.routes.js';
 import { linkRouter } from './modules/trainees/link.routes.js';
 
 const container = buildContainer();
@@ -17,6 +18,7 @@ staffApi.use(requireAuth(container.authService));
 staffApi.use(requireRole('HR', 'ADMIN'));
 staffApi.use('/trainees', traineeRouter(container.traineeService));
 staffApi.use('/employees', employeeRouter(container.employeeService));
+staffApi.use('/', assetRouter(container.assetService));
 
 const app = createApp({
   checkReady: async () => {
@@ -24,7 +26,7 @@ const app = createApp({
   },
   authRouter: authRouter(container.authService),
   staffRouter: staffApi,
-  linkRouter: linkRouter(container.traineeService),
+  linkRouter: linkRouter(container.traineeService, container.assetService, container.linkTokenService),
 });
 
 const server = app.listen(config.PORT, () => {

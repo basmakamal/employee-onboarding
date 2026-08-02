@@ -18,6 +18,9 @@ import { buildTraineeWorkflow } from './workflow/trainee-workflow.js';
 import { SlaScheduler } from './workflow/sla-scheduler.js';
 import { TraineeService } from './modules/trainees/trainee.service.js';
 import { EmployeeService } from './modules/employees/employee.service.js';
+import { AssetRepository } from './modules/assets/asset.repository.js';
+import { AssetFormRepository } from './modules/assets/asset-form.repository.js';
+import { AssetService } from './modules/assets/asset.service.js';
 import { GosiRepository } from './modules/processes/gosi.repository.js';
 import { MedicalInsuranceRepository } from './modules/processes/medical-insurance.repository.js';
 import { CriminalRecordRepository } from './modules/processes/criminal-record.repository.js';
@@ -72,6 +75,14 @@ export function buildContainer() {
 
   const employeeService = new EmployeeService({ employees, gosi, medical, criminal, audit });
 
+  const assets = new AssetRepository(prisma);
+  const assetForms = new AssetFormRepository(prisma);
+  const assetService = new AssetService(
+    { assets, forms: assetForms, employees, audit },
+    linkTokenService,
+    notifications,
+  );
+
   return {
     prisma,
     eventBus,
@@ -96,6 +107,7 @@ export function buildContainer() {
     linkTokenService,
     traineeService,
     employeeService,
+    assetService,
     authService,
   };
 }

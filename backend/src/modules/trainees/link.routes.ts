@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, compact } from '../../common/http.js';
+import { asyncHandler, compact, validate } from '../../common/http.js';
 import { documentUpload } from '../../common/storage.js';
 import type { TraineeService } from './trainee.service.js';
+import type { AssetService } from '../assets/asset.service.js';
+import type { LinkTokenService } from '../../auth/link-token.service.js';
 
 const formFieldsSchema = z.object({
   phone: z.string().optional(),
@@ -10,18 +12,43 @@ const formFieldsSchema = z.object({
   birthDate: z.coerce.date().optional(),
 });
 
+const decisionSchema = z.object({
+  decision: z.enum(['APPROVE', 'REJECT']),
+  rejectReason: z.string().optional(),
+});
+
 /**
  * PUBLIC endpoints — no staff auth. Possession of a valid signed token IS
- * the authentication (verified inside the service on every call).
+ * the authentication (verified on every call).
  */
-export function linkRouter(service: TraineeService): Router {
+export function linkRouter(
+  service: TraineeService,
+  assets: AssetService,
+  links: LinkTokenService,
+): Router {
   const router = Router();
 
-  /** What should this link's page show? (form checklist / contract). */
+  /** What should this link's page show? Dispatch by the token's purpose. */
   router.get(
     '/:token',
     asyncHandler(async (req, res) => {
-      res.json(await service.linkContext(req.params['token'] as string));
+      const raw = req.params['token'] as string;
+      const row = await links.verify(raw);
+      if (row.purpose === 'ASSET_APPROVAL') {
+        res.json(await assets.buildLinkContext(row));
+        return;
+      }
+      res.json(await service.linkContext(raw));
+    }),
+  );
+
+  /** Asset custody decision (approve / reject with reason). */
+  router.post(
+    '/:token/assets/decision',
+    validate(decisionSchema),
+    asyncHandler(async (req, res) => {
+      const { decision, rejectReason } = req.body as z.infer<typeof decisionSchema>;
+      res.json(await assets.decide(req.params['token'] as string, decision, rejectReason));
     }),
   );
 

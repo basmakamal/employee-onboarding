@@ -28,7 +28,24 @@ export class AssetFormRepository {
   }
 
   findWithItems(id: string) {
-    return this.db.assetForm.findUnique({ where: { id }, include: { items: true } });
+    return this.db.assetForm.findUnique({
+      where: { id },
+      include: { items: true, employee: true },
+    });
+  }
+
+  countItems(formId: string): Promise<number> {
+    return this.db.assetFormItem.count({ where: { formId } });
+  }
+
+  /** Replace all item lines — only meaningful while the form is a draft. */
+  async replaceItems(formId: string, items: AssetFormItemInput[]) {
+    await this.db.assetFormItem.deleteMany({ where: { formId } });
+    return this.db.assetForm.update({
+      where: { id: formId },
+      data: { items: { create: items } },
+      include: { items: true },
+    });
   }
 
   listByEmployee(employeeId: string) {
