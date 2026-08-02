@@ -144,7 +144,7 @@ on-hold reason) · `Asset` (registry, unique serials) · `AssetForm` + `AssetFor
   audit, unit-tested in isolation.
 - [x] **Phase D — SLA scheduler + notifications.** Config-driven timers, bilingual
   email + in-app bell, every send audited.
-- [ ] **Phase E — Stage 1 end-to-end.** Trainee API + HR screens + trainee
+- [x] **Phase E — Stage 1 end-to-end.** Trainee API + HR screens + trainee
   signed-link form + contract e-approval.
 - [ ] **Phase F — Auth & RBAC.** Staff JWT + refresh, role guards, link-token auth.
 - [ ] **Phase G — Stage 2 end-to-end.** Employee file page, 4 process cards,

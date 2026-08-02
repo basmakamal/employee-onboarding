@@ -112,6 +112,23 @@
     "LINK": "Trainee (signed link)",
     "SYSTEM": "System"
   },
+  "publicForm": {
+    "title": "Complete your onboarding data",
+    "greeting": "Hello {name}, welcome aboard!",
+    "fileHint": "Accepted files: PDF, JPG, PNG, DOC — up to 10 MB each.",
+    "requiredHint": "All documents marked * are required before submitting.",
+    "invalidTitle": "This link is no longer valid",
+    "invalidHint": "The link may have expired or already been used. Please contact HR for a new one.",
+    "doneTitle": "Thank you! Your data was submitted.",
+    "doneHint": "HR will review your documents and contact you with the next step."
+  },
+  "approval": {
+    "title": "Your employment contract",
+    "hint": "By clicking Approve, you electronically accept this contract.",
+    "approveBtn": "Approve contract",
+    "doneTitle": "Contract approved — welcome!",
+    "doneHint": "Your employee profile ({no}) has been created. HR will contact you with your onboarding details."
+  },
   "docTypes": {
     "NATIONAL_ID": "National ID",
     "QUALIFICATION": "Qualification certificate",

@@ -11,5 +11,16 @@ export const router = createRouter({
       name: 'trainee-detail',
       component: () => import('../pages/TraineeDetailPage.vue'),
     },
+    // Public signed-link pages (no staff chrome, token IS the auth).
+    {
+      path: '/form/:token',
+      name: 'public-form',
+      component: () => import('../pages/public/DataFormPage.vue'),
+    },
+    {
+      path: '/approve-contract/:token',
+      name: 'public-approval',
+      component: () => import('../pages/public/ContractApprovalPage.vue'),
+    },
   ],
 });
