@@ -1,10 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import HomePage from '../pages/HomePage.vue';
+import { useAuthStore } from '../stores/auth';
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'home', component: HomePage },
+    { path: '/login', name: 'login', component: () => import('../pages/LoginPage.vue'), meta: { public: true } },
     { path: '/trainees', name: 'trainees', component: () => import('../pages/TraineesPage.vue') },
     {
       path: '/trainees/:id',
@@ -16,11 +18,28 @@ export const router = createRouter({
       path: '/form/:token',
       name: 'public-form',
       component: () => import('../pages/public/DataFormPage.vue'),
+      meta: { public: true },
     },
     {
       path: '/approve-contract/:token',
       name: 'public-approval',
       component: () => import('../pages/public/ContractApprovalPage.vue'),
+      meta: { public: true },
     },
   ],
+});
+
+/**
+ * Staff routes require a session. On first navigation we try a silent
+ * restore (httpOnly refresh cookie) so a page reload keeps you signed in.
+ */
+router.beforeEach(async (to) => {
+  if (to.meta['public']) return true;
+
+  const auth = useAuthStore();
+  if (!auth.isAuthenticated) await auth.restore();
+  if (!auth.isAuthenticated) {
+    return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} };
+  }
+  return true;
 });

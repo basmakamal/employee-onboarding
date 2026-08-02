@@ -146,7 +146,7 @@ on-hold reason) · `Asset` (registry, unique serials) · `AssetForm` + `AssetFor
   email + in-app bell, every send audited.
 - [x] **Phase E — Stage 1 end-to-end.** Trainee API + HR screens + trainee
   signed-link form + contract e-approval.
-- [ ] **Phase F — Auth & RBAC.** Staff JWT + refresh, role guards, link-token auth.
+- [x] **Phase F — Auth & RBAC.** Staff JWT + refresh, role guards, link-token auth.
 - [ ] **Phase G — Stage 2 end-to-end.** Employee file page, 4 process cards,
   asset registry + custody forms + e-approval.
 - [ ] **Phase H — Stage 3 end-to-end.** Offboarding wizard, asset-return gate,

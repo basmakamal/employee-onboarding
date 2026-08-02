@@ -1,19 +1,37 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { usePreferencesStore } from './stores/preferences';
+import { useAuthStore } from './stores/auth';
 
 const prefs = usePreferencesStore();
+const auth = useAuthStore();
 const route = useRoute();
+const router = useRouter();
 const drawer = ref(true);
 
-/** Public signed-link pages render without the staff chrome. */
-const isPublicPage = () => ['/form/', '/approve-contract/'].some((p) => route.path.startsWith(p));
+/** Public pages (signed links, login) render without the staff chrome. */
+const isPublicPage = () =>
+  ['/form/', '/approve-contract/', '/login'].some((p) => route.path.startsWith(p));
 
 const NAV = [
   { to: '/', icon: 'mdi-view-dashboard', key: 'nav.home' },
   { to: '/trainees', icon: 'mdi-school', key: 'nav.trainees' },
 ];
+
+const initials = computed(() =>
+  (auth.user?.name ?? '')
+    .split(' ')
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase(),
+);
+
+async function logout() {
+  await auth.logout();
+  await router.push('/login');
+}
 
 onMounted(() => prefs.apply());
 </script>
@@ -36,6 +54,26 @@ onMounted(() => prefs.apply());
           :aria-label="$t('actions.toggleTheme')"
           @click="prefs.toggleTheme()"
         />
+
+        <v-menu v-if="auth.user">
+          <template #activator="{ props }">
+            <v-btn v-bind="props" icon class="ms-1">
+              <v-avatar color="primary" size="36">
+                <span class="text-body-2 font-weight-bold">{{ initials }}</span>
+              </v-avatar>
+            </v-btn>
+          </template>
+          <v-card min-width="220">
+            <v-card-item>
+              <v-card-title class="text-body-1">{{ auth.user.name }}</v-card-title>
+              <v-card-subtitle>{{ $t(`roles.${auth.user.role}`) }}</v-card-subtitle>
+            </v-card-item>
+            <v-divider />
+            <v-list density="compact">
+              <v-list-item prepend-icon="mdi-logout" :title="$t('login.signOut')" @click="logout" />
+            </v-list>
+          </v-card>
+        </v-menu>
       </v-app-bar>
 
       <v-navigation-drawer v-model="drawer" :permanent="$vuetify.display.mdAndUp">

@@ -112,6 +112,18 @@
     "LINK": "Trainee (signed link)",
     "SYSTEM": "System"
   },
+  "login": {
+    "subtitle": "Sign in to your account",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "invalid": "Invalid email or password"
+  },
+  "roles": {
+    "HR": "Human Resources",
+    "ADMIN": "Administrator"
+  },
   "publicForm": {
     "title": "Complete your onboarding data",
     "greeting": "Hello {name}, welcome aboard!",
