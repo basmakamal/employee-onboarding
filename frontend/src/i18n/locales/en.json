@@ -8,6 +8,8 @@
     "trainees": "Trainees",
     "employees": "Employees",
     "users": "Staff & roles",
+    "ownership": "Status ownership",
+    "automation": "Automation",
     "settings": "Settings"
   },
   "users": {

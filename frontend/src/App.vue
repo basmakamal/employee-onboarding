@@ -24,6 +24,8 @@ const NAV = [
   // hasRole() lets ADMIN through on any check; listing no other role makes
   // these entries effectively admin-only.
   { to: '/users', icon: 'mdi-account-cog', key: 'nav.users', roles: ['ADMIN'] },
+  { to: '/ownership', icon: 'mdi-sitemap', key: 'nav.ownership', roles: ['ADMIN'] },
+  { to: '/automation', icon: 'mdi-robot', key: 'nav.automation', roles: ['ADMIN'] },
   { to: '/settings', icon: 'mdi-cog', key: 'nav.settings', roles: ['ADMIN'] },
 ];
 
