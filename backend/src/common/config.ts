@@ -1,19 +1,31 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(4000),
-  DATABASE_URL: z.string().url(),
-  JWT_ACCESS_SECRET: z.string().min(8),
-  JWT_REFRESH_SECRET: z.string().min(8),
-  NOTIFIER: z.enum(['console', 'smtp']).default('console'),
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().int().positive().optional(),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  MAIL_FROM: z.string().optional(),
-});
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().positive().default(4000),
+    DATABASE_URL: z.string().url(),
+    JWT_ACCESS_SECRET: z.string().min(8),
+    JWT_REFRESH_SECRET: z.string().min(8),
+    NOTIFIER: z.enum(['console', 'smtp']).default('console'),
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().int().positive().optional(),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASS: z.string().optional(),
+    MAIL_FROM: z.string().optional(),
+    /** SLA engine tick interval; 0 disables the scheduler (tests). */
+    SLA_TICK_MINUTES: z.coerce.number().int().min(0).default(5),
+    /** Public base URL of the frontend — signed links point here. */
+    APP_URL: z.string().url().default('http://localhost:3000'),
+    /** Uploaded files live here — outside the webroot, gitignored. */
+    UPLOAD_DIR: z.string().default('./storage'),
+    /** Signed-link lifetime in hours. */
+    LINK_TTL_HOURS: z.coerce.number().int().positive().default(240),
+  })
+  .refine((env) => env.NOTIFIER !== 'smtp' || (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS), {
+    message: 'NOTIFIER=smtp requires SMTP_HOST, SMTP_USER and SMTP_PASS',
+  });
 
 const parsed = envSchema.safeParse(process.env);
 

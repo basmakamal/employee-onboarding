@@ -1,0 +1,538 @@
+// Prisma schema — HR System (BRD v2)
+// Stage 1: Trainee Management · Stage 2: Employee File · Stage 3: Offboarding
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Staff role groups — each workflow status is owned by a group (machine
+/// transitions declare `roles`); ADMIN overrides everything. Trainees and
+/// employees are NOT users — they act through signed link tokens.
+enum Role {
+  HR // trainee stage, criminal record, offboarding flow
+  INSURANCE // GOSI + medical insurance cards
+  IT // asset registry + custody forms
+  FINANCE // final settlement + file closure
+  ADMIN
+}
+
+/// Stage 1 state machine (see README §1). Transitions enforced in src/workflow.
+enum TraineeStatus {
+  CREATED
+  AWAITING_FORM
+  FORM_RECEIVED
+  CONTRACT_CREATION
+  AWAITING_CONTRACT_APPROVAL
+  EMPLOYEE_CREATED
+  EXPIRED
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// GOSI + Medical Insurance share this lifecycle.
+enum ProcessStatus {
+  PENDING
+  DONE
+  ON_HOLD
+  CANCELLED
+}
+
+enum GosiHoldReason {
+  OPTIONAL_SUBSCRIPTION
+  GOVERNMENT_EMPLOYEE
+  DOB_MISMATCH
+  ID_MISMATCH
+  INCOMPLETE_DATA
+  OTHER
+}
+
+enum MedicalHoldReason {
+  ELM_DATA_ISSUE
+  OTHER_INSURANCE_EXISTS
+  EMPLOYEE_DECLINED
+  AWAITING_INSURER
+  INCOMPLETE_DATA
+  OTHER
+}
+
+enum CriminalRecordStatus {
+  TRAINING
+  REQUEST_SENT
+  PENDING
+  DONE
+}
+
+enum AssetFormStatus {
+  DRAFT
+  SENT
+  PENDING_EMPLOYEE_APPROVAL
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AssetCondition {
+  NEW
+  USED
+}
+
+enum OffboardingReason {
+  RESIGNATION
+  TERMINATION
+  CONTRACT_EXPIRY
+  RETIREMENT
+  DEATH
+}
+
+enum OffboardingStatus {
+  REQUESTED
+  IN_PROGRESS
+  ASSETS_PENDING
+  NOTICE_SENT
+  SETTLEMENT
+  CLOSED
+  CANCELLED
+}
+
+enum LinkPurpose {
+  DATA_FORM
+  CONTRACT_APPROVAL
+  ASSET_APPROVAL
+  EXIT_INTERVIEW
+}
+
+enum SlaUnit {
+  HOURS
+  CALENDAR_DAYS
+  WORKING_DAYS
+}
+
+enum SlaAction {
+  REMIND
+  REMIND_DAILY
+  EXPIRE
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Staff
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         Role
+  passwordHash String? // set in Phase F (auth)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  traineesCreated     Trainee[]     @relation("TraineeCreatedBy")
+  contractsCreated    Contract[]
+  assetFormsCreated   AssetForm[]
+  offboardingRequests Offboarding[] @relation("OffboardingRequestedBy")
+  auditEntries        AuditLog[]
+  notifications       Notification[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Stage 1 — Trainee Management
+// ---------------------------------------------------------------------------
+
+model Trainee {
+  id         String        @id @default(cuid())
+  firstName  String
+  lastName   String
+  email      String        @unique
+  phone      String?
+  nationalId String?
+  birthDate  DateTime?
+  department String?
+  jobTitle   String?
+  status     TraineeStatus @default(CREATED)
+
+  /// SLA anchor: every transition updates this; the scheduler measures from it.
+  statusChangedAt DateTime  @default(now())
+  /// Last automatic reminder, so daily nags fire at most once per day.
+  lastReminderAt  DateTime?
+
+  createdBy   User   @relation("TraineeCreatedBy", fields: [createdById], references: [id])
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents  TraineeDocument[]
+  contract   Contract?
+  employee   Employee?
+  linkTokens LinkToken[]
+  auditLogs  AuditLog[]        @relation("TraineeAudit")
+
+  @@index([status])
+  @@map("trainees")
+}
+
+/// One row per checklist item. HR configures the checklist per trainee;
+/// the trainee's signed-link upload fills the row. A row without storageKey
+/// is a missing document.
+model TraineeDocument {
+  id         String    @id @default(cuid())
+  trainee    Trainee   @relation(fields: [traineeId], references: [id])
+  traineeId  String
+  type       String // e.g. NATIONAL_ID, QUALIFICATION, IBAN_LETTER — HR-configurable
+  label      String? // display label if type is custom
+  required   Boolean   @default(true)
+  storageKey String?
+  mimeType   String?
+  sizeBytes  Int?
+  uploadedAt DateTime?
+  notes      String?
+
+  @@unique([traineeId, type])
+  @@map("trainee_documents")
+}
+
+model Contract {
+  id          String    @id @default(cuid())
+  trainee     Trainee   @relation(fields: [traineeId], references: [id])
+  traineeId   String    @unique
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdById String
+  storageKey  String? // generated/uploaded contract document
+  details     Json? // salary, duration, terms — structured in Phase E
+  sentAt      DateTime?
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("contracts")
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2 — Employee File
+// ---------------------------------------------------------------------------
+
+model Employee {
+  id         String         @id @default(cuid())
+  employeeNo String         @unique // e.g. EMP-0001, assigned on creation
+  firstName  String
+  lastName   String
+  email      String         @unique
+  phone      String?
+  nationalId String?
+  birthDate  DateTime?
+  department String?
+  project    String?
+  jobTitle   String?
+  hireDate   DateTime
+  status     EmployeeStatus @default(ACTIVE)
+
+  trainee   Trainee? @relation(fields: [traineeId], references: [id])
+  traineeId String?  @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  gosi           GosiProcess?
+  medical        MedicalInsuranceProcess?
+  criminalRecord CriminalRecordProcess?
+  assetForms     AssetForm[]
+  offboardings   Offboarding[]
+  linkTokens     LinkToken[]
+  auditLogs      AuditLog[]               @relation("EmployeeAudit")
+
+  @@index([status])
+  @@map("employees")
+}
+
+model GosiProcess {
+  id         String          @id @default(cuid())
+  employee   Employee        @relation(fields: [employeeId], references: [id])
+  employeeId String          @unique
+  status     ProcessStatus   @default(PENDING)
+  holdReason GosiHoldReason?
+  holdNote   String?
+  updatedAt  DateTime        @updatedAt
+  createdAt  DateTime        @default(now())
+
+  @@map("gosi_processes")
+}
+
+model MedicalInsuranceProcess {
+  id         String             @id @default(cuid())
+  employee   Employee           @relation(fields: [employeeId], references: [id])
+  employeeId String             @unique
+  status     ProcessStatus      @default(PENDING)
+  holdReason MedicalHoldReason?
+  holdNote   String?
+  updatedAt  DateTime           @updatedAt
+  createdAt  DateTime           @default(now())
+
+  @@map("medical_insurance_processes")
+}
+
+model CriminalRecordProcess {
+  id                    String               @id @default(cuid())
+  employee              Employee             @relation(fields: [employeeId], references: [id])
+  employeeId            String               @unique
+  status                CriminalRecordStatus @default(TRAINING)
+  certificateStorageKey String?
+  updatedAt             DateTime             @updatedAt
+  createdAt             DateTime             @default(now())
+
+  @@map("criminal_record_processes")
+}
+
+// ---------------------------------------------------------------------------
+// Assets (registry + custody forms)
+// ---------------------------------------------------------------------------
+
+/// Company asset registry. Serial-numbered assets are unique; bulk items
+/// (cables, accessories) may have no serial.
+model Asset {
+  id           String   @id @default(cuid())
+  type         String // e.g. LAPTOP, HEADPHONE, PHONE, ACCESS_CARD
+  name         String
+  serialNumber String?  @unique
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  formItems AssetFormItem[]
+
+  @@index([type])
+  @@map("assets")
+}
+
+model AssetForm {
+  id           String          @id @default(cuid())
+  employee     Employee        @relation(fields: [employeeId], references: [id])
+  employeeId   String
+  createdBy    User            @relation(fields: [createdById], references: [id])
+  createdById  String
+  status       AssetFormStatus @default(DRAFT)
+  deliveryDate DateTime?
+  sentAt       DateTime?
+  decidedAt    DateTime? // employee approved/rejected at
+  rejectReason String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  items      AssetFormItem[]
+  linkTokens LinkToken[]
+
+  @@index([employeeId])
+  @@map("asset_forms")
+}
+
+model AssetFormItem {
+  id           String         @id @default(cuid())
+  form         AssetForm      @relation(fields: [formId], references: [id])
+  formId       String
+  /// Optional link into the registry (enforces unique serial ownership).
+  asset        Asset?         @relation(fields: [assetId], references: [id])
+  assetId      String?
+  type         String
+  name         String
+  serialNumber String?
+  quantity     Int            @default(1)
+  condition    AssetCondition @default(NEW)
+  notes        String?
+  returnedAt   DateTime? // set during offboarding asset return
+
+  @@index([formId])
+  @@map("asset_form_items")
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3 — Offboarding
+// ---------------------------------------------------------------------------
+
+model Offboarding {
+  id         String            @id @default(cuid())
+  employee   Employee          @relation(fields: [employeeId], references: [id])
+  employeeId String
+  reason     OffboardingReason
+  status     OffboardingStatus @default(REQUESTED)
+  notes      String?
+
+  requestedBy   User   @relation("OffboardingRequestedBy", fields: [requestedById], references: [id])
+  requestedById String
+
+  // Exit interview (auto-sent only for RESIGNATION)
+  exitInterviewSentAt      DateTime?
+  exitInterviewCompletedAt DateTime?
+  exitInterviewData        Json?
+
+  // Asset return gate
+  assetsConfirmedAt   DateTime?
+  assetsConfirmedById String?
+
+  // Termination notice
+  noticeSentAt     DateTime?
+  noticeStorageKey String?
+
+  // Final settlement (amounts entered by HR)
+  settlementWorkingDays  Int?
+  settlementLeaveDays    Decimal?  @db.Decimal(6, 2)
+  settlementDeductions   Decimal?  @db.Decimal(12, 2)
+  settlementEntitlements Decimal?  @db.Decimal(12, 2)
+  settlementNotes        String?
+  settlementApprovedById String?
+  settlementApprovedAt   DateTime?
+
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  linkTokens LinkToken[]
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("offboardings")
+}
+
+// ---------------------------------------------------------------------------
+// SLA engine (config-driven timers) + working-day support
+// ---------------------------------------------------------------------------
+
+/// One row per BRD automation rule, editable by admins. The scheduler
+/// evaluates active rules against records sitting in `status` for longer
+/// than `afterValue afterUnit` (measured from statusChangedAt).
+model SlaRule {
+  id            String    @id @default(cuid())
+  processKey    String    @default("TRAINEE") // which state machine this targets
+  status        String // the status the record must be in
+  afterValue    Int
+  afterUnit     SlaUnit
+  action        SlaAction
+  notifySubject Boolean   @default(true) // the trainee/employee
+  notifyHr      Boolean   @default(true)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  @@index([processKey, status, active])
+  @@map("sla_rules")
+}
+
+/// Public holidays — excluded (with Fri/Sat weekends) from working-day math.
+model Holiday {
+  id   String   @id @default(cuid())
+  date DateTime @unique @db.Date
+  name String
+
+  @@map("holidays")
+}
+
+/// Admin-editable system settings (JSON values keyed by area, e.g. "mail").
+model Setting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications, signed links, audit
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id             String              @id @default(cuid())
+  channel        NotificationChannel
+  status         NotificationStatus  @default(PENDING)
+  /// Staff recipient (in-app + email) …
+  recipient      User?               @relation(fields: [recipientUserId], references: [id])
+  recipientUserId String?
+  /// … or external recipient (trainee/employee) by email.
+  recipientEmail String?
+  locale         String              @default("ar")
+  subject        String?
+  body           String              @db.Text
+  entity         String? // e.g. TRAINEE, ASSET_FORM — for deep links
+  entityId       String?
+  sentAt         DateTime?
+  readAt         DateTime? // in-app read marker
+  createdAt      DateTime            @default(now())
+
+  @@index([recipientUserId, readAt])
+  @@map("notifications")
+}
+
+/// Signed single-purpose link (trainee/employee actions). Only the token
+/// hash is stored — the raw token exists only inside the email we send.
+model LinkToken {
+  id      String      @id @default(cuid())
+  purpose LinkPurpose
+
+  trainee       Trainee?     @relation(fields: [traineeId], references: [id])
+  traineeId     String?
+  employee      Employee?    @relation(fields: [employeeId], references: [id])
+  employeeId    String?
+  assetForm     AssetForm?   @relation(fields: [assetFormId], references: [id])
+  assetFormId   String?
+  offboarding   Offboarding? @relation(fields: [offboardingId], references: [id])
+  offboardingId String?
+
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([traineeId])
+  @@index([employeeId])
+  @@map("link_tokens")
+}
+
+/// Append-only audit trail — every status transition, SLA action, and
+/// e-approval across all state machines. Never updated, never deleted.
+model AuditLog {
+  id       String @id @default(cuid())
+  entity   String // TRAINEE | EMPLOYEE | GOSI | MEDICAL_INSURANCE | CRIMINAL_RECORD | ASSET_FORM | OFFBOARDING
+  entityId String
+  action   String // STATUS_TRANSITION | SLA_REMINDER | SLA_EXPIRE | LINK_SENT | E_APPROVAL | REOPEN | ...
+
+  fromStatus String?
+  toStatus   String?
+
+  actorType String // USER | LINK | SYSTEM
+  actor     User?   @relation(fields: [actorId], references: [id])
+  actorId   String?
+
+  /// Optional anchors so a record's full timeline is one indexed query.
+  trainee    Trainee?  @relation("TraineeAudit", fields: [traineeId], references: [id])
+  traineeId  String?
+  employee   Employee? @relation("EmployeeAudit", fields: [employeeId], references: [id])
+  employeeId String?
+
+  metadata Json?
+  at       DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([traineeId, at])
+  @@index([employeeId, at])
+  @@map("audit_logs")
+}
