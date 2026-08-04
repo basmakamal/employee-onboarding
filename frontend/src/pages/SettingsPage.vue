@@ -12,6 +12,22 @@ interface MailSettings {
   hasPassword: boolean;
 }
 
+interface SlaRuleRow {
+  id: string;
+  processKey: string;
+  status: string;
+  afterValue: number;
+  afterUnit: 'HOURS' | 'CALENDAR_DAYS' | 'WORKING_DAYS';
+  action: string;
+  notifySubject: boolean;
+  notifyRole: string;
+  escalateToRole: string | null;
+  active: boolean;
+}
+
+const ROLES = ['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN'];
+const UNITS = ['HOURS', 'CALENDAR_DAYS', 'WORKING_DAYS'];
+
 const PRESETS: Record<string, { host: string; port: number }> = {
   gmail: { host: 'smtp.gmail.com', port: 587 },
   microsoft: { host: 'smtp.office365.com', port: 587 },
@@ -45,7 +61,28 @@ function onProvider(provider: string) {
   }
 }
 
+const rules = ref<SlaRuleRow[]>([]);
+const ruleBusy = ref('');
+
+async function loadRules() {
+  rules.value = await api.get<SlaRuleRow[]>('/api/settings/sla');
+}
+
+async function updateRule(rule: SlaRuleRow, changes: Partial<SlaRuleRow>) {
+  ruleBusy.value = rule.id;
+  try {
+    await api.put(`/api/settings/sla/${rule.id}`, changes);
+    notify(t('common.saved'));
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    ruleBusy.value = '';
+    await loadRules();
+  }
+}
+
 async function load() {
+  await loadRules();
   const data = await api.get<MailSettings>('/api/settings/mail');
   form.value = {
     provider: data.provider,
@@ -184,6 +221,100 @@ onMounted(load);
           {{ $t('settings.sendTest') }}
         </v-btn>
       </v-card-actions>
+    </v-card>
+
+    <!-- Automation (SLA) rules -->
+    <v-card v-if="loaded" class="mt-6" :title="$t('sla.title')" :subtitle="$t('sla.subtitle')">
+      <v-table density="comfortable">
+        <thead>
+          <tr>
+            <th>{{ $t('sla.watch') }}</th>
+            <th>{{ $t('sla.action') }}</th>
+            <th style="width: 220px">{{ $t('sla.after') }}</th>
+            <th>{{ $t('sla.notify') }}</th>
+            <th>{{ $t('sla.active') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="rule in rules" :key="rule.id">
+            <td>
+              <div class="font-weight-medium">{{ $t(`entities.${rule.processKey}`, rule.processKey) }}</div>
+              <div class="text-caption text-medium-emphasis">
+                {{ $t(`status.${rule.status}`, $t(`offboardingStatus.${rule.status}`, $t(`processStatus.${rule.status}`, rule.status))) }}
+              </div>
+            </td>
+            <td>
+              <v-chip
+                size="small"
+                variant="tonal"
+                :color="rule.action === 'EXPIRE' ? 'error' : rule.action === 'ESCALATE' ? 'warning' : 'primary'"
+              >
+                {{ $t(`sla.actions.${rule.action}`) }}
+              </v-chip>
+            </td>
+            <td>
+              <div class="d-flex align-center" style="gap: 6px">
+                <v-text-field
+                  :model-value="rule.afterValue"
+                  type="number"
+                  min="1"
+                  density="compact"
+                  hide-details
+                  style="max-width: 76px"
+                  :disabled="ruleBusy === rule.id"
+                  @change="(e: Event) => updateRule(rule, { afterValue: Number((e.target as HTMLInputElement).value) })"
+                />
+                <v-select
+                  :model-value="rule.afterUnit"
+                  :items="UNITS.map((u) => ({ title: $t(`sla.units.${u}`), value: u }))"
+                  density="compact"
+                  hide-details
+                  variant="plain"
+                  :disabled="ruleBusy === rule.id"
+                  @update:model-value="(afterUnit: SlaRuleRow['afterUnit']) => updateRule(rule, { afterUnit })"
+                />
+              </div>
+            </td>
+            <td>
+              <v-select
+                v-if="rule.action !== 'ESCALATE'"
+                :model-value="rule.notifyRole"
+                :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
+                density="compact"
+                hide-details
+                variant="plain"
+                style="max-width: 170px"
+                :disabled="ruleBusy === rule.id"
+                @update:model-value="(notifyRole: string) => updateRule(rule, { notifyRole })"
+              />
+              <v-select
+                v-else
+                :model-value="rule.escalateToRole ?? 'ADMIN'"
+                :items="ROLES.map((r) => ({ title: `⬆ ${$t(`roles.${r}`)}`, value: r }))"
+                density="compact"
+                hide-details
+                variant="plain"
+                style="max-width: 170px"
+                :disabled="ruleBusy === rule.id"
+                @update:model-value="(escalateToRole: string) => updateRule(rule, { escalateToRole })"
+              />
+            </td>
+            <td>
+              <v-switch
+                :model-value="rule.active"
+                color="success"
+                density="compact"
+                hide-details
+                :disabled="ruleBusy === rule.id"
+                @update:model-value="(active: unknown) => updateRule(rule, { active: Boolean(active) })"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
+      <v-card-text class="text-caption text-medium-emphasis">
+        {{ $t('sla.hint') }}
+      </v-card-text>
     </v-card>
 
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3500">

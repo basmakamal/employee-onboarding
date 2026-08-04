@@ -328,6 +328,31 @@
     "doneTitle": "Thank you for your feedback",
     "doneHint": "Your answers were recorded. We wish you all the best!"
   },
+  "bell": {
+    "title": "Notifications",
+    "empty": "Nothing yet — reminders and escalations will appear here."
+  },
+  "sla": {
+    "title": "Automation rules",
+    "subtitle": "Reminders, escalations and deadlines — evaluated every few minutes",
+    "watch": "Watches",
+    "action": "Action",
+    "after": "After",
+    "notify": "Notify group",
+    "active": "Active",
+    "hint": "Changes apply on the next scheduler tick (within minutes). ESCALATE fires once per record after reminders were ignored.",
+    "actions": {
+      "REMIND": "Remind once",
+      "REMIND_DAILY": "Remind daily",
+      "ESCALATE": "Escalate",
+      "EXPIRE": "Expire"
+    },
+    "units": {
+      "HOURS": "hours",
+      "CALENDAR_DAYS": "calendar days",
+      "WORKING_DAYS": "working days"
+    }
+  },
   "assetApproval": {
     "title": "Asset custody form",
     "hint": "By approving, you electronically confirm receipt of the items above and accept responsibility for them.",
