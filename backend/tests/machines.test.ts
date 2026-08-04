@@ -24,6 +24,9 @@ function deps<T extends { id: string; status: string }>(): EngineDeps<T> {
 }
 
 const HR = { type: 'USER' as const, id: 'hr1', role: 'HR' };
+const INSURANCE = { type: 'USER' as const, id: 'ins1', role: 'INSURANCE' };
+const IT = { type: 'USER' as const, id: 'it1', role: 'IT' };
+const FINANCE = { type: 'USER' as const, id: 'fin1', role: 'FINANCE' };
 const LINK = { type: 'LINK' as const, id: 'tok1' };
 const SYSTEM = { type: 'SYSTEM' as const };
 
@@ -118,13 +121,15 @@ describe('employee-file process machines (Stage 2)', () => {
     const wf = new Workflow(employeeProcessMachine('GOSI'), deps());
     const rec = (status: string) => ({ id: 'p1', employeeId: 'e1', status });
 
-    expect((await wf.transition(rec('PENDING'), 'HOLD', HR)).to).toBe('ON_HOLD');
-    expect((await wf.transition(rec('ON_HOLD'), 'RESUME', HR)).to).toBe('PENDING');
-    expect((await wf.transition(rec('ON_HOLD'), 'COMPLETE', HR)).to).toBe('DONE');
-    expect((await wf.transition(rec('PENDING'), 'CANCEL', HR)).to).toBe('CANCELLED');
-    await expect(wf.transition(rec('DONE'), 'HOLD', HR)).rejects.toBeInstanceOf(
+    expect((await wf.transition(rec('PENDING'), 'HOLD', INSURANCE)).to).toBe('ON_HOLD');
+    expect((await wf.transition(rec('ON_HOLD'), 'RESUME', INSURANCE)).to).toBe('PENDING');
+    expect((await wf.transition(rec('ON_HOLD'), 'COMPLETE', INSURANCE)).to).toBe('DONE');
+    expect((await wf.transition(rec('PENDING'), 'CANCEL', INSURANCE)).to).toBe('CANCELLED');
+    await expect(wf.transition(rec('DONE'), 'HOLD', INSURANCE)).rejects.toBeInstanceOf(
       IllegalTransitionError,
     );
+    // Status ownership: HR may not act on the insurance group's card.
+    await expect(wf.transition(rec('PENDING'), 'HOLD', HR)).rejects.toThrow(/role HR/);
   });
 
   it('criminal record: strictly forward, no skipping', async () => {
@@ -148,7 +153,7 @@ describe('asset form machine (Stage 2)', () => {
       assetFormMachine({ countItems: vi.fn().mockResolvedValue(0) }),
       deps<AssetForm>(),
     );
-    await expect(wf.transition(form('DRAFT'), 'SEND', HR)).rejects.toThrow(/no asset lines/);
+    await expect(wf.transition(form('DRAFT'), 'SEND', IT)).rejects.toThrow(/no asset lines/);
   });
 
   it('employee decisions come only through the signed link', async () => {
@@ -157,7 +162,7 @@ describe('asset form machine (Stage 2)', () => {
       deps<AssetForm>(),
     );
 
-    expect((await wf.transition(form('DRAFT'), 'SEND', HR)).to).toBe('SENT');
+    expect((await wf.transition(form('DRAFT'), 'SEND', IT)).to).toBe('SENT');
     expect((await wf.transition(form('SENT'), 'OPEN', LINK)).to).toBe(
       'PENDING_EMPLOYEE_APPROVAL',
     );
@@ -174,7 +179,7 @@ describe('asset form machine (Stage 2)', () => {
       assetFormMachine({ countItems: vi.fn().mockResolvedValue(1) }),
       deps<AssetForm>(),
     );
-    expect((await wf.transition(form('REJECTED'), 'REVISE', HR)).to).toBe('DRAFT');
+    expect((await wf.transition(form('REJECTED'), 'REVISE', IT)).to).toBe('DRAFT');
   });
 });
 
@@ -211,7 +216,7 @@ describe('offboarding machine (Stage 3)', () => {
       'NOTICE_SENT',
     );
 
-    await expect(wf.transition(off('SETTLEMENT'), 'CLOSE', HR)).rejects.toThrow(
+    await expect(wf.transition(off('SETTLEMENT'), 'CLOSE', FINANCE)).rejects.toThrow(
       /settlement amounts/,
     );
 
@@ -220,7 +225,7 @@ describe('offboarding machine (Stage 3)', () => {
       settlementLeaveDays: 4.5 as never,
       settlementEntitlements: 15000 as never,
     });
-    expect((await wf.transition(complete, 'CLOSE', HR)).to).toBe('CLOSED');
+    expect((await wf.transition(complete, 'CLOSE', FINANCE)).to).toBe('CLOSED');
   });
 
   it('cancellation is impossible once the notice is out', async () => {

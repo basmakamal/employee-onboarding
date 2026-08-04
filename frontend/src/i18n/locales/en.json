@@ -4,7 +4,102 @@
     "tagline": "Trainee onboarding, employee file, and offboarding — one auditable workflow."
   },
   "nav": {
-    "home": "Home"
+    "home": "Dashboard",
+    "trainees": "Trainees",
+    "employees": "Employees"
+  },
+  "employees": {
+    "title": "Employees",
+    "subtitle": "Stage 2 — the employee file: GOSI, insurance, criminal record, assets",
+    "no": "Employee no.",
+    "empty": "No employees yet — they are created automatically when a trainee's contract is approved.",
+    "new": "New employee",
+    "directHint": "For existing staff joining the system directly. New hires normally arrive automatically when their trainee contract is approved.",
+    "project": "Project",
+    "hireDate": "Hire date",
+    "hired": "Hired",
+    "holdReason": "Hold reason",
+    "holdNote": "Note (optional)",
+    "statuses": { "ACTIVE": "Active", "INACTIVE": "Inactive" }
+  },
+  "processes": {
+    "gosi": "GOSI",
+    "medical": "Medical Insurance",
+    "criminal": "Criminal Record"
+  },
+  "processStatus": {
+    "PENDING": "Pending",
+    "DONE": "Done",
+    "ON_HOLD": "On hold",
+    "CANCELLED": "Cancelled",
+    "TRAINING": "In training",
+    "REQUEST_SENT": "Request sent"
+  },
+  "processActions": {
+    "COMPLETE": "Mark done",
+    "HOLD": "Put on hold",
+    "RESUME": "Resume",
+    "CANCEL": "Cancel",
+    "SEND_REQUEST": "Send request",
+    "MARK_PENDING": "Awaiting certificate"
+  },
+  "holdReasons": {
+    "OPTIONAL_SUBSCRIPTION": "Optional subscription",
+    "GOVERNMENT_EMPLOYEE": "Government employee",
+    "DOB_MISMATCH": "Birth date mismatch",
+    "ID_MISMATCH": "ID number mismatch",
+    "INCOMPLETE_DATA": "Incomplete data",
+    "ELM_DATA_ISSUE": "Elm data issue",
+    "OTHER_INSURANCE_EXISTS": "Other insurance exists",
+    "EMPLOYEE_DECLINED": "Employee declined",
+    "AWAITING_INSURER": "Awaiting insurance company",
+    "OTHER": "Other"
+  },
+  "assets": {
+    "title": "Asset custody",
+    "newForm": "New custody form",
+    "empty": "No custody forms yet.",
+    "items": "item(s)",
+    "type": "Type",
+    "name": "Name",
+    "serial": "Serial no.",
+    "qty": "Qty",
+    "condition": "Condition",
+    "notes": "Notes",
+    "deliveryDate": "Delivery date",
+    "addItem": "Add item",
+    "rejectReason": "Rejection reason",
+    "linkSent": "Approval link sent",
+    "linkHint": "The employee received this link by email (in development it is also shown here).",
+    "actions": { "send": "Send for approval", "cancel": "Cancel", "revise": "Revise" }
+  },
+  "assetStatus": {
+    "DRAFT": "Draft",
+    "SENT": "Sent",
+    "PENDING_EMPLOYEE_APPROVAL": "Awaiting employee",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "CANCELLED": "Cancelled"
+  },
+  "conditions": { "NEW": "New", "USED": "Used" },
+  "entities": {
+    "TRAINEE": "Trainee",
+    "EMPLOYEE": "Employee",
+    "GOSI": "GOSI",
+    "MEDICAL_INSURANCE": "Medical insurance",
+    "CRIMINAL_RECORD": "Criminal record",
+    "ASSET_FORM": "Asset custody",
+    "OFFBOARDING": "Offboarding"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "create": "Create",
+    "save": "Save",
+    "send": "Send",
+    "saved": "Saved",
+    "done": "Done",
+    "error": "Something went wrong",
+    "submit": "Submit"
   },
   "home": {
     "welcome": "Welcome",
@@ -27,8 +122,126 @@
       }
     }
   },
+  "trainees": {
+    "title": "Trainees",
+    "subtitle": "Stage 1 — from record creation to contract approval",
+    "new": "New trainee",
+    "empty": "No trainees yet — create the first one.",
+    "name": "Name",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email",
+    "phone": "Phone",
+    "nationalId": "National ID",
+    "birthDate": "Birth date",
+    "department": "Department",
+    "jobTitle": "Job title",
+    "status": "Status",
+    "docsHint": "The default document checklist (ID, qualification, photo, IBAN letter) is created automatically.",
+    "info": "Personal information",
+    "documents": "Document checklist",
+    "uploaded": "Uploaded",
+    "missing": "Not uploaded",
+    "optional": "optional",
+    "contract": "Contract",
+    "timeline": "Timeline",
+    "missingNotes": "What is missing? (sent to the trainee)",
+    "becameEmployee": "Contract approved — employee profile {no} was created automatically."
+  },
+  "contract": {
+    "salary": "Salary",
+    "durationMonths": "Duration (months)",
+    "startDate": "Start date",
+    "terms": "Terms",
+    "none": "No contract yet.",
+    "edit": "Edit contract",
+    "createBtn": "Create contract",
+    "sentAt": "Sent",
+    "approvedAt": "Approved"
+  },
+  "status": {
+    "CREATED": "Created",
+    "AWAITING_FORM": "Awaiting form",
+    "FORM_RECEIVED": "Form received",
+    "CONTRACT_CREATION": "Contract creation",
+    "AWAITING_CONTRACT_APPROVAL": "Awaiting approval",
+    "EMPLOYEE_CREATED": "Employee created",
+    "EXPIRED": "Expired"
+  },
   "actions": {
     "toggleTheme": "Toggle dark mode",
-    "language": "العربية"
+    "language": "العربية",
+    "SEND_FORM": "Send data form",
+    "REQUEST_MISSING": "Request missing documents",
+    "ACCEPT_DOCUMENTS": "Accept documents",
+    "SEND_CONTRACT": "Send contract",
+    "REOPEN": "Reopen"
+  },
+  "audit": {
+    "CREATE": "Record created",
+    "STATUS_TRANSITION": "Status changed",
+    "LINK_SENT": "Link sent",
+    "SLA_REMINDER": "Automatic reminder",
+    "SEND_FORM": "Data form sent",
+    "SUBMIT_FORM": "Form submitted",
+    "REQUEST_MISSING": "Missing documents requested",
+    "ACCEPT_DOCUMENTS": "Documents accepted",
+    "SEND_CONTRACT": "Contract sent",
+    "APPROVE_CONTRACT": "Contract approved",
+    "EXPIRE": "Deadline expired",
+    "REOPEN": "Reopened"
+  },
+  "actors": {
+    "USER": "Staff",
+    "LINK": "Trainee (signed link)",
+    "SYSTEM": "System"
+  },
+  "login": {
+    "subtitle": "Sign in to your account",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "invalid": "Invalid email or password"
+  },
+  "roles": {
+    "HR": "Human Resources",
+    "INSURANCE": "Insurance",
+    "IT": "IT",
+    "FINANCE": "Finance",
+    "ADMIN": "Administrator"
+  },
+  "publicForm": {
+    "title": "Complete your onboarding data",
+    "greeting": "Hello {name}, welcome aboard!",
+    "fileHint": "Accepted files: PDF, JPG, PNG, DOC — up to 10 MB each.",
+    "requiredHint": "All documents marked * are required before submitting.",
+    "invalidTitle": "This link is no longer valid",
+    "invalidHint": "The link may have expired or already been used. Please contact HR for a new one.",
+    "doneTitle": "Thank you! Your data was submitted.",
+    "doneHint": "HR will review your documents and contact you with the next step."
+  },
+  "approval": {
+    "title": "Your employment contract",
+    "hint": "By clicking Approve, you electronically accept this contract.",
+    "approveBtn": "Approve contract",
+    "doneTitle": "Contract approved — welcome!",
+    "doneHint": "Your employee profile ({no}) has been created. HR will contact you with your onboarding details."
+  },
+  "assetApproval": {
+    "title": "Asset custody form",
+    "hint": "By approving, you electronically confirm receipt of the items above and accept responsibility for them.",
+    "approveBtn": "Approve & confirm receipt",
+    "rejectBtn": "Reject",
+    "approvedTitle": "Custody approved",
+    "approvedHint": "The items are now registered to your employee file.",
+    "rejectedTitle": "Custody rejected",
+    "rejectedHint": "HR has been notified and will follow up with you."
+  },
+  "docTypes": {
+    "NATIONAL_ID": "National ID",
+    "QUALIFICATION": "Qualification certificate",
+    "PHOTO": "Personal photo",
+    "IBAN_LETTER": "IBAN letter"
   }
 }

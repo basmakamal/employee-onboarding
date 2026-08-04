@@ -17,7 +17,7 @@ export function assetFormMachine(gates: AssetFormGates): MachineDef<AssetForm> {
         action: 'SEND',
         from: 'DRAFT',
         to: 'SENT',
-        actors: ['USER'],
+        actors: ['USER'], roles: ['IT'],
         guard: async ({ record }) => {
           if ((await gates.countItems(record.id)) === 0) {
             throw new GuardFailedError('FORM_EMPTY', 'the custody form has no asset lines');
@@ -43,16 +43,16 @@ export function assetFormMachine(gates: AssetFormGates): MachineDef<AssetForm> {
       },
 
       // HR may revise a rejected form and try again.
-      { action: 'REVISE', from: 'REJECTED', to: 'DRAFT', actors: ['USER'] },
+      { action: 'REVISE', from: 'REJECTED', to: 'DRAFT', actors: ['USER'], roles: ['IT'] },
 
       // HR may cancel anything not yet decided.
-      { action: 'CANCEL', from: 'DRAFT', to: 'CANCELLED', actors: ['USER'] },
-      { action: 'CANCEL', from: 'SENT', to: 'CANCELLED', actors: ['USER'] },
+      { action: 'CANCEL', from: 'DRAFT', to: 'CANCELLED', actors: ['USER'], roles: ['IT'] },
+      { action: 'CANCEL', from: 'SENT', to: 'CANCELLED', actors: ['USER'], roles: ['IT'] },
       {
         action: 'CANCEL',
         from: 'PENDING_EMPLOYEE_APPROVAL',
         to: 'CANCELLED',
-        actors: ['USER'],
+        actors: ['USER'], roles: ['IT'],
       },
     ],
   };

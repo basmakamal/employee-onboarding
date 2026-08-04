@@ -117,8 +117,8 @@ describe('Workflow.transition', () => {
 
   it('lists available actions per status and actor — for UI buttons', () => {
     const wf = new Workflow(MACHINE, makeDeps().deps);
-    expect(wf.availableActions('A', 'USER')).toEqual(['GO', 'GUARDED']);
-    expect(wf.availableActions('A', 'LINK')).toEqual([]);
-    expect(wf.availableActions('B', 'SYSTEM')).toEqual(['DYNAMIC']);
+    expect(wf.availableActions('A', { type: 'USER', role: 'HR' })).toEqual(['GO', 'GUARDED']);
+    expect(wf.availableActions('A', { type: 'LINK' })).toEqual([]);
+    expect(wf.availableActions('B', { type: 'SYSTEM' })).toEqual(['DYNAMIC']);
   });
 });

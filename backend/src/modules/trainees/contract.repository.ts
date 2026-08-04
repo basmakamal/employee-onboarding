@@ -21,6 +21,10 @@ export class ContractRepository {
     return this.db.contract.update({ where: { id }, data: { sentAt } });
   }
 
+  updateDetails(id: string, details: Prisma.InputJsonValue) {
+    return this.db.contract.update({ where: { id }, data: { details } });
+  }
+
   /** Guarded on unapproved so a duplicate approval click cannot re-stamp it. */
   async markApproved(id: string, approvedAt: Date): Promise<boolean> {
     const result = await this.db.contract.updateMany({

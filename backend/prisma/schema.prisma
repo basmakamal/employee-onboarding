@@ -14,10 +14,14 @@ datasource db {
 // Enums
 // ---------------------------------------------------------------------------
 
-/// Staff roles. Trainees/employees are NOT users — they act through signed,
-/// expiring link tokens (see LinkToken).
+/// Staff role groups — each workflow status is owned by a group (machine
+/// transitions declare `roles`); ADMIN overrides everything. Trainees and
+/// employees are NOT users — they act through signed link tokens.
 enum Role {
-  HR
+  HR // trainee stage, criminal record, offboarding flow
+  INSURANCE // GOSI + medical insurance cards
+  IT // asset registry + custody forms
+  FINANCE // final settlement + file closure
   ADMIN
 }
 

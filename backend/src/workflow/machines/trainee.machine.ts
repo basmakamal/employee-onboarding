@@ -31,7 +31,7 @@ export function traineeMachine(gates: TraineeGates): MachineDef<Trainee> {
     key: 'TRAINEE',
     transitions: [
       // HR sends the data-completion form (signed link goes out).
-      { action: 'SEND_FORM', from: 'CREATED', to: 'AWAITING_FORM', actors: ['USER'] },
+      { action: 'SEND_FORM', from: 'CREATED', to: 'AWAITING_FORM', actors: ['USER'], roles: ['HR'] },
 
       // Trainee submits the form through the signed link.
       { action: 'SUBMIT_FORM', from: 'AWAITING_FORM', to: 'FORM_RECEIVED', actors: ['LINK'] },
@@ -41,7 +41,7 @@ export function traineeMachine(gates: TraineeGates): MachineDef<Trainee> {
         action: 'REQUEST_MISSING',
         from: 'FORM_RECEIVED',
         to: 'AWAITING_FORM',
-        actors: ['USER'],
+        actors: ['USER'], roles: ['HR'],
       },
 
       // HR review: complete → contract work begins.
@@ -50,7 +50,7 @@ export function traineeMachine(gates: TraineeGates): MachineDef<Trainee> {
         action: 'ACCEPT_DOCUMENTS',
         from: 'FORM_RECEIVED',
         to: 'CONTRACT_CREATION',
-        actors: ['USER'],
+        actors: ['USER'], roles: ['HR'],
         guard: ({ record }) => documentsComplete(record.id),
       },
 
@@ -60,7 +60,7 @@ export function traineeMachine(gates: TraineeGates): MachineDef<Trainee> {
         action: 'SEND_CONTRACT',
         from: 'CONTRACT_CREATION',
         to: 'AWAITING_CONTRACT_APPROVAL',
-        actors: ['USER'],
+        actors: ['USER'], roles: ['HR'],
         guard: async ({ record }) => {
           await documentsComplete(record.id);
           if (!(await gates.hasContract(record.id))) {
@@ -95,7 +95,7 @@ export function traineeMachine(gates: TraineeGates): MachineDef<Trainee> {
           (await gates.contractWasSent(record.id))
             ? 'AWAITING_CONTRACT_APPROVAL'
             : 'AWAITING_FORM',
-        actors: ['USER'],
+        actors: ['USER'], roles: ['HR'],
       },
     ],
   };

@@ -55,3 +55,21 @@ export class NotFoundError extends DomainError {
     super(`${entity} ${id} not found`);
   }
 }
+
+/** Missing/invalid credentials or token. */
+export class UnauthorizedError extends DomainError {
+  readonly code = 'UNAUTHORIZED';
+  readonly httpStatus = 401;
+  constructor(message = 'authentication required') {
+    super(message);
+  }
+}
+
+/** Authenticated, but this role may not do that. */
+export class ForbiddenError extends DomainError {
+  readonly code = 'FORBIDDEN';
+  readonly httpStatus = 403;
+  constructor(message = 'insufficient permissions') {
+    super(message);
+  }
+}
