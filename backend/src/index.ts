@@ -10,7 +10,9 @@ import { traineeRouter } from './modules/trainees/trainee.routes.js';
 import { employeeRouter } from './modules/employees/employee.routes.js';
 import { assetRouter } from './modules/assets/asset.routes.js';
 import { offboardingRouter } from './modules/offboarding/offboarding.routes.js';
+import { settingsRouter } from './modules/settings/settings.routes.js';
 import { linkRouter } from './modules/trainees/link.routes.js';
+import { asyncHandler } from './common/http.js';
 
 const container = buildContainer();
 
@@ -21,6 +23,13 @@ staffApi.use(requireAuth(container.authService));
 staffApi.use('/trainees', requireRole('HR', 'ADMIN'), traineeRouter(container.traineeService));
 staffApi.use('/employees', employeeRouter(container.employeeService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
+staffApi.use('/settings', settingsRouter(container.settingsService));
+staffApi.get(
+  '/dashboard',
+  asyncHandler(async (_req, res) => {
+    res.json(await container.dashboardService.summary());
+  }),
+);
 staffApi.use('/', assetRouter(container.assetService));
 
 const app = createApp({
