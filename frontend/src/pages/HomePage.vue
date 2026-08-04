@@ -1,81 +1,208 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { api } from '../api/client';
 
-const api = ref<'checking' | 'up' | 'down'>('checking');
+type CountMap = Record<string, number>;
+
+interface DashboardData {
+  trainees: CountMap;
+  employees: CountMap;
+  processes: { gosi: CountMap; medical: CountMap; criminal: CountMap };
+  assetForms: CountMap;
+  offboardings: CountMap;
+  recent: Array<{
+    id: string;
+    entity: string;
+    action: string;
+    toStatus: string | null;
+    actorType: string;
+    at: string;
+    subject: string | null;
+  }>;
+}
+
+const TRAINEE_STAGES = [
+  'CREATED',
+  'AWAITING_FORM',
+  'FORM_RECEIVED',
+  'CONTRACT_CREATION',
+  'AWAITING_CONTRACT_APPROVAL',
+  'EMPLOYEE_CREATED',
+  'EXPIRED',
+];
+const OFFBOARDING_STAGES = ['REQUESTED', 'IN_PROGRESS', 'ASSETS_PENDING', 'NOTICE_SENT', 'SETTLEMENT'];
+
+const STAGE_COLORS: Record<string, string> = {
+  CREATED: 'grey',
+  AWAITING_FORM: 'orange',
+  FORM_RECEIVED: 'blue',
+  CONTRACT_CREATION: 'indigo',
+  AWAITING_CONTRACT_APPROVAL: 'amber',
+  EMPLOYEE_CREATED: 'success',
+  EXPIRED: 'error',
+};
+
+const data = ref<DashboardData | null>(null);
+
+const sum = (map: CountMap | undefined) =>
+  Object.values(map ?? {}).reduce((a, b) => a + b, 0);
+
+const stats = computed(() => [
+  { key: 'trainees', icon: 'mdi-school', color: 'primary', value: sum(data.value?.trainees), to: '/trainees' },
+  { key: 'activeEmployees', icon: 'mdi-badge-account', color: 'success', value: data.value?.employees['ACTIVE'] ?? 0, to: '/employees' },
+  { key: 'openOffboardings', icon: 'mdi-exit-run', color: 'warning', value: OFFBOARDING_STAGES.reduce((a, s) => a + (data.value?.offboardings[s] ?? 0), 0), to: '/employees' },
+  { key: 'pendingApprovals', icon: 'mdi-file-clock', color: 'indigo', value: (data.value?.trainees['AWAITING_CONTRACT_APPROVAL'] ?? 0) + (data.value?.assetForms['PENDING_EMPLOYEE_APPROVAL'] ?? 0), to: '/trainees' },
+]);
+
+function processSummary(map: CountMap | undefined) {
+  return {
+    done: map?.['DONE'] ?? 0,
+    pending: (map?.['PENDING'] ?? 0) + (map?.['TRAINING'] ?? 0) + (map?.['REQUEST_SENT'] ?? 0),
+    hold: map?.['ON_HOLD'] ?? 0,
+  };
+}
 
 onMounted(async () => {
-  try {
-    const res = await fetch('/api/health');
-    api.value = res.ok ? 'up' : 'down';
-  } catch {
-    api.value = 'down';
-  }
+  data.value = await api.get<DashboardData>('/api/dashboard');
 });
-
-const stages = [
-  { key: 'trainee', icon: 'mdi-school', color: 'primary' },
-  { key: 'profile', icon: 'mdi-folder-account', color: 'secondary' },
-  { key: 'offboarding', icon: 'mdi-exit-run', color: 'warning' },
-] as const;
 </script>
 
 <template>
-  <v-container class="py-12" style="max-width: 1100px">
-    <div class="text-center mb-12 hero">
-      <h1 class="text-h3 font-weight-bold mb-3">{{ $t('home.welcome') }} 👋</h1>
-      <p class="text-h6 text-medium-emphasis mx-auto" style="max-width: 640px">
-        {{ $t('app.tagline') }}
-      </p>
-      <v-chip
-        class="mt-6"
-        :color="api === 'up' ? 'success' : api === 'down' ? 'error' : undefined"
-        variant="tonal"
-        prepend-icon="mdi-heart-pulse"
-      >
-        {{ $t('home.apiStatus') }}:
-        {{ api === 'checking' ? $t('home.checking') : api === 'up' ? $t('home.up') : $t('home.down') }}
-      </v-chip>
-    </div>
+  <v-container class="py-8" style="max-width: 1200px">
+    <h1 class="text-h4 font-weight-bold mb-1">{{ $t('dashboard.title') }}</h1>
+    <p class="text-medium-emphasis mb-6">{{ $t('app.tagline') }}</p>
 
-    <v-row>
-      <v-col v-for="(stage, i) in stages" :key="stage.key" cols="12" md="4">
-        <v-card
-          class="stage-card pa-2 h-100"
-          :style="{ animationDelay: `${i * 120}ms` }"
-          hover
-        >
-          <v-card-item>
-            <v-avatar :color="stage.color" variant="tonal" size="56" class="mb-4">
-              <v-icon :icon="stage.icon" size="30" />
-            </v-avatar>
-            <v-card-title class="text-h6 font-weight-bold px-0">
-              {{ $t(`home.stages.${stage.key}.title`) }}
-            </v-card-title>
-            <v-card-text class="px-0 text-medium-emphasis">
-              {{ $t(`home.stages.${stage.key}.desc`) }}
+    <template v-if="data">
+      <!-- Stat tiles -->
+      <v-row class="mb-2">
+        <v-col v-for="(stat, i) in stats" :key="stat.key" cols="6" md="3">
+          <v-card :to="stat.to" class="stat-card pa-2" :style="{ animationDelay: `${i * 80}ms` }" hover>
+            <v-card-text class="d-flex align-center" style="gap: 14px">
+              <v-avatar :color="stat.color" variant="tonal" size="52">
+                <v-icon :icon="stat.icon" size="28" />
+              </v-avatar>
+              <div>
+                <div class="text-h4 font-weight-bold">{{ stat.value }}</div>
+                <div class="text-caption text-medium-emphasis">{{ $t(`dashboard.${stat.key}`) }}</div>
+              </div>
             </v-card-text>
-          </v-card-item>
-        </v-card>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <v-row>
+        <v-col cols="12" md="7">
+          <!-- Stage 1: trainees by stage -->
+          <v-card class="mb-4" :title="$t('dashboard.traineesByStage')">
+            <v-card-text>
+              <v-list density="compact">
+                <v-list-item
+                  v-for="stage in TRAINEE_STAGES.filter((s) => (data!.trainees[s] ?? 0) > 0)"
+                  :key="stage"
+                  to="/trainees"
+                >
+                  <template #prepend>
+                    <v-badge :content="data!.trainees[stage]" :color="STAGE_COLORS[stage]" inline />
+                  </template>
+                  <v-list-item-title class="ms-2">{{ $t(`status.${stage}`) }}</v-list-item-title>
+                </v-list-item>
+                <div v-if="sum(data.trainees) === 0" class="text-medium-emphasis pa-4">
+                  {{ $t('trainees.empty') }}
+                </div>
+              </v-list>
+            </v-card-text>
+          </v-card>
+
+          <!-- Stage 2: process health -->
+          <v-card class="mb-4" :title="$t('dashboard.processes')">
+            <v-card-text>
+              <v-row dense>
+                <v-col v-for="kind in (['gosi', 'medical', 'criminal'] as const)" :key="kind" cols="12" sm="4">
+                  <div class="text-subtitle-2 font-weight-bold mb-2">{{ $t(`processes.${kind}`) }}</div>
+                  <div class="d-flex flex-wrap" style="gap: 6px">
+                    <v-chip size="small" color="success" variant="tonal">
+                      {{ $t('processStatus.DONE') }}: {{ processSummary(data.processes[kind]).done }}
+                    </v-chip>
+                    <v-chip size="small" color="orange" variant="tonal">
+                      {{ $t('processStatus.PENDING') }}: {{ processSummary(data.processes[kind]).pending }}
+                    </v-chip>
+                    <v-chip
+                      v-if="processSummary(data.processes[kind]).hold > 0"
+                      size="small"
+                      color="warning"
+                      variant="tonal"
+                    >
+                      {{ $t('processStatus.ON_HOLD') }}: {{ processSummary(data.processes[kind]).hold }}
+                    </v-chip>
+                  </div>
+                </v-col>
+              </v-row>
+            </v-card-text>
+          </v-card>
+
+          <!-- Stage 3: offboardings -->
+          <v-card :title="$t('dashboard.offboardings')">
+            <v-card-text>
+              <div class="d-flex flex-wrap" style="gap: 6px">
+                <v-chip
+                  v-for="stage in OFFBOARDING_STAGES.filter((s) => (data!.offboardings[s] ?? 0) > 0)"
+                  :key="stage"
+                  color="warning"
+                  variant="tonal"
+                  size="small"
+                >
+                  {{ $t(`offboardingStatus.${stage}`) }}: {{ data!.offboardings[stage] }}
+                </v-chip>
+                <v-chip v-if="(data.offboardings['CLOSED'] ?? 0) > 0" color="grey" variant="tonal" size="small">
+                  {{ $t('offboardingStatus.CLOSED') }}: {{ data.offboardings['CLOSED'] }}
+                </v-chip>
+                <span
+                  v-if="sum(data.offboardings) === 0"
+                  class="text-medium-emphasis"
+                >
+                  {{ $t('dashboard.noOffboardings') }}
+                </span>
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+
+        <!-- Recent activity -->
+        <v-col cols="12" md="5">
+          <v-card :title="$t('dashboard.recent')">
+            <v-list density="compact" lines="two">
+              <v-list-item v-for="log in data.recent" :key="log.id">
+                <v-list-item-title>
+                  {{ $t(`entities.${log.entity}`, log.entity) }} —
+                  {{ $t(`audit.${log.action}`, log.action) }}
+                </v-list-item-title>
+                <v-list-item-subtitle>
+                  <template v-if="log.subject">{{ log.subject }} · </template>
+                  {{ new Date(log.at).toLocaleString() }}
+                </v-list-item-subtitle>
+              </v-list-item>
+            </v-list>
+          </v-card>
+        </v-col>
+      </v-row>
+    </template>
+
+    <v-row v-else>
+      <v-col class="text-center py-16">
+        <v-progress-circular indeterminate color="primary" size="48" />
       </v-col>
     </v-row>
   </v-container>
 </template>
 
 <style scoped>
-.hero {
-  animation: rise 0.5s ease both;
-}
-.stage-card {
-  animation: rise 0.5s ease both;
-  transition: transform 0.2s ease;
-}
-.stage-card:hover {
-  transform: translateY(-4px);
+.stat-card {
+  animation: rise 0.45s ease both;
 }
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
