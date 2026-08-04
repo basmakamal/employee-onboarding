@@ -1,21 +1,24 @@
+# Optional: containerized MySQL for machines without XAMPP.
+# Local development normally uses XAMPP's MySQL/MariaDB on 127.0.0.1:3306
+# (see backend/.env.example). This compose file maps to host port 3307 so the
+# two can coexist.
 services:
   db:
-    image: postgres:16-alpine
+    image: mariadb:10.6
     container_name: onboarding-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: onboarding
-      POSTGRES_PASSWORD: onboarding
-      POSTGRES_DB: onboarding
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: employee_onboarding
     ports:
-      - "5433:5432"
+      - "3307:3306"
     volumes:
-      - onboarding_pgdata:/var/lib/postgresql/data
+      - onboarding_mysql:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U onboarding -d onboarding"]
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
       timeout: 3s
       retries: 10
 
 volumes:
-  onboarding_pgdata:
+  onboarding_mysql:

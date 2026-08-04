@@ -1,0 +1,105 @@
+/**
+ * Repository unit tests with a fake Db — no database needed.
+ * Repositories are constructor-injected, so anything that quacks like the
+ * Prisma client works. Same seam the services will use in Phase C tests.
+ */
+import { describe, expect, it, vi } from 'vitest';
+import type { Db } from '../src/common/prisma.js';
+import { TraineeRepository } from '../src/modules/trainees/trainee.repository.js';
+import { TraineeDocumentRepository } from '../src/modules/trainees/trainee-document.repository.js';
+import { AssetFormRepository } from '../src/modules/assets/asset-form.repository.js';
+import { AuditLogRepository } from '../src/workflow/audit-log.repository.js';
+
+describe('TraineeRepository.moveStatus', () => {
+  it('transitions only from the expected status and resets the SLA anchor', async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const repo = new TraineeRepository({ trainee: { updateMany } } as unknown as Db);
+
+    const moved = await repo.moveStatus('t1', 'AWAITING_FORM', 'FORM_RECEIVED');
+
+    expect(moved).toBe(true);
+    const args = updateMany.mock.calls[0]![0];
+    expect(args.where).toEqual({ id: 't1', status: 'AWAITING_FORM' });
+    expect(args.data.status).toBe('FORM_RECEIVED');
+    expect(args.data.statusChangedAt).toBeInstanceOf(Date); // SLA anchor reset
+    expect(args.data.lastReminderAt).toBeNull(); // reminder counter cleared
+  });
+
+  it('returns false for a stale transition (record moved on already)', async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const repo = new TraineeRepository({ trainee: { updateMany } } as unknown as Db);
+
+    expect(await repo.moveStatus('t1', 'CREATED', 'AWAITING_FORM')).toBe(false);
+  });
+});
+
+describe('TraineeDocumentRepository.countMissingRequired', () => {
+  it('counts required checklist rows without an upload — the contract gate', async () => {
+    const count = vi.fn().mockResolvedValue(2);
+    const repo = new TraineeDocumentRepository({ traineeDocument: { count } } as unknown as Db);
+
+    expect(await repo.countMissingRequired('t1')).toBe(2);
+    expect(count).toHaveBeenCalledWith({
+      where: { traineeId: 't1', required: true, storageKey: null },
+    });
+  });
+});
+
+describe('AssetFormRepository', () => {
+  it('moveStatus is guarded so a double-click cannot re-decide a form', async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const repo = new AssetFormRepository({ assetForm: { updateMany } } as unknown as Db);
+    const when = new Date('2026-08-01T10:00:00Z');
+
+    const moved = await repo.moveStatus('f1', 'PENDING_EMPLOYEE_APPROVAL', 'APPROVED', {
+      decidedAt: when,
+    });
+
+    expect(moved).toBe(true);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'f1', status: 'PENDING_EMPLOYEE_APPROVAL' },
+      data: { status: 'APPROVED', decidedAt: when },
+    });
+  });
+
+  it('countUnreturnedItems only looks at APPROVED custody forms — the offboarding gate', async () => {
+    const count = vi.fn().mockResolvedValue(3);
+    const repo = new AssetFormRepository({ assetFormItem: { count } } as unknown as Db);
+
+    expect(await repo.countUnreturnedItems('e1')).toBe(3);
+    expect(count).toHaveBeenCalledWith({
+      where: { form: { employeeId: 'e1', status: 'APPROVED' }, returnedAt: null },
+    });
+  });
+});
+
+describe('AuditLogRepository', () => {
+  it('appends the full transition record with anchors', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'log1' });
+    const repo = new AuditLogRepository({ auditLog: { create } } as unknown as Db);
+
+    await repo.append({
+      entity: 'TRAINEE',
+      entityId: 't1',
+      action: 'STATUS_TRANSITION',
+      fromStatus: 'AWAITING_FORM',
+      toStatus: 'EXPIRED',
+      actorType: 'SYSTEM',
+      traineeId: 't1',
+      metadata: { rule: 'form-10d-expire' },
+    });
+
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        entity: 'TRAINEE',
+        entityId: 't1',
+        action: 'STATUS_TRANSITION',
+        fromStatus: 'AWAITING_FORM',
+        toStatus: 'EXPIRED',
+        actorType: 'SYSTEM',
+        traineeId: 't1',
+        metadata: { rule: 'form-10d-expire' },
+      },
+    });
+  });
+});
