@@ -19,6 +19,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => user.value !== null);
 
+  /** Group check for UI gating — ADMIN passes everything. */
+  function hasRole(...roles: string[]): boolean {
+    const role = user.value?.role;
+    return role === 'ADMIN' || (role !== undefined && roles.includes(role));
+  }
+
   // Keep the store in sync with silent refreshes done by the api client.
   onSessionChange((sessionUser) => {
     user.value = sessionUser;
@@ -46,5 +52,5 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null;
   }
 
-  return { user, isAuthenticated, login, logout, restore };
+  return { user, isAuthenticated, hasRole, login, logout, restore };
 });

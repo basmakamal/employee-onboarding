@@ -13,10 +13,11 @@ import { linkRouter } from './modules/trainees/link.routes.js';
 
 const container = buildContainer();
 
+// Any active staff member may enter; ownership per status is enforced by
+// the state machines (roles on transitions) and per-route gates below.
 const staffApi = Router();
 staffApi.use(requireAuth(container.authService));
-staffApi.use(requireRole('HR', 'ADMIN'));
-staffApi.use('/trainees', traineeRouter(container.traineeService));
+staffApi.use('/trainees', requireRole('HR', 'ADMIN'), traineeRouter(container.traineeService));
 staffApi.use('/employees', employeeRouter(container.employeeService));
 staffApi.use('/', assetRouter(container.assetService));
 

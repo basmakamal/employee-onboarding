@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AssetService } from '../src/modules/assets/asset.service.js';
 import { GuardFailedError } from '../src/workflow/errors.js';
 
-const HR = { type: 'USER' as const, id: 'u1', role: 'HR' };
+const IT = { type: 'USER' as const, id: 'u1', role: 'IT' };
 
 function makeService(formOverrides: Partial<Record<string, unknown>> = {}, itemCount = 2) {
   const form = {
@@ -57,13 +57,13 @@ function makeService(formOverrides: Partial<Record<string, unknown>> = {}, itemC
 describe('AssetService', () => {
   it('an empty draft cannot be sent (machine guard)', async () => {
     const { service } = makeService({}, 0);
-    await expect(service.send('f1', HR)).rejects.toBeInstanceOf(GuardFailedError);
+    await expect(service.send('f1', IT)).rejects.toBeInstanceOf(GuardFailedError);
   });
 
   it('send issues the signed link and emails the employee', async () => {
     const { service, links, notifications } = makeService();
 
-    const result = await service.send('f1', HR);
+    const result = await service.send('f1', IT);
 
     expect(result.url).toContain('/approve-assets/');
     expect(links.issue).toHaveBeenCalledWith('ASSET_APPROVAL', {
@@ -112,6 +112,6 @@ describe('AssetService', () => {
 
   it('items can only be replaced while the form is a draft', async () => {
     const { service } = makeService({ status: 'SENT' });
-    await expect(service.replaceItems('f1', [], HR)).rejects.toThrow(/draft/);
+    await expect(service.replaceItems('f1', [], IT)).rejects.toThrow(/draft/);
   });
 });

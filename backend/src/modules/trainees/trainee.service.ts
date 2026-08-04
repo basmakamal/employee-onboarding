@@ -55,7 +55,7 @@ export class TraineeService {
     if (!trainee) throw new NotFoundError('trainee', id);
     return {
       ...trainee,
-      availableActions: this.workflow.availableActions(trainee.status, actor.type),
+      availableActions: this.workflow.availableActions(trainee.status, actor),
     };
   }
 

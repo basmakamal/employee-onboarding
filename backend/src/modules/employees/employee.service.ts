@@ -101,12 +101,12 @@ export class EmployeeService {
     return {
       ...employee,
       processActions: {
-        gosi: employee.gosi ? processMachine.availableActions(employee.gosi.status, actor.type) : [],
+        gosi: employee.gosi ? processMachine.availableActions(employee.gosi.status, actor) : [],
         medical: employee.medical
-          ? processMachine.availableActions(employee.medical.status, actor.type)
+          ? processMachine.availableActions(employee.medical.status, actor)
           : [],
         criminal: employee.criminalRecord
-          ? criminalMachine.availableActions(employee.criminalRecord.status, actor.type)
+          ? criminalMachine.availableActions(employee.criminalRecord.status, actor)
           : [],
       },
     };

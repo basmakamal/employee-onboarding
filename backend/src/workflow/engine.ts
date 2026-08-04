@@ -27,6 +27,11 @@ export interface TransitionDef<TRecord> {
   to: string | ((ctx: TransitionContext<TRecord>) => string | Promise<string>);
   /** Actor types allowed to perform this transition. */
   actors: ActorType[];
+  /**
+   * Staff role groups allowed to perform it (checked for USER actors only;
+   * ADMIN always passes). Omitted = any staff role.
+   */
+  roles?: string[];
   /** Business precondition — throws GuardFailedError to reject. */
   guard?: (ctx: TransitionContext<TRecord>) => void | Promise<void>;
 }
@@ -73,11 +78,17 @@ export class Workflow<TRecord> {
     private readonly deps: EngineDeps<TRecord>,
   ) {}
 
-  /** Actions available from a status for an actor type — drives UI buttons. */
-  availableActions(status: string, actorType: ActorType): string[] {
+  /** Actions available from a status for an actor — drives UI buttons. */
+  availableActions(status: string, actor: Actor): string[] {
     return this.def.transitions
-      .filter((t) => t.from === status && t.actors.includes(actorType))
+      .filter((t) => t.from === status && t.actors.includes(actor.type))
+      .filter((t) => this.roleAllowed(t, actor))
       .map((t) => t.action);
+  }
+
+  private roleAllowed(def: TransitionDef<TRecord>, actor: Actor): boolean {
+    if (actor.type !== 'USER' || !def.roles || actor.role === 'ADMIN') return true;
+    return def.roles.includes(actor.role ?? '');
   }
 
   async transition(
@@ -91,6 +102,9 @@ export class Workflow<TRecord> {
     if (!def) throw new IllegalTransitionError(this.def.key, from, action);
     if (!def.actors.includes(actor.type)) {
       throw new ForbiddenActorError(this.def.key, action, actor.type);
+    }
+    if (!this.roleAllowed(def, actor)) {
+      throw new ForbiddenActorError(this.def.key, action, `role ${actor.role ?? 'unknown'}`);
     }
 
     const ctx: TransitionContext<TRecord> = { record, actor };

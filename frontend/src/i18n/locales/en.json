@@ -206,6 +206,9 @@
   },
   "roles": {
     "HR": "Human Resources",
+    "INSURANCE": "Insurance",
+    "IT": "IT",
+    "FINANCE": "Finance",
     "ADMIN": "Administrator"
   },
   "publicForm": {

@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, ApiError } from '../api/client';
+import { useAuthStore } from '../stores/auth';
 
 interface EmployeeRow {
   id: string;
@@ -17,6 +18,7 @@ interface EmployeeRow {
 
 const { t } = useI18n();
 const router = useRouter();
+const auth = useAuthStore();
 const employees = ref<EmployeeRow[]>([]);
 const loading = ref(true);
 const dialog = ref(false);
@@ -80,7 +82,7 @@ onMounted(load);
         <p class="text-medium-emphasis mt-1">{{ $t('employees.subtitle') }}</p>
       </div>
       <v-spacer />
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="dialog = true">
+      <v-btn v-if="auth.hasRole('HR')" color="primary" prepend-icon="mdi-plus" @click="dialog = true">
         {{ $t('employees.new') }}
       </v-btn>
     </div>

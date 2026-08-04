@@ -17,10 +17,14 @@ const isPublicPage = () =>
   );
 
 const NAV = [
-  { to: '/', icon: 'mdi-view-dashboard', key: 'nav.home' },
-  { to: '/trainees', icon: 'mdi-school', key: 'nav.trainees' },
-  { to: '/employees', icon: 'mdi-badge-account', key: 'nav.employees' },
+  { to: '/', icon: 'mdi-view-dashboard', key: 'nav.home', roles: [] as string[] },
+  { to: '/trainees', icon: 'mdi-school', key: 'nav.trainees', roles: ['HR'] },
+  { to: '/employees', icon: 'mdi-badge-account', key: 'nav.employees', roles: [] as string[] },
 ];
+
+const navItems = computed(() =>
+  NAV.filter((item) => item.roles.length === 0 || auth.hasRole(...item.roles)),
+);
 
 const initials = computed(() =>
   (auth.user?.name ?? '')
@@ -82,7 +86,7 @@ onMounted(() => prefs.apply());
       <v-navigation-drawer v-model="drawer" :permanent="$vuetify.display.mdAndUp">
         <v-list nav density="comfortable">
           <v-list-item
-            v-for="item in NAV"
+            v-for="item in navItems"
             :key="item.to"
             :to="item.to"
             :prepend-icon="item.icon"

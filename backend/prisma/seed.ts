@@ -17,6 +17,9 @@ const DEFAULT_PASSWORD = 'Passw0rd!';
 
 const STAFF: Array<{ email: string; name: string; role: Role }> = [
   { email: 'hr@example.com', name: 'HR Officer', role: Role.HR },
+  { email: 'insurance@example.com', name: 'Insurance Officer', role: Role.INSURANCE },
+  { email: 'it@example.com', name: 'IT Officer', role: Role.IT },
+  { email: 'finance@example.com', name: 'Finance Officer', role: Role.FINANCE },
   { email: 'admin@example.com', name: 'System Admin', role: Role.ADMIN },
 ];
 

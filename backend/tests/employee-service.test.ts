@@ -7,6 +7,7 @@ import { EmployeeService } from '../src/modules/employees/employee.service.js';
 import { IllegalTransitionError } from '../src/workflow/errors.js';
 
 const HR = { type: 'USER' as const, id: 'u1', role: 'HR' };
+const INSURANCE = { type: 'USER' as const, id: 'u2', role: 'INSURANCE' };
 
 function makeService(overrides: Partial<Record<string, unknown>> = {}) {
   const gosiRow = { id: 'g1', employeeId: 'e1', status: 'PENDING', ...overrides };
@@ -33,7 +34,7 @@ describe('EmployeeService.actOnProcess', () => {
   it('HOLD carries the reason and note into the guarded move', async () => {
     const { service, repos } = makeService();
 
-    const result = await service.actOnProcess('e1', 'gosi', 'HOLD', HR, {
+    const result = await service.actOnProcess('e1', 'gosi', 'HOLD', INSURANCE, {
       holdReason: 'GOVERNMENT_EMPLOYEE',
       holdNote: 'works at ministry',
     });
@@ -47,7 +48,7 @@ describe('EmployeeService.actOnProcess', () => {
 
   it('audits with the employee anchor and the acting user', async () => {
     const { service, repos } = makeService();
-    await service.actOnProcess('e1', 'medical', 'COMPLETE', HR);
+    await service.actOnProcess('e1', 'medical', 'COMPLETE', INSURANCE);
 
     expect(repos.audit.append).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -55,7 +56,7 @@ describe('EmployeeService.actOnProcess', () => {
         action: 'COMPLETE',
         fromStatus: 'PENDING',
         toStatus: 'DONE',
-        actorId: 'u1',
+        actorId: 'u2',
         employeeId: 'e1',
       }),
     );
@@ -81,7 +82,7 @@ describe('EmployeeService.actOnProcess', () => {
 
   it('a DONE process accepts no further actions', async () => {
     const { service } = makeService({ status: 'DONE' });
-    await expect(service.actOnProcess('e1', 'gosi', 'HOLD', HR)).rejects.toBeInstanceOf(
+    await expect(service.actOnProcess('e1', 'gosi', 'HOLD', INSURANCE)).rejects.toBeInstanceOf(
       IllegalTransitionError,
     );
   });

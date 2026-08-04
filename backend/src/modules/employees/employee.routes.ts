@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
+import { requireRole } from '../../auth/require-auth.middleware.js';
 import type { EmployeeService } from './employee.service.js';
 import type { Actor } from '../../workflow/engine.js';
 
@@ -39,6 +40,7 @@ export function employeeRouter(service: EmployeeService): Router {
   /** Direct add — for existing staff who never went through the trainee flow. */
   router.post(
     '/',
+    requireRole('HR', 'ADMIN'),
     validate(createEmployeeSchema),
     asyncHandler(async (req, res) => {
       const input = compact(req.body as z.infer<typeof createEmployeeSchema>);

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { api, ApiError } from '../api/client';
 import ProcessCard from '../components/ProcessCard.vue';
+import { useAuthStore } from '../stores/auth';
 
 interface ProcessData {
   status: string;
@@ -88,6 +89,7 @@ const ASSET_STATUS_COLORS: Record<string, string> = {
 
 const { t } = useI18n();
 const route = useRoute();
+const auth = useAuthStore();
 const id = route.params['id'] as string;
 
 const employee = ref<EmployeeDetail | null>(null);
@@ -256,7 +258,13 @@ onMounted(load);
               {{ $t('assets.title') }}
             </v-card-title>
             <template #append>
-              <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="formDialog = true">
+              <v-btn
+                v-if="auth.hasRole('IT')"
+                color="primary"
+                size="small"
+                prepend-icon="mdi-plus"
+                @click="formDialog = true"
+              >
                 {{ $t('assets.newForm') }}
               </v-btn>
             </template>
