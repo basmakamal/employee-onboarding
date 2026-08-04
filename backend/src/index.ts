@@ -25,7 +25,10 @@ staffApi.use(requireAuth(container.authService));
 staffApi.use('/trainees', requireRole('HR', 'ADMIN'), traineeRouter(container.traineeService));
 staffApi.use('/employees', employeeRouter(container.employeeService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
-staffApi.use('/settings', settingsRouter(container.settingsService, container.repos.slaRules));
+staffApi.use(
+  '/settings',
+  settingsRouter(container.settingsService, container.repos.slaRules, container.ownershipService),
+);
 staffApi.use('/users', usersRouter(container.repos.users));
 staffApi.use('/notifications', notificationRouter(container.repos.notificationRepo));
 staffApi.get(

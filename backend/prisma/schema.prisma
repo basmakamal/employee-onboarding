@@ -477,6 +477,21 @@ model Setting {
   @@map("settings")
 }
 
+/// Which role group(s) own the records sitting in a given status of a given
+/// state machine — editable from the admin screen. Seeded from the BRD
+/// defaults; the machines' hardcoded roles are only the fallback when a row
+/// is missing. ADMIN always passes regardless.
+model StatusOwnership {
+  id         String   @id @default(cuid())
+  processKey String // TRAINEE | GOSI | MEDICAL_INSURANCE | CRIMINAL_RECORD | ASSET_FORM | OFFBOARDING
+  status     String
+  roles      Json // e.g. ["INSURANCE"] or ["HR","INSURANCE"]
+  updatedAt  DateTime @updatedAt
+
+  @@unique([processKey, status])
+  @@map("status_ownership")
+}
+
 // ---------------------------------------------------------------------------
 // Notifications, signed links, audit
 // ---------------------------------------------------------------------------

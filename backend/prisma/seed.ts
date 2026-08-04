@@ -170,7 +170,44 @@ async function main() {
   }
 }
 
+/** Default status ownership (system-managed; editable in admin Settings). */
+const OWNERSHIP: Array<{ processKey: string; status: string; roles: string[] }> = [
+  ...['CREATED', 'AWAITING_FORM', 'FORM_RECEIVED', 'CONTRACT_CREATION', 'AWAITING_CONTRACT_APPROVAL', 'EXPIRED'].map(
+    (status) => ({ processKey: 'TRAINEE', status, roles: ['HR'] }),
+  ),
+  { processKey: 'GOSI', status: 'PENDING', roles: ['INSURANCE'] },
+  { processKey: 'GOSI', status: 'ON_HOLD', roles: ['INSURANCE'] },
+  { processKey: 'MEDICAL_INSURANCE', status: 'PENDING', roles: ['INSURANCE'] },
+  { processKey: 'MEDICAL_INSURANCE', status: 'ON_HOLD', roles: ['INSURANCE'] },
+  { processKey: 'CRIMINAL_RECORD', status: 'TRAINING', roles: ['HR'] },
+  { processKey: 'CRIMINAL_RECORD', status: 'REQUEST_SENT', roles: ['HR'] },
+  { processKey: 'CRIMINAL_RECORD', status: 'PENDING', roles: ['HR'] },
+  { processKey: 'ASSET_FORM', status: 'DRAFT', roles: ['IT'] },
+  { processKey: 'ASSET_FORM', status: 'SENT', roles: ['IT'] },
+  { processKey: 'ASSET_FORM', status: 'PENDING_EMPLOYEE_APPROVAL', roles: ['IT'] },
+  { processKey: 'ASSET_FORM', status: 'REJECTED', roles: ['IT'] },
+  { processKey: 'OFFBOARDING', status: 'REQUESTED', roles: ['HR'] },
+  { processKey: 'OFFBOARDING', status: 'IN_PROGRESS', roles: ['HR'] },
+  { processKey: 'OFFBOARDING', status: 'ASSETS_PENDING', roles: ['HR'] },
+  { processKey: 'OFFBOARDING', status: 'NOTICE_SENT', roles: ['HR'] },
+  { processKey: 'OFFBOARDING', status: 'SETTLEMENT', roles: ['FINANCE'] },
+];
+
+async function seedOwnership() {
+  for (const row of OWNERSHIP) {
+    // Never overwrite an admin's customization — only create missing rows.
+    const existing = await prisma.statusOwnership.findUnique({
+      where: { processKey_status: { processKey: row.processKey, status: row.status } },
+    });
+    if (!existing) {
+      await prisma.statusOwnership.create({ data: row });
+      console.log(`seeded ownership  ${row.processKey}:${row.status} → ${row.roles.join(',')}`);
+    }
+  }
+}
+
 main()
+  .then(seedOwnership)
   .catch((e) => {
     console.error(e);
     process.exit(1);

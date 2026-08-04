@@ -4,6 +4,7 @@ import { asyncHandler, compact, validate } from '../../common/http.js';
 import { requireRole } from '../../auth/require-auth.middleware.js';
 import { mailSettingsSchema, type SettingsService } from './settings.service.js';
 import type { SlaRuleRepository } from '../../workflow/sla-rule.repository.js';
+import type { OwnershipService } from '../../workflow/ownership.service.js';
 
 const testSchema = z.object({ to: z.string().email() });
 
@@ -17,10 +18,35 @@ const ruleUpdateSchema = z.object({
   active: z.boolean().optional(),
 });
 
+const ownershipSchema = z.object({
+  roles: z.array(z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN'])).min(1),
+});
+
 /** ADMIN-only system settings. */
-export function settingsRouter(service: SettingsService, slaRules: SlaRuleRepository): Router {
+export function settingsRouter(
+  service: SettingsService,
+  slaRules: SlaRuleRepository,
+  ownership: OwnershipService,
+): Router {
   const router = Router();
   router.use(requireRole('ADMIN'));
+
+  // ---- Status ownership (which group handles which status) ----
+  router.get(
+    '/ownership',
+    asyncHandler(async (_req, res) => {
+      res.json(await ownership.list());
+    }),
+  );
+
+  router.put(
+    '/ownership/:id',
+    validate(ownershipSchema),
+    asyncHandler(async (req, res) => {
+      const { roles } = req.body as z.infer<typeof ownershipSchema>;
+      res.json(await ownership.update(req.params['id'] as string, roles));
+    }),
+  );
 
   // ---- Automation (SLA) rules ----
   router.get(
