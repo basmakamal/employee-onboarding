@@ -61,6 +61,38 @@ function onProvider(provider: string) {
   }
 }
 
+interface OwnershipRow {
+  id: string;
+  processKey: string;
+  status: string;
+  roles: string[];
+}
+
+const ownership = ref<OwnershipRow[]>([]);
+const ownershipBusy = ref('');
+
+async function loadOwnership() {
+  ownership.value = await api.get<OwnershipRow[]>('/api/settings/ownership');
+}
+
+async function updateOwnership(row: OwnershipRow, roles: string[]) {
+  if (roles.length === 0) {
+    notify(t('ownership.atLeastOne'), 'error');
+    await loadOwnership();
+    return;
+  }
+  ownershipBusy.value = row.id;
+  try {
+    await api.put(`/api/settings/ownership/${row.id}`, { roles });
+    notify(t('common.saved'));
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    ownershipBusy.value = '';
+    await loadOwnership();
+  }
+}
+
 const rules = ref<SlaRuleRow[]>([]);
 const ruleBusy = ref('');
 
@@ -83,6 +115,7 @@ async function updateRule(rule: SlaRuleRow, changes: Partial<SlaRuleRow>) {
 
 async function load() {
   await loadRules();
+  await loadOwnership();
   const data = await api.get<MailSettings>('/api/settings/mail');
   form.value = {
     provider: data.provider,
@@ -221,6 +254,44 @@ onMounted(load);
           {{ $t('settings.sendTest') }}
         </v-btn>
       </v-card-actions>
+    </v-card>
+
+    <!-- Status ownership -->
+    <v-card v-if="loaded" class="mt-6" :title="$t('ownership.title')" :subtitle="$t('ownership.subtitle')">
+      <v-table density="comfortable">
+        <thead>
+          <tr>
+            <th>{{ $t('ownership.machine') }}</th>
+            <th>{{ $t('trainees.status') }}</th>
+            <th style="width: 320px">{{ $t('ownership.groups') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in ownership" :key="row.id">
+            <td class="font-weight-medium">{{ $t(`entities.${row.processKey}`, row.processKey) }}</td>
+            <td>
+              {{ $t(`status.${row.status}`, $t(`offboardingStatus.${row.status}`, $t(`processStatus.${row.status}`, $t(`assetStatus.${row.status}`, row.status)))) }}
+            </td>
+            <td>
+              <v-select
+                :model-value="row.roles"
+                :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
+                multiple
+                chips
+                closable-chips
+                density="compact"
+                hide-details
+                variant="plain"
+                :disabled="ownershipBusy === row.id"
+                @update:model-value="(roles: string[]) => updateOwnership(row, roles)"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
+      <v-card-text class="text-caption text-medium-emphasis">
+        {{ $t('ownership.hint') }}
+      </v-card-text>
     </v-card>
 
     <!-- Automation (SLA) rules -->

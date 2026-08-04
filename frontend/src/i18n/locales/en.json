@@ -332,6 +332,14 @@
     "title": "Notifications",
     "empty": "Nothing yet — reminders and escalations will appear here."
   },
+  "ownership": {
+    "title": "Status ownership",
+    "subtitle": "Which group handles each workflow status — changes apply immediately",
+    "machine": "Workflow",
+    "groups": "Responsible group(s)",
+    "atLeastOne": "At least one group must own a status.",
+    "hint": "A user outside the owning group gets no action buttons and a 403 from the API. ADMIN always has access. New records and existing ones follow the change immediately."
+  },
   "sla": {
     "title": "Automation rules",
     "subtitle": "Reminders, escalations and deadlines — evaluated every few minutes",
