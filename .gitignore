@@ -28,3 +28,5 @@ CLAUDE.md
 *.log
 .DS_Store
 Thumbs.db
+# local-only documents (user preference: never commit)
+docs/*.docx
