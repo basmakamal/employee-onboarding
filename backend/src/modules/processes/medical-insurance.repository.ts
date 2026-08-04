@@ -8,6 +8,14 @@ export class MedicalInsuranceRepository {
     return this.db.medicalInsuranceProcess.findUnique({ where: { employeeId } });
   }
 
+  /** SLA scan input: cards sitting in `status` since before `threshold`. */
+  listInStatusSince(status: string, threshold: Date) {
+    return this.db.medicalInsuranceProcess.findMany({
+      where: { status: status as ProcessStatus, updatedAt: { lt: threshold } },
+      include: { employee: { select: { firstName: true, lastName: true } } },
+    });
+  }
+
   async moveStatus(
     id: string,
     from: ProcessStatus,

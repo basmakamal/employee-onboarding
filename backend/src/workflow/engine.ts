@@ -42,9 +42,19 @@ export interface MachineDef<TRecord> {
   transitions: TransitionDef<TRecord>[];
 }
 
+/** Sync status→roles lookup (system-managed ownership overrides). */
+export interface OwnershipLookup {
+  rolesFor(processKey: string, status: string): string[] | undefined;
+}
+
 export interface EngineDeps<TRecord> {
   getId: (record: TRecord) => string;
   getStatus: (record: TRecord) => string;
+  /**
+   * Optional ownership overrides: when a row exists for (machine, from
+   * status) it REPLACES the transition's hardcoded `roles`.
+   */
+  ownership?: OwnershipLookup;
   /**
    * Guarded persistence: move id from → to ONLY if still in `from`
    * (updateMany pattern). Returns false when the record changed underneath.
@@ -87,8 +97,10 @@ export class Workflow<TRecord> {
   }
 
   private roleAllowed(def: TransitionDef<TRecord>, actor: Actor): boolean {
-    if (actor.type !== 'USER' || !def.roles || actor.role === 'ADMIN') return true;
-    return def.roles.includes(actor.role ?? '');
+    if (actor.type !== 'USER' || actor.role === 'ADMIN') return true;
+    const roles = this.deps.ownership?.rolesFor(this.def.key, def.from) ?? def.roles;
+    if (!roles) return true;
+    return roles.includes(actor.role ?? '');
   }
 
   async transition(

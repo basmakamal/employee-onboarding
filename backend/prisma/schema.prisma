@@ -122,6 +122,7 @@ enum SlaUnit {
 enum SlaAction {
   REMIND
   REMIND_DAILY
+  ESCALATE
   EXPIRE
 }
 
@@ -430,12 +431,32 @@ model SlaRule {
   afterUnit     SlaUnit
   action        SlaAction
   notifySubject Boolean   @default(true) // the trainee/employee
-  notifyHr      Boolean   @default(true)
+  notifyHr      Boolean   @default(true) // legacy flag; notifyRole is the target
+  /** Staff group that receives the reminder. */
+  notifyRole    String    @default("HR")
+  /** ESCALATE only: the higher group that gets the escalation. */
+  escalateToRole String?
   active        Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
+  firings SlaFiring[]
+
   @@index([processKey, status, active])
   @@map("sla_rules")
+}
+
+/// One row per rule execution against a record — the scheduler's memory.
+/// REMIND/ESCALATE fire once per (rule, record); REMIND_DAILY re-fires
+/// when the last firing is old enough.
+model SlaFiring {
+  id       String   @id @default(cuid())
+  rule     SlaRule  @relation(fields: [ruleId], references: [id])
+  ruleId   String
+  entityId String
+  firedAt  DateTime @default(now())
+
+  @@index([ruleId, entityId, firedAt])
+  @@map("sla_firings")
 }
 
 /// Public holidays — excluded (with Fri/Sat weekends) from working-day math.
@@ -454,6 +475,21 @@ model Setting {
   updatedAt DateTime @updatedAt
 
   @@map("settings")
+}
+
+/// Which role group(s) own the records sitting in a given status of a given
+/// state machine — editable from the admin screen. Seeded from the BRD
+/// defaults; the machines' hardcoded roles are only the fallback when a row
+/// is missing. ADMIN always passes regardless.
+model StatusOwnership {
+  id         String   @id @default(cuid())
+  processKey String // TRAINEE | GOSI | MEDICAL_INSURANCE | CRIMINAL_RECORD | ASSET_FORM | OFFBOARDING
+  status     String
+  roles      Json // e.g. ["INSURANCE"] or ["HR","INSURANCE"]
+  updatedAt  DateTime @updatedAt
+
+  @@unique([processKey, status])
+  @@map("status_ownership")
 }
 
 // ---------------------------------------------------------------------------

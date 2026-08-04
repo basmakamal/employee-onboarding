@@ -12,12 +12,15 @@ import type { TraineeStatus } from '../generated/prisma/enums.js';
  * Both the API services (Phase E) and the SLA scheduler drive transitions
  * through this single instance — one door, always guarded, always audited.
  */
-export function buildTraineeWorkflow(repos: {
-  trainees: TraineeRepository;
-  documents: TraineeDocumentRepository;
-  contracts: ContractRepository;
-  audit: AuditLogRepository;
-}): Workflow<Trainee> {
+export function buildTraineeWorkflow(
+  repos: {
+    trainees: TraineeRepository;
+    documents: TraineeDocumentRepository;
+    contracts: ContractRepository;
+    audit: AuditLogRepository;
+  },
+  ownership?: import('./engine.js').OwnershipLookup,
+): Workflow<Trainee> {
   const machine = traineeMachine({
     countMissingRequiredDocs: (traineeId) => repos.documents.countMissingRequired(traineeId),
     hasContract: async (traineeId) => (await repos.contracts.findByTrainee(traineeId)) !== null,
@@ -28,6 +31,7 @@ export function buildTraineeWorkflow(repos: {
   return new Workflow<Trainee>(machine, {
     getId: (t) => t.id,
     getStatus: (t) => t.status,
+    ...(ownership ? { ownership } : {}),
     move: (t, from, to) => repos.trainees.moveStatus(t.id, from as TraineeStatus, to as TraineeStatus),
     audit: (entry) => repos.audit.append(entry),
     anchors: (t) => ({ traineeId: t.id }),

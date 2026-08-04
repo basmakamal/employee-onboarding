@@ -328,6 +328,39 @@
     "doneTitle": "Thank you for your feedback",
     "doneHint": "Your answers were recorded. We wish you all the best!"
   },
+  "bell": {
+    "title": "Notifications",
+    "empty": "Nothing yet — reminders and escalations will appear here."
+  },
+  "ownership": {
+    "title": "Status ownership",
+    "subtitle": "Which group handles each workflow status — changes apply immediately",
+    "machine": "Workflow",
+    "groups": "Responsible group(s)",
+    "atLeastOne": "At least one group must own a status.",
+    "hint": "A user outside the owning group gets no action buttons and a 403 from the API. ADMIN always has access. New records and existing ones follow the change immediately."
+  },
+  "sla": {
+    "title": "Automation rules",
+    "subtitle": "Reminders, escalations and deadlines — evaluated every few minutes",
+    "watch": "Watches",
+    "action": "Action",
+    "after": "After",
+    "notify": "Notify group",
+    "active": "Active",
+    "hint": "Changes apply on the next scheduler tick (within minutes). ESCALATE fires once per record after reminders were ignored.",
+    "actions": {
+      "REMIND": "Remind once",
+      "REMIND_DAILY": "Remind daily",
+      "ESCALATE": "Escalate",
+      "EXPIRE": "Expire"
+    },
+    "units": {
+      "HOURS": "hours",
+      "CALENDAR_DAYS": "calendar days",
+      "WORKING_DAYS": "working days"
+    }
+  },
   "assetApproval": {
     "title": "Asset custody form",
     "hint": "By approving, you electronically confirm receipt of the items above and accept responsibility for them.",
