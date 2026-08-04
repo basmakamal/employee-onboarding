@@ -12,8 +12,8 @@ import { AuditLogRepository } from './workflow/audit-log.repository.js';
 import { SlaRuleRepository, HolidayRepository } from './workflow/sla-rule.repository.js';
 import { NotificationRepository } from './notifications/notification.repository.js';
 import { NotificationService } from './notifications/notification.service.js';
-import { ConsoleNotifier } from './notifications/console.notifier.js';
-import { SmtpNotifier } from './notifications/smtp.notifier.js';
+import { SettingsService, DynamicNotifier } from './modules/settings/settings.service.js';
+import { DashboardService } from './modules/dashboard/dashboard.service.js';
 import { buildTraineeWorkflow } from './workflow/trainee-workflow.js';
 import { SlaScheduler } from './workflow/sla-scheduler.js';
 import { TraineeService } from './modules/trainees/trainee.service.js';
@@ -47,8 +47,12 @@ export function buildContainer() {
   const holidays = new HolidayRepository(prisma);
   const notificationRepo = new NotificationRepository(prisma);
 
-  const notifier = config.NOTIFIER === 'smtp' ? new SmtpNotifier(config) : new ConsoleNotifier();
+  // The notifier follows the admin's saved mail settings at send time
+  // (console/gmail/microsoft/custom) — no restart needed after changes.
+  const settingsService = new SettingsService(prisma);
+  const notifier = new DynamicNotifier(settingsService);
   const notifications = new NotificationService(notificationRepo, users, notifier);
+  const dashboardService = new DashboardService(prisma);
 
   const eventBus = new EventBus();
   const traineeWorkflow = buildTraineeWorkflow({ trainees, documents, contracts, audit });
@@ -119,6 +123,8 @@ export function buildContainer() {
     assetService,
     offboardingService,
     authService,
+    settingsService,
+    dashboardService,
   };
 }
 

@@ -6,7 +6,50 @@
   "nav": {
     "home": "Dashboard",
     "trainees": "Trainees",
-    "employees": "Employees"
+    "employees": "Employees",
+    "users": "Staff & roles",
+    "settings": "Settings"
+  },
+  "users": {
+    "title": "Staff & roles",
+    "subtitle": "Create staff accounts and assign each to its responsible group",
+    "new": "New staff user",
+    "role": "Role group",
+    "active": "Active",
+    "resetPassword": "Reset password",
+    "newPassword": "New password",
+    "passwordHint": "At least 8 characters",
+    "passwordReset": "Password updated."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "trainees": "Trainees in progress",
+    "activeEmployees": "Active employees",
+    "openOffboardings": "Open offboardings",
+    "pendingApprovals": "Awaiting e-approval",
+    "traineesByStage": "Trainees by stage",
+    "processes": "Employee file processes",
+    "offboardings": "Offboarding",
+    "noOffboardings": "No offboarding requests.",
+    "recent": "Recent activity"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "System configuration (administrators only)",
+    "mail": "Outgoing email",
+    "provider": "Provider",
+    "providers": { "console": "Development (log only)", "custom": "Custom SMTP" },
+    "host": "SMTP host",
+    "port": "Port",
+    "user": "Username / email",
+    "password": "Password",
+    "passwordKept": "•••••• (saved — leave empty to keep)",
+    "from": "From address",
+    "gmailHint": "Gmail requires an App Password (Google Account → Security → 2-Step Verification → App passwords), not your normal password.",
+    "consoleHint": "Emails are written to the server log instead of being sent — for development.",
+    "testTo": "Send test to",
+    "sendTest": "Send test email",
+    "testSent": "Test email sent — check the inbox (or the server log in development mode)."
   },
   "employees": {
     "title": "Employees",

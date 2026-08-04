@@ -20,6 +20,10 @@ const NAV = [
   { to: '/', icon: 'mdi-view-dashboard', key: 'nav.home', roles: [] as string[] },
   { to: '/trainees', icon: 'mdi-school', key: 'nav.trainees', roles: ['HR'] },
   { to: '/employees', icon: 'mdi-badge-account', key: 'nav.employees', roles: [] as string[] },
+  // hasRole() lets ADMIN through on any check; listing no other role makes
+  // these entries effectively admin-only.
+  { to: '/users', icon: 'mdi-account-cog', key: 'nav.users', roles: ['ADMIN'] },
+  { to: '/settings', icon: 'mdi-cog', key: 'nav.settings', roles: ['ADMIN'] },
 ];
 
 const navItems = computed(() =>

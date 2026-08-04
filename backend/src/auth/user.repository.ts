@@ -17,6 +17,17 @@ export class UserRepository {
     return this.db.user.findMany({ where: { role, active: true } });
   }
 
+  list() {
+    return this.db.user.findMany({
+      select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  update(id: string, data: { role?: Role; active?: boolean; passwordHash?: string; name?: string }) {
+    return this.db.user.update({ where: { id }, data });
+  }
+
   create(data: { email: string; name: string; role: Role; passwordHash?: string }) {
     return this.db.user.create({ data });
   }

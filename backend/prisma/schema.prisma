@@ -447,6 +447,15 @@ model Holiday {
   @@map("holidays")
 }
 
+/// Admin-editable system settings (JSON values keyed by area, e.g. "mail").
+model Setting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
 // ---------------------------------------------------------------------------
 // Notifications, signed links, audit
 // ---------------------------------------------------------------------------
