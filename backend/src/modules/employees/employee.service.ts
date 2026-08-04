@@ -1,4 +1,4 @@
-import type { Actor } from '../../workflow/engine.js';
+import type { Actor, OwnershipLookup } from '../../workflow/engine.js';
 import { Workflow } from '../../workflow/engine.js';
 import {
   employeeProcessMachine,
@@ -45,6 +45,7 @@ export class EmployeeService {
       criminal: CriminalRecordRepository;
       audit: AuditLogRepository;
     },
+    private readonly ownership?: OwnershipLookup,
   ) {}
 
   list() {
@@ -95,8 +96,8 @@ export class EmployeeService {
     const employee = await this.repos.employees.findWithDetails(id);
     if (!employee) throw new NotFoundError('employee', id);
 
-    const processMachine = new Workflow(employeeProcessMachine('GOSI'), noopDeps());
-    const criminalMachine = new Workflow(criminalRecordMachine(), noopDeps());
+    const processMachine = new Workflow(employeeProcessMachine('GOSI'), noopDeps(this.ownership));
+    const criminalMachine = new Workflow(criminalRecordMachine(), noopDeps(this.ownership));
 
     return {
       ...employee,
@@ -150,6 +151,7 @@ export class EmployeeService {
     const workflow = new Workflow<ProcessRow>(employeeProcessMachine(machineKey), {
       getId: (r) => r.id,
       getStatus: (r) => r.status,
+      ...(this.ownership ? { ownership: this.ownership } : {}),
       move: (r, from, to) =>
         (repo as GosiRepository).moveStatus(
           r.id,
@@ -176,6 +178,7 @@ export class EmployeeService {
     const workflow = new Workflow<ProcessRow>(criminalRecordMachine(), {
       getId: (r) => r.id,
       getStatus: (r) => r.status,
+      ...(this.ownership ? { ownership: this.ownership } : {}),
       move: (r, from, to) =>
         this.repos.criminal.moveStatus(
           r.id,
@@ -192,11 +195,12 @@ export class EmployeeService {
 }
 
 /** availableActions never persists — inert deps are fine for lookups. */
-function noopDeps() {
+function noopDeps(ownership?: OwnershipLookup) {
   return {
     getId: (r: ProcessRow) => r.id,
     getStatus: (r: ProcessRow) => r.status,
     move: () => Promise.resolve(false),
     audit: () => Promise.resolve({}),
+    ...(ownership ? { ownership } : {}),
   };
 }

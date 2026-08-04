@@ -16,6 +16,9 @@ import { SettingsService, DynamicNotifier } from './modules/settings/settings.se
 import { DashboardService } from './modules/dashboard/dashboard.service.js';
 import { buildTraineeWorkflow } from './workflow/trainee-workflow.js';
 import { SlaScheduler } from './workflow/sla-scheduler.js';
+import { SlaFiringRepository } from './workflow/sla-firing.repository.js';
+import { traineeWatcher, offboardingWatcher, processWatcher } from './workflow/sla-watchers.js';
+import { OwnershipService } from './workflow/ownership.service.js';
 import { TraineeService } from './modules/trainees/trainee.service.js';
 import { EmployeeService } from './modules/employees/employee.service.js';
 import { AssetRepository } from './modules/assets/asset.repository.js';
@@ -55,16 +58,19 @@ export function buildContainer() {
   const dashboardService = new DashboardService(prisma);
 
   const eventBus = new EventBus();
-  const traineeWorkflow = buildTraineeWorkflow({ trainees, documents, contracts, audit });
+  const ownershipService = new OwnershipService(prisma);
+  const traineeWorkflow = buildTraineeWorkflow({ trainees, documents, contracts, audit }, ownershipService);
 
-  const slaScheduler = new SlaScheduler({
-    rules: slaRules,
-    holidays,
-    trainees,
-    workflow: traineeWorkflow,
-    audit,
-    notifications,
-  });
+  const slaFirings = new SlaFiringRepository(prisma);
+  const slaScheduler = new SlaScheduler(
+    { rules: slaRules, holidays, firings: slaFirings, audit, notifications },
+    [
+      traineeWatcher(trainees, traineeWorkflow),
+      offboardingWatcher(new OffboardingRepository(prisma)),
+      processWatcher('GOSI', gosi),
+      processWatcher('MEDICAL_INSURANCE', medical),
+    ],
+  );
 
   const authService = new AuthService(users, {
     access: config.JWT_ACCESS_SECRET,
@@ -79,7 +85,10 @@ export function buildContainer() {
     notifications,
   );
 
-  const employeeService = new EmployeeService({ employees, gosi, medical, criminal, audit });
+  const employeeService = new EmployeeService(
+    { employees, gosi, medical, criminal, audit },
+    ownershipService,
+  );
 
   const assets = new AssetRepository(prisma);
   const assetForms = new AssetFormRepository(prisma);
@@ -87,6 +96,7 @@ export function buildContainer() {
     { assets, forms: assetForms, employees, audit },
     linkTokenService,
     notifications,
+    ownershipService,
   );
 
   const offboardings = new OffboardingRepository(prisma);
@@ -94,6 +104,7 @@ export function buildContainer() {
     { offboardings, employees, assetForms, audit },
     linkTokenService,
     notifications,
+    ownershipService,
   );
 
   return {
@@ -125,6 +136,7 @@ export function buildContainer() {
     authService,
     settingsService,
     dashboardService,
+    ownershipService,
   };
 }
 

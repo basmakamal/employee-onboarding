@@ -1,4 +1,4 @@
-import type { Actor } from '../../workflow/engine.js';
+import type { Actor, OwnershipLookup } from '../../workflow/engine.js';
 import { Workflow } from '../../workflow/engine.js';
 import { assetFormMachine } from '../../workflow/machines/asset-form.machine.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
@@ -35,12 +35,14 @@ export class AssetService {
     },
     private readonly links: LinkTokenService,
     private readonly notifications: NotificationService,
+    ownership?: OwnershipLookup,
   ) {
     this.workflow = new Workflow<AssetForm>(
       assetFormMachine({ countItems: (formId) => repos.forms.countItems(formId) }),
       {
         getId: (f) => f.id,
         getStatus: (f) => f.status,
+        ...(ownership ? { ownership } : {}),
         move: (f, from, to) =>
           repos.forms.moveStatus(f.id, from as AssetFormStatus, to as AssetFormStatus),
         audit: (entry) => repos.audit.append(entry),

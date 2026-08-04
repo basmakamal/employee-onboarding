@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { usePreferencesStore } from './stores/preferences';
 import { useAuthStore } from './stores/auth';
+import NotificationBell from './components/NotificationBell.vue';
 
 const prefs = usePreferencesStore();
 const auth = useAuthStore();
@@ -65,6 +66,8 @@ onMounted(() => prefs.apply());
           :aria-label="$t('actions.toggleTheme')"
           @click="prefs.toggleTheme()"
         />
+
+        <NotificationBell v-if="auth.user" />
 
         <v-menu v-if="auth.user">
           <template #activator="{ props }">

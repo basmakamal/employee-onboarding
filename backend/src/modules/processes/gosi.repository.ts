@@ -8,6 +8,14 @@ export class GosiRepository {
     return this.db.gosiProcess.findUnique({ where: { employeeId } });
   }
 
+  /** SLA scan input: cards sitting in `status` since before `threshold`. */
+  listInStatusSince(status: string, threshold: Date) {
+    return this.db.gosiProcess.findMany({
+      where: { status: status as ProcessStatus, updatedAt: { lt: threshold } },
+      include: { employee: { select: { firstName: true, lastName: true } } },
+    });
+  }
+
   /** Guarded status move; hold reason/note only meaningful for ON_HOLD. */
   async moveStatus(
     id: string,
