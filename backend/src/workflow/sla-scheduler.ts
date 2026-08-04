@@ -50,6 +50,8 @@ export class SlaScheduler {
       firings: SlaFiringRepository;
       audit: AuditLogRepository;
       notifications: NotificationService;
+      /** System calendar: which weekdays are the weekend (admin-configured). */
+      calendar?: { getCalendar(): Promise<{ weekendDays: number[] }> };
     },
     watchers: SlaWatcher[],
   ) {
@@ -113,7 +115,10 @@ export class SlaScheduler {
       const holidays = (await this.deps.holidays.listBetween(record.anchorAt, now)).map(
         (h) => h.date,
       );
-      if (workingDaysBetween(record.anchorAt, now, holidays) < rule.afterValue) return false;
+      const weekend = (await this.deps.calendar?.getCalendar())?.weekendDays;
+      if (workingDaysBetween(record.anchorAt, now, holidays, weekend) < rule.afterValue) {
+        return false;
+      }
     }
 
     const lastFiring = await this.deps.firings.lastFiring(rule.id, record.id);

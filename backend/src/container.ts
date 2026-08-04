@@ -63,7 +63,7 @@ export function buildContainer() {
 
   const slaFirings = new SlaFiringRepository(prisma);
   const slaScheduler = new SlaScheduler(
-    { rules: slaRules, holidays, firings: slaFirings, audit, notifications },
+    { rules: slaRules, holidays, firings: slaFirings, audit, notifications, calendar: settingsService },
     [
       traineeWatcher(trainees, traineeWorkflow),
       offboardingWatcher(new OffboardingRepository(prisma)),

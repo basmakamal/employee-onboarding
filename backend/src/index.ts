@@ -27,7 +27,12 @@ staffApi.use('/employees', employeeRouter(container.employeeService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
 staffApi.use(
   '/settings',
-  settingsRouter(container.settingsService, container.repos.slaRules, container.ownershipService),
+  settingsRouter(
+    container.settingsService,
+    container.repos.slaRules,
+    container.ownershipService,
+    container.repos.holidays,
+  ),
 );
 staffApi.use('/users', usersRouter(container.repos.users));
 staffApi.use('/notifications', notificationRouter(container.repos.notificationRepo));
