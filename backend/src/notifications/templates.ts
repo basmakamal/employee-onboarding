@@ -87,6 +87,56 @@ const T: Record<string, Record<Locale, Template>> = {
     }),
   },
 
+  /** Employee — exit interview form (auto-sent for resignations, BRD). */
+  'employee.exit_interview': {
+    ar: (p) => ({
+      subject: 'نموذج مقابلة إنهاء الخدمة',
+      text:
+        `مرحبًا ${p.name ?? ''},\n\n` +
+        `نرجو استكمال نموذج مقابلة إنهاء الخدمة إلكترونيًا.` +
+        (p.linkUrl ? `\n\nرابط النموذج: ${p.linkUrl}` : '') +
+        `\n\nقسم الموارد البشرية`,
+    }),
+    en: (p) => ({
+      subject: 'Exit interview form',
+      text:
+        `Hello ${p.name ?? ''},\n\n` +
+        `Please complete your exit interview form electronically.` +
+        (p.linkUrl ? `\n\nForm link: ${p.linkUrl}` : '') +
+        `\n\nHR Department`,
+    }),
+  },
+
+  /** Employee — official termination notice (BRD step 3). */
+  'employee.termination_notice': {
+    ar: (p) => ({
+      subject: 'إشعار إنهاء الخدمة',
+      text:
+        `عزيزنا ${p.name ?? ''},\n\n` +
+        `نشعركم بإنهاء العلاقة التعاقدية وفق الإجراءات المعتمدة. سيتم التواصل معكم بخصوص المخالصة النهائية.\n\n` +
+        `قسم الموارد البشرية`,
+    }),
+    en: (p) => ({
+      subject: 'Termination notice',
+      text:
+        `Dear ${p.name ?? ''},\n\n` +
+        `This is the official notice of the end of your contractual relationship per the approved procedures. You will be contacted regarding your final settlement.\n\n` +
+        `HR Department`,
+    }),
+  },
+
+  /** HR — the employee completed the exit interview. */
+  'hr.exit_interview_done': {
+    ar: (p) => ({
+      subject: `اكتملت مقابلة إنهاء الخدمة: ${p.name ?? ''}`,
+      text: `أكمل الموظف ${p.name ?? ''} نموذج مقابلة إنهاء الخدمة. راجع النظام للاطلاع على الإجابات.`,
+    }),
+    en: (p) => ({
+      subject: `Exit interview completed: ${p.name ?? ''}`,
+      text: `Employee ${p.name ?? ''} completed the exit interview form. Review the answers in the system.`,
+    }),
+  },
+
   /** Employee — a custody form awaits their electronic approval. */
   'employee.asset_approval': {
     ar: (p) => ({

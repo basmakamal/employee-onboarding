@@ -12,7 +12,7 @@ const drawer = ref(true);
 
 /** Public pages (signed links, login) render without the staff chrome. */
 const isPublicPage = () =>
-  ['/form/', '/approve-contract/', '/approve-assets/', '/login'].some((p) =>
+  ['/form/', '/approve-contract/', '/approve-assets/', '/exit-interview/', '/login'].some((p) =>
     route.path.startsWith(p),
   );
 

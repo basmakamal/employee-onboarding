@@ -41,6 +41,13 @@ interface AuditRow {
   at: string;
 }
 
+interface OffboardingRow {
+  id: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+}
+
 interface EmployeeDetail {
   id: string;
   employeeNo: string;
@@ -57,9 +64,12 @@ interface EmployeeDetail {
   medical: ProcessData | null;
   criminalRecord: ProcessData | null;
   assetForms: AssetFormRow[];
+  offboardings: OffboardingRow[];
   auditLogs: AuditRow[];
   processActions: { gosi: string[]; medical: string[]; criminal: string[] };
 }
+
+const OFFBOARDING_REASONS = ['RESIGNATION', 'TERMINATION', 'CONTRACT_EXPIRY', 'RETIREMENT', 'DEATH'];
 
 const GOSI_REASONS = [
   'OPTIONAL_SUBSCRIPTION',
@@ -181,6 +191,35 @@ function formActions(status: string): Array<'send' | 'cancel' | 'revise'> {
   return [];
 }
 
+// ------------------------------------------------------------- offboarding
+import { computed } from 'vue';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+const offboardingDialog = ref(false);
+const offboardingForm = ref({ reason: 'RESIGNATION', notes: '' });
+
+const openOffboarding = computed(() =>
+  employee.value?.offboardings.find((o) => !['CLOSED', 'CANCELLED'].includes(o.status)),
+);
+
+async function startOffboarding() {
+  busy.value = 'offboarding';
+  try {
+    const created = await api.post<{ id: string }>('/api/offboardings', {
+      employeeId: id,
+      reason: offboardingForm.value.reason,
+      notes: offboardingForm.value.notes || undefined,
+    });
+    offboardingDialog.value = false;
+    await router.push(`/offboardings/${created.id}`);
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -209,7 +248,39 @@ onMounted(load);
           {{ $t('employees.hired') }} {{ new Date(employee.hireDate).toLocaleDateString() }}
         </p>
       </div>
+      <v-spacer />
+      <v-btn
+        v-if="!openOffboarding && employee.status === 'ACTIVE' && auth.hasRole('HR')"
+        color="warning"
+        variant="tonal"
+        prepend-icon="mdi-exit-run"
+        @click="offboardingDialog = true"
+      >
+        {{ $t('offboarding.start') }}
+      </v-btn>
     </div>
+
+    <!-- Offboarding banner -->
+    <v-alert
+      v-if="openOffboarding"
+      type="warning"
+      variant="tonal"
+      class="mb-6"
+      :title="$t('offboarding.inProgress')"
+    >
+      {{ $t(`offboardingReasons.${openOffboarding.reason}`) }} —
+      {{ $t(`offboardingStatus.${openOffboarding.status}`) }}
+      <template #append>
+        <v-btn
+          color="warning"
+          variant="flat"
+          size="small"
+          :to="`/offboardings/${openOffboarding.id}`"
+        >
+          {{ $t('offboarding.open') }}
+        </v-btn>
+      </template>
+    </v-alert>
 
     <!-- BRD Stage 2: the three independent processes -->
     <v-row class="mb-2">
@@ -421,6 +492,27 @@ onMounted(load);
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="linkDialog.show = false">{{ $t('common.done') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Start offboarding dialog -->
+    <v-dialog v-model="offboardingDialog" max-width="480">
+      <v-card :title="$t('offboarding.start')" class="pa-2">
+        <v-card-text>
+          <v-select
+            v-model="offboardingForm.reason"
+            :items="OFFBOARDING_REASONS.map((r) => ({ title: $t(`offboardingReasons.${r}`), value: r }))"
+            :label="$t('offboarding.reason')"
+          />
+          <v-textarea v-model="offboardingForm.notes" :label="$t('assets.notes')" rows="2" />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="offboardingDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="warning" :loading="busy === 'offboarding'" @click="startOffboarding">
+            {{ $t('common.create') }}
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
