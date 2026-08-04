@@ -111,6 +111,7 @@ export class OffboardingService {
   async start(id: string, actor: Actor) {
     const offboarding = await this.mustFind(id);
     const result = await this.workflow.transition(offboarding, 'START', actor);
+    let exitInterviewUrl: string | undefined;
 
     if (offboarding.reason === 'RESIGNATION') {
       const employee = await this.repos.employees.findById(offboarding.employeeId);
@@ -134,9 +135,10 @@ export class OffboardingService {
           employeeId: offboarding.employeeId,
           metadata: { purpose: 'EXIT_INTERVIEW' },
         });
+        exitInterviewUrl = link.url;
       }
     }
-    return result;
+    return { ...result, ...(exitInterviewUrl ? { exitInterviewUrl } : {}) };
   }
 
   async toAssetReturn(id: string, actor: Actor) {

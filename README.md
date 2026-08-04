@@ -149,7 +149,7 @@ on-hold reason) · `Asset` (registry, unique serials) · `AssetForm` + `AssetFor
 - [x] **Phase F — Auth & RBAC.** Staff JWT + refresh, role guards, link-token auth.
 - [x] **Phase G — Stage 2 end-to-end.** Employee file page, 4 process cards,
   asset registry + custody forms + e-approval.
-- [ ] **Phase H — Stage 3 end-to-end.** Offboarding wizard, asset-return gate,
+- [x] **Phase H — Stage 3 end-to-end.** Offboarding wizard, asset-return gate,
   settlement flow, bilingual notice PDF.
 - [ ] **Phase I — Hardening & delivery.** Idempotency, rate limiting, integration
   tests, seeded demo, docs.
