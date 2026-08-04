@@ -21,6 +21,8 @@ import { EmployeeService } from './modules/employees/employee.service.js';
 import { AssetRepository } from './modules/assets/asset.repository.js';
 import { AssetFormRepository } from './modules/assets/asset-form.repository.js';
 import { AssetService } from './modules/assets/asset.service.js';
+import { OffboardingRepository } from './modules/offboarding/offboarding.repository.js';
+import { OffboardingService } from './modules/offboarding/offboarding.service.js';
 import { GosiRepository } from './modules/processes/gosi.repository.js';
 import { MedicalInsuranceRepository } from './modules/processes/medical-insurance.repository.js';
 import { CriminalRecordRepository } from './modules/processes/criminal-record.repository.js';
@@ -83,6 +85,13 @@ export function buildContainer() {
     notifications,
   );
 
+  const offboardings = new OffboardingRepository(prisma);
+  const offboardingService = new OffboardingService(
+    { offboardings, employees, assetForms, audit },
+    linkTokenService,
+    notifications,
+  );
+
   return {
     prisma,
     eventBus,
@@ -108,6 +117,7 @@ export function buildContainer() {
     traineeService,
     employeeService,
     assetService,
+    offboardingService,
     authService,
   };
 }

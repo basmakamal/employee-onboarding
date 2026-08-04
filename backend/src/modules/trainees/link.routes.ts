@@ -4,6 +4,7 @@ import { asyncHandler, compact, validate } from '../../common/http.js';
 import { documentUpload } from '../../common/storage.js';
 import type { TraineeService } from './trainee.service.js';
 import type { AssetService } from '../assets/asset.service.js';
+import type { OffboardingService } from '../offboarding/offboarding.service.js';
 import type { LinkTokenService } from '../../auth/link-token.service.js';
 
 const formFieldsSchema = z.object({
@@ -24,6 +25,7 @@ const decisionSchema = z.object({
 export function linkRouter(
   service: TraineeService,
   assets: AssetService,
+  offboarding: OffboardingService,
   links: LinkTokenService,
 ): Router {
   const router = Router();
@@ -38,7 +40,20 @@ export function linkRouter(
         res.json(await assets.buildLinkContext(row));
         return;
       }
+      if (row.purpose === 'EXIT_INTERVIEW') {
+        res.json(await offboarding.buildLinkContext(row));
+        return;
+      }
       res.json(await service.linkContext(raw));
+    }),
+  );
+
+  /** Exit interview submission (answers stored as structured JSON). */
+  router.post(
+    '/:token/exit-interview',
+    asyncHandler(async (req, res) => {
+      const answers = z.record(z.string(), z.string()).parse(req.body ?? {});
+      res.json(await offboarding.submitExitInterview(req.params['token'] as string, answers));
     }),
   );
 

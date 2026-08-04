@@ -9,6 +9,7 @@ import { authRouter } from './auth/auth.routes.js';
 import { traineeRouter } from './modules/trainees/trainee.routes.js';
 import { employeeRouter } from './modules/employees/employee.routes.js';
 import { assetRouter } from './modules/assets/asset.routes.js';
+import { offboardingRouter } from './modules/offboarding/offboarding.routes.js';
 import { linkRouter } from './modules/trainees/link.routes.js';
 
 const container = buildContainer();
@@ -19,6 +20,7 @@ const staffApi = Router();
 staffApi.use(requireAuth(container.authService));
 staffApi.use('/trainees', requireRole('HR', 'ADMIN'), traineeRouter(container.traineeService));
 staffApi.use('/employees', employeeRouter(container.employeeService));
+staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
 staffApi.use('/', assetRouter(container.assetService));
 
 const app = createApp({
@@ -27,7 +29,12 @@ const app = createApp({
   },
   authRouter: authRouter(container.authService),
   staffRouter: staffApi,
-  linkRouter: linkRouter(container.traineeService, container.assetService, container.linkTokenService),
+  linkRouter: linkRouter(
+    container.traineeService,
+    container.assetService,
+    container.offboardingService,
+    container.linkTokenService,
+  ),
 });
 
 const server = app.listen(config.PORT, () => {
