@@ -151,7 +151,7 @@ on-hold reason) · `Asset` (registry, unique serials) · `AssetForm` + `AssetFor
   asset registry + custody forms + e-approval.
 - [x] **Phase H — Stage 3 end-to-end.** Offboarding wizard, asset-return gate,
   settlement flow, bilingual notice PDF.
-- [ ] **Phase I — Hardening & delivery.** Idempotency, rate limiting, integration
+- [x] **Phase I — Hardening & delivery.** Idempotency, rate limiting, integration
   tests, seeded demo, docs.
 
 ## 7. Branching model
@@ -184,6 +184,21 @@ npm run dev                       # UI  → http://localhost:3000
 ```
 
 `GET /api/ready` reports real DB connectivity (`{"checks":{"db":"up"}}`).
+
+### Seeded staff accounts (development)
+
+| Email | Group | Owns |
+|---|---|---|
+| `hr@example.com` | HR | Trainee stage, criminal record, offboarding flow |
+| `insurance@example.com` | INSURANCE | GOSI + medical insurance cards |
+| `it@example.com` | IT | Asset registry + custody forms |
+| `finance@example.com` | FINANCE | Settlement approval & file closure |
+| `admin@example.com` | ADMIN | Everything, plus Staff & roles + Settings pages |
+
+All use the dev password `Passw0rd!` — change them (admin → Staff & roles)
+before any real deployment. Outgoing email is configured at runtime from the
+admin **Settings** page (console / Gmail / Microsoft / custom SMTP); the SMTP
+password is stored AES-256-GCM-encrypted.
 
 ## Tech stack
 
