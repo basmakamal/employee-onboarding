@@ -14,6 +14,7 @@ jobs:
     env:
       NODE_ENV: test
       DATABASE_URL: mysql://ci:ci@127.0.0.1:3306/ci
+
       JWT_ACCESS_SECRET: ci-only-access-secret
       JWT_REFRESH_SECRET: ci-only-refresh-secret
     steps:
