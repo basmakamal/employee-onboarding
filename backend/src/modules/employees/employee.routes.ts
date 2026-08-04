@@ -10,6 +10,19 @@ const processActionSchema = z.object({
   certificateStorageKey: z.string().optional(),
 });
 
+const createEmployeeSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email(),
+  phone: z.string().optional(),
+  nationalId: z.string().optional(),
+  birthDate: z.coerce.date().optional(),
+  department: z.string().optional(),
+  project: z.string().optional(),
+  jobTitle: z.string().optional(),
+  hireDate: z.coerce.date().optional(),
+});
+
 const KINDS = ['gosi', 'medical', 'criminal'] as const;
 
 export function employeeRouter(service: EmployeeService): Router {
@@ -20,6 +33,16 @@ export function employeeRouter(service: EmployeeService): Router {
     '/',
     asyncHandler(async (_req, res) => {
       res.json(await service.list());
+    }),
+  );
+
+  /** Direct add — for existing staff who never went through the trainee flow. */
+  router.post(
+    '/',
+    validate(createEmployeeSchema),
+    asyncHandler(async (req, res) => {
+      const input = compact(req.body as z.infer<typeof createEmployeeSchema>);
+      res.status(201).json(await service.createDirect(input, actor(req)));
     }),
   );
 

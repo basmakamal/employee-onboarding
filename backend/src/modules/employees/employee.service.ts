@@ -51,6 +51,46 @@ export class EmployeeService {
     return this.repos.employees.list();
   }
 
+  /**
+   * Direct creation for EXISTING staff (data migration / hires that never
+   * went through the trainee flow). Trainee-originated employees are still
+   * created automatically on contract approval — same repo call, so both
+   * paths open the three Stage-2 process rows.
+   */
+  async createDirect(
+    input: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone?: string;
+      nationalId?: string;
+      birthDate?: Date;
+      department?: string;
+      project?: string;
+      jobTitle?: string;
+      hireDate?: Date;
+    },
+    actor: Actor,
+  ) {
+    const employeeNo = `EMP-${String((await this.repos.employees.count()) + 1).padStart(4, '0')}`;
+    const employee = await this.repos.employees.create({
+      ...input,
+      employeeNo,
+      hireDate: input.hireDate ?? new Date(),
+    });
+    await this.repos.audit.append({
+      entity: 'EMPLOYEE',
+      entityId: employee.id,
+      action: 'CREATE',
+      toStatus: 'ACTIVE',
+      actorType: actor.type,
+      ...(actor.id ? { actorId: actor.id } : {}),
+      employeeId: employee.id,
+      metadata: { employeeNo, from: 'direct' },
+    });
+    return employee;
+  }
+
   async getDetails(id: string, actor: Actor) {
     const employee = await this.repos.employees.findWithDetails(id);
     if (!employee) throw new NotFoundError('employee', id);
