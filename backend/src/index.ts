@@ -11,6 +11,7 @@ import { employeeRouter } from './modules/employees/employee.routes.js';
 import { assetRouter } from './modules/assets/asset.routes.js';
 import { offboardingRouter } from './modules/offboarding/offboarding.routes.js';
 import { settingsRouter } from './modules/settings/settings.routes.js';
+import { usersRouter } from './auth/users.routes.js';
 import { linkRouter } from './modules/trainees/link.routes.js';
 import { asyncHandler } from './common/http.js';
 
@@ -24,6 +25,7 @@ staffApi.use('/trainees', requireRole('HR', 'ADMIN'), traineeRouter(container.tr
 staffApi.use('/employees', employeeRouter(container.employeeService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
 staffApi.use('/settings', settingsRouter(container.settingsService));
+staffApi.use('/users', usersRouter(container.repos.users));
 staffApi.get(
   '/dashboard',
   asyncHandler(async (_req, res) => {

@@ -7,7 +7,19 @@
     "home": "Dashboard",
     "trainees": "Trainees",
     "employees": "Employees",
+    "users": "Staff & roles",
     "settings": "Settings"
+  },
+  "users": {
+    "title": "Staff & roles",
+    "subtitle": "Create staff accounts and assign each to its responsible group",
+    "new": "New staff user",
+    "role": "Role group",
+    "active": "Active",
+    "resetPassword": "Reset password",
+    "newPassword": "New password",
+    "passwordHint": "At least 8 characters",
+    "passwordReset": "Password updated."
   },
   "dashboard": {
     "title": "Dashboard",

@@ -25,6 +25,7 @@ export const router = createRouter({
       component: () => import('../pages/OffboardingPage.vue'),
     },
     { path: '/settings', name: 'settings', component: () => import('../pages/SettingsPage.vue') },
+    { path: '/users', name: 'users', component: () => import('../pages/UsersPage.vue') },
     // Public signed-link pages (no staff chrome, token IS the auth).
     {
       path: '/form/:token',
