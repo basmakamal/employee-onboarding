@@ -4,6 +4,7 @@ import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { Notifier, OutboundMessage } from '../../notifications/notifier.js';
 import { config } from '../../common/config.js';
 import { logger } from '../../common/logger.js';
+import { decryptString, encryptString } from '../../common/crypto.js';
 import { GuardFailedError } from '../../workflow/errors.js';
 
 export const mailSettingsSchema = z.object({
@@ -37,8 +38,10 @@ export class SettingsService {
     if (this.cached && Date.now() - this.cached.at < CACHE_MS) return this.cached.value;
 
     const row = await this.prisma.setting.findUnique({ where: { key: MAIL_KEY } });
-    const value: MailSettings = row
-      ? mailSettingsSchema.parse(JSON.parse(row.value))
+    const stored = row ? mailSettingsSchema.parse(JSON.parse(row.value)) : null;
+    if (stored?.password) stored.password = decryptString(stored.password);
+    const value: MailSettings = stored
+      ? stored
       : {
           provider: config.NOTIFIER === 'smtp' ? 'microsoft' : 'console',
           ...(config.SMTP_HOST ? { host: config.SMTP_HOST } : {}),
@@ -66,10 +69,15 @@ export class SettingsService {
       ...(preset ? { host: preset.host, port: preset.port } : {}),
       ...(input.password ? {} : current.password ? { password: current.password } : {}),
     };
+    // Secrets never hit the disk in plaintext.
+    const persisted = {
+      ...next,
+      ...(next.password ? { password: encryptString(next.password) } : {}),
+    };
     await this.prisma.setting.upsert({
       where: { key: MAIL_KEY },
-      update: { value: JSON.stringify(next) },
-      create: { key: MAIL_KEY, value: JSON.stringify(next) },
+      update: { value: JSON.stringify(persisted) },
+      create: { key: MAIL_KEY, value: JSON.stringify(persisted) },
     });
     this.cached = null;
   }

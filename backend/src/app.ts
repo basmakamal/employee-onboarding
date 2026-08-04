@@ -1,8 +1,11 @@
 import express, { type Router } from 'express';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { pinoHttp } from 'pino-http';
 import { logger } from './common/logger.js';
 import { errorHandler } from './common/http.js';
+import { config } from './common/config.js';
 
 export interface AppDeps {
   /** Resolves when dependencies (DB) are reachable; rejects otherwise. */
@@ -19,9 +22,24 @@ export function createApp(deps: AppDeps = {}) {
   const app = express();
 
   app.disable('x-powered-by');
-  app.use(express.json());
+  app.use(helmet({ contentSecurityPolicy: false })); // JSON API — CSP is the SPA's concern
+  app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
   app.use(pinoHttp({ logger }));
+
+  const limiterDefaults = {
+    standardHeaders: true,
+    legacyHeaders: false,
+    // Vitest/supertest fire many requests from one "IP" — relax under test.
+    skip: () => config.NODE_ENV === 'test',
+  };
+  /** Brute-force guard on credentials. */
+  app.use(
+    '/api/auth/login',
+    rateLimit({ ...limiterDefaults, windowMs: 15 * 60_000, limit: 20 }),
+  );
+  /** Token guessing on public signed links. */
+  app.use('/api/link', rateLimit({ ...limiterDefaults, windowMs: 15 * 60_000, limit: 120 }));
 
   // Liveness: the process is up.
   app.get('/api/health', (_req, res) => {
