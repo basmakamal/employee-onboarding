@@ -19,6 +19,11 @@ export const router = createRouter({
       name: 'employee-detail',
       component: () => import('../pages/EmployeeDetailPage.vue'),
     },
+    {
+      path: '/offboardings/:id',
+      name: 'offboarding',
+      component: () => import('../pages/OffboardingPage.vue'),
+    },
     // Public signed-link pages (no staff chrome, token IS the auth).
     {
       path: '/form/:token',
@@ -36,6 +41,12 @@ export const router = createRouter({
       path: '/approve-assets/:token',
       name: 'public-asset-approval',
       component: () => import('../pages/public/AssetApprovalPage.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/exit-interview/:token',
+      name: 'public-exit-interview',
+      component: () => import('../pages/public/ExitInterviewPage.vue'),
       meta: { public: true },
     },
   ],

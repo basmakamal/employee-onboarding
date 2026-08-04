@@ -228,6 +228,63 @@
     "doneTitle": "Contract approved — welcome!",
     "doneHint": "Your employee profile ({no}) has been created. HR will contact you with your onboarding details."
   },
+  "offboarding": {
+    "title": "Offboarding",
+    "start": "Start offboarding",
+    "open": "Open",
+    "inProgress": "Offboarding in progress",
+    "reason": "Reason",
+    "exitInterview": "Exit interview",
+    "interviewDone": "The employee completed the exit interview.",
+    "interviewPending": "Waiting for the employee to complete the form.",
+    "assetReturn": "Asset return",
+    "noAssets": "No approved custody items registered to this employee.",
+    "returned": "Returned",
+    "notReturned": "Not returned yet",
+    "markReturned": "Mark returned",
+    "unreturnedWarning": "{n} item(s) must be returned before the termination notice.",
+    "settlement": "Final settlement",
+    "settlementLater": "The settlement form opens when the record reaches the settlement stage.",
+    "workingDays": "Working days due",
+    "leaveDays": "Leave balance (days)",
+    "deductions": "Deductions",
+    "entitlements": "Final entitlements",
+    "closeHint": "Amounts saved — a Finance user closes the file after payout.",
+    "closedAt": "File closed on {date}. The employee is now inactive."
+  },
+  "offboardingStatus": {
+    "REQUESTED": "Requested",
+    "IN_PROGRESS": "In progress",
+    "ASSETS_PENDING": "Asset return",
+    "NOTICE_SENT": "Notice sent",
+    "SETTLEMENT": "Settlement",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "offboardingReasons": {
+    "RESIGNATION": "Resignation",
+    "TERMINATION": "Termination",
+    "CONTRACT_EXPIRY": "Contract expiry",
+    "RETIREMENT": "Retirement",
+    "DEATH": "Death"
+  },
+  "offboardingActions": {
+    "START": "Start procedures",
+    "TO_ASSET_RETURN": "To asset return",
+    "CONFIRM_ASSETS_RETURNED": "Confirm returned & send notice",
+    "TO_SETTLEMENT": "To settlement",
+    "CLOSE": "Close file",
+    "CANCEL": "Cancel"
+  },
+  "exitInterview": {
+    "title": "Exit interview",
+    "intro": "We appreciate your time with us — your honest answers help us improve.",
+    "leavingReason": "What is your reason for leaving?",
+    "experience": "How was your experience working with us?",
+    "improvements": "What could we improve?",
+    "doneTitle": "Thank you for your feedback",
+    "doneHint": "Your answers were recorded. We wish you all the best!"
+  },
   "assetApproval": {
     "title": "Asset custody form",
     "hint": "By approving, you electronically confirm receipt of the items above and accept responsibility for them.",
