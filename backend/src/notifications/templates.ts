@@ -12,6 +12,7 @@ export interface RenderedMessage {
 
 interface TemplateParams {
   name?: string;
+  status?: string;
   daysWaiting?: number;
   linkUrl?: string;
 }
@@ -36,6 +37,42 @@ const T: Record<string, Record<Locale, Template>> = {
         `This is a reminder to complete your data form and required documents.` +
         (p.linkUrl ? `\n\nForm link: ${p.linkUrl}` : '') +
         `\n\nHR Department`,
+    }),
+  },
+
+  /** Generic staff reminder — any record stalled in any watched status. */
+  'staff.record_stalled': {
+    ar: (p) => ({
+      subject: `متابعة: ${p.name ?? ''} — ${p.status ?? ''}`,
+      text: `السجل الخاص بـ ${p.name ?? ''} في حالة ${p.status ?? ''} منذ ${p.daysWaiting ?? '?'} يومًا. يرجى المتابعة من النظام.`,
+    }),
+    en: (p) => ({
+      subject: `Follow-up: ${p.name ?? ''} — ${p.status ?? ''}`,
+      text: `The record for ${p.name ?? ''} has been in status ${p.status ?? ''} for ${p.daysWaiting ?? '?'} day(s). Please follow up in the system.`,
+    }),
+  },
+
+  /** Escalation — reminders were ignored; a higher group steps in. */
+  'staff.escalation': {
+    ar: (p) => ({
+      subject: `تصعيد: ${p.name ?? ''} متوقف منذ ${p.daysWaiting ?? '?'} يومًا`,
+      text: `تصعيد تلقائي: سجل ${p.name ?? ''} لا يزال في حالة ${p.status ?? ''} منذ ${p.daysWaiting ?? '?'} يومًا رغم التذكيرات السابقة. يتطلب تدخلًا.`,
+    }),
+    en: (p) => ({
+      subject: `Escalation: ${p.name ?? ''} stalled for ${p.daysWaiting ?? '?'} day(s)`,
+      text: `Automatic escalation: the record for ${p.name ?? ''} is still in status ${p.status ?? ''} after ${p.daysWaiting ?? '?'} day(s) despite earlier reminders. Intervention required.`,
+    }),
+  },
+
+  /** A deadline expired and the system closed the window. */
+  'staff.record_expired': {
+    ar: (p) => ({
+      subject: `انتهت المهلة: ${p.name ?? ''}`,
+      text: `انتهت المهلة المحددة لسجل ${p.name ?? ''} (الحالة: ${p.status ?? ''}) وتم تغييرها تلقائيًا. يمكن إعادة الفتح من النظام.`,
+    }),
+    en: (p) => ({
+      subject: `Deadline expired: ${p.name ?? ''}`,
+      text: `The deadline for ${p.name ?? ''} (status: ${p.status ?? ''}) has passed and was changed automatically. It can be reopened from the system.`,
     }),
   },
 

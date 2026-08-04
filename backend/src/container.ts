@@ -16,6 +16,8 @@ import { SettingsService, DynamicNotifier } from './modules/settings/settings.se
 import { DashboardService } from './modules/dashboard/dashboard.service.js';
 import { buildTraineeWorkflow } from './workflow/trainee-workflow.js';
 import { SlaScheduler } from './workflow/sla-scheduler.js';
+import { SlaFiringRepository } from './workflow/sla-firing.repository.js';
+import { traineeWatcher, offboardingWatcher, processWatcher } from './workflow/sla-watchers.js';
 import { TraineeService } from './modules/trainees/trainee.service.js';
 import { EmployeeService } from './modules/employees/employee.service.js';
 import { AssetRepository } from './modules/assets/asset.repository.js';
@@ -57,14 +59,16 @@ export function buildContainer() {
   const eventBus = new EventBus();
   const traineeWorkflow = buildTraineeWorkflow({ trainees, documents, contracts, audit });
 
-  const slaScheduler = new SlaScheduler({
-    rules: slaRules,
-    holidays,
-    trainees,
-    workflow: traineeWorkflow,
-    audit,
-    notifications,
-  });
+  const slaFirings = new SlaFiringRepository(prisma);
+  const slaScheduler = new SlaScheduler(
+    { rules: slaRules, holidays, firings: slaFirings, audit, notifications },
+    [
+      traineeWatcher(trainees, traineeWorkflow),
+      offboardingWatcher(new OffboardingRepository(prisma)),
+      processWatcher('GOSI', gosi),
+      processWatcher('MEDICAL_INSURANCE', medical),
+    ],
+  );
 
   const authService = new AuthService(users, {
     access: config.JWT_ACCESS_SECRET,

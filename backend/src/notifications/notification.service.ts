@@ -51,13 +51,24 @@ export class NotificationService {
   }
 
   /** Notify every active HR user: email + in-app bell entry. */
-  async notifyHr(
+  notifyHr(
     templateKey: string,
     params: { name?: string; daysWaiting?: number; linkUrl?: string },
     ref?: EntityRef,
     locale: Locale = 'ar',
   ): Promise<void> {
-    const staff = await this.users.listActiveByRole('HR');
+    return this.notifyRole('HR', templateKey, params, ref, locale);
+  }
+
+  /** Notify every active user of a role group: email + in-app bell entry. */
+  async notifyRole(
+    role: string,
+    templateKey: string,
+    params: { name?: string; status?: string; daysWaiting?: number; linkUrl?: string },
+    ref?: EntityRef,
+    locale: Locale = 'ar',
+  ): Promise<void> {
+    const staff = await this.users.listActiveByRole(role as never);
     const message = renderTemplate(templateKey, locale, params);
 
     for (const user of staff) {
