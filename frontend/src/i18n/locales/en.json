@@ -389,6 +389,27 @@
       "WORKING_DAYS": "working days"
     }
   },
+  "expiryDocs": {
+    "title": "Documents & expiry",
+    "add": "Add document",
+    "edit": "Edit document",
+    "empty": "No tracked documents — add Iqama, passport, or the contract end date to get automatic expiry alerts.",
+    "number": "Document number",
+    "expiry": "Expiry date",
+    "customType": "Document name",
+    "daysLeft": "{n} day(s) left",
+    "expired": "expired {n} day(s) ago",
+    "renewHint": "Changing the expiry date (renewal) resets the alerts — the system will remind again before the new date.",
+    "types": {
+      "IQAMA": "Iqama",
+      "NATIONAL_ID": "National ID",
+      "PASSPORT": "Passport",
+      "CONTRACT": "Contract end date",
+      "WORK_PERMIT": "Work permit",
+      "DRIVING_LICENSE": "Driving license",
+      "CUSTOM": "Other…"
+    }
+  },
   "assetApproval": {
     "title": "Asset custody form",
     "hint": "By approving, you electronically confirm receipt of the items above and accept responsibility for them.",
