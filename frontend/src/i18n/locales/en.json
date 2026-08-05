@@ -7,6 +7,7 @@
     "home": "Dashboard",
     "trainees": "Trainees",
     "employees": "Employees",
+    "reports": "Reports",
     "users": "Staff & roles",
     "ownership": "Status ownership",
     "automation": "Automation",
@@ -387,6 +388,22 @@
       "HOURS": "hours",
       "CALENDAR_DAYS": "calendar days",
       "WORKING_DAYS": "working days"
+    }
+  },
+  "reports": {
+    "title": "Reports",
+    "subtitle": "Live numbers across all stages — with Excel exports",
+    "headcount": "Headcount by department",
+    "funnel": "Trainee funnel",
+    "completion": "Employee-file completion",
+    "expiry": "Document expiry",
+    "offReasons": "Offboarding by reason",
+    "buckets": { "expired": "Expired", "in30": "≤ 30 days", "in60": "≤ 60 days", "in90": "≤ 90 days" },
+    "exports": {
+      "employees": "Employees",
+      "trainees": "Trainees",
+      "expiring-documents": "Expiring docs",
+      "audit": "Audit (30d)"
     }
   },
   "expiryDocs": {
