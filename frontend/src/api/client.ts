@@ -30,6 +30,11 @@ export function setAccessToken(token: string) {
   accessToken = token;
 }
 
+/** For raw fetch use-cases (blob downloads) that bypass the api helpers. */
+export function getAccessToken(): string {
+  return accessToken;
+}
+
 /** The auth store registers here to hear about silent refreshes/expiry. */
 export function onSessionChange(handler: typeof onSession) {
   onSession = handler;

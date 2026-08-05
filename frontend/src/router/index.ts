@@ -24,6 +24,7 @@ export const router = createRouter({
       name: 'offboarding',
       component: () => import('../pages/OffboardingPage.vue'),
     },
+    { path: '/reports', name: 'reports', component: () => import('../pages/ReportsPage.vue') },
     { path: '/settings', name: 'settings', component: () => import('../pages/SettingsPage.vue') },
     { path: '/automation', name: 'automation', component: () => import('../pages/AutomationPage.vue') },
     { path: '/ownership', name: 'ownership', component: () => import('../pages/OwnershipPage.vue') },
