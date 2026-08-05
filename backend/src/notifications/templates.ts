@@ -14,6 +14,10 @@ interface TemplateParams {
   name?: string;
   status?: string;
   daysWaiting?: number;
+  daysLeft?: number;
+  docType?: string;
+  docNumber?: string;
+  expiryDate?: string;
   linkUrl?: string;
 }
 
@@ -37,6 +41,46 @@ const T: Record<string, Record<Locale, Template>> = {
         `This is a reminder to complete your data form and required documents.` +
         (p.linkUrl ? `\n\nForm link: ${p.linkUrl}` : '') +
         `\n\nHR Department`,
+    }),
+  },
+
+  /** A tracked document is approaching (or past) its expiry date. */
+  'staff.document_expiring': {
+    ar: (p) => ({
+      subject:
+        (p.daysLeft ?? 0) < 0
+          ? `منتهي: ${p.docType ?? 'مستند'} — ${p.name ?? ''}`
+          : `ينتهي قريبًا: ${p.docType ?? 'مستند'} — ${p.name ?? ''}`,
+      text:
+        `${p.docType ?? 'المستند'}${p.docNumber ? ` رقم ${p.docNumber}` : ''} للموظف ${p.name ?? ''} ` +
+        ((p.daysLeft ?? 0) < 0
+          ? `انتهى بتاريخ ${p.expiryDate ?? ''} (منذ ${Math.abs(p.daysLeft ?? 0)} يومًا).`
+          : `ينتهي بتاريخ ${p.expiryDate ?? ''} (بعد ${p.daysLeft ?? '?'} يومًا).`) +
+        ` يرجى التجديد وتحديث التاريخ في النظام.`,
+    }),
+    en: (p) => ({
+      subject:
+        (p.daysLeft ?? 0) < 0
+          ? `Expired: ${p.docType ?? 'document'} — ${p.name ?? ''}`
+          : `Expiring soon: ${p.docType ?? 'document'} — ${p.name ?? ''}`,
+      text:
+        `${p.docType ?? 'The document'}${p.docNumber ? ` no. ${p.docNumber}` : ''} for ${p.name ?? ''} ` +
+        ((p.daysLeft ?? 0) < 0
+          ? `expired on ${p.expiryDate ?? ''} (${Math.abs(p.daysLeft ?? 0)} day(s) ago).`
+          : `expires on ${p.expiryDate ?? ''} (in ${p.daysLeft ?? '?'} day(s)).`) +
+        ` Please renew it and update the date in the system.`,
+    }),
+  },
+
+  /** Escalation — the expiring document was ignored. */
+  'staff.document_expiry_escalation': {
+    ar: (p) => ({
+      subject: `تصعيد: ${p.docType ?? 'مستند'} ${p.name ?? ''} — ${p.expiryDate ?? ''}`,
+      text: `تصعيد تلقائي: ${p.docType ?? 'المستند'} للموظف ${p.name ?? ''} ينتهي/انتهى بتاريخ ${p.expiryDate ?? ''} رغم التذكيرات السابقة. يتطلب تدخلًا.`,
+    }),
+    en: (p) => ({
+      subject: `Escalation: ${p.docType ?? 'document'} for ${p.name ?? ''} — ${p.expiryDate ?? ''}`,
+      text: `Automatic escalation: the ${p.docType ?? 'document'} for ${p.name ?? ''} expires/expired on ${p.expiryDate ?? ''} despite earlier reminders. Intervention required.`,
     }),
   },
 

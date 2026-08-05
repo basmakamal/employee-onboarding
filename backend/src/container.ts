@@ -17,7 +17,13 @@ import { DashboardService } from './modules/dashboard/dashboard.service.js';
 import { buildTraineeWorkflow } from './workflow/trainee-workflow.js';
 import { SlaScheduler } from './workflow/sla-scheduler.js';
 import { SlaFiringRepository } from './workflow/sla-firing.repository.js';
-import { traineeWatcher, offboardingWatcher, processWatcher } from './workflow/sla-watchers.js';
+import {
+  traineeWatcher,
+  offboardingWatcher,
+  processWatcher,
+  documentExpiryWatcher,
+} from './workflow/sla-watchers.js';
+import { EmployeeDocumentRepository } from './modules/employees/employee-document.repository.js';
 import { OwnershipService } from './workflow/ownership.service.js';
 import { TraineeService } from './modules/trainees/trainee.service.js';
 import { EmployeeService } from './modules/employees/employee.service.js';
@@ -61,6 +67,7 @@ export function buildContainer() {
   const ownershipService = new OwnershipService(prisma);
   const traineeWorkflow = buildTraineeWorkflow({ trainees, documents, contracts, audit }, ownershipService);
 
+  const employeeDocuments = new EmployeeDocumentRepository(prisma);
   const slaFirings = new SlaFiringRepository(prisma);
   const slaScheduler = new SlaScheduler(
     { rules: slaRules, holidays, firings: slaFirings, audit, notifications, calendar: settingsService },
@@ -69,6 +76,7 @@ export function buildContainer() {
       offboardingWatcher(new OffboardingRepository(prisma)),
       processWatcher('GOSI', gosi),
       processWatcher('MEDICAL_INSURANCE', medical),
+      documentExpiryWatcher(employeeDocuments),
     ],
   );
 
@@ -122,7 +130,9 @@ export function buildContainer() {
       linkTokens,
       audit,
       slaRules,
+      slaFirings,
       holidays,
+      employeeDocuments,
       notificationRepo,
     },
     notifications,

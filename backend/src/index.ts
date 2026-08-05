@@ -12,6 +12,7 @@ import { assetRouter } from './modules/assets/asset.routes.js';
 import { offboardingRouter } from './modules/offboarding/offboarding.routes.js';
 import { settingsRouter } from './modules/settings/settings.routes.js';
 import { usersRouter } from './auth/users.routes.js';
+import { employeeDocumentRouter } from './modules/employees/employee-document.routes.js';
 import { notificationRouter } from './notifications/notification.routes.js';
 import { linkRouter } from './modules/trainees/link.routes.js';
 import { asyncHandler } from './common/http.js';
@@ -23,6 +24,13 @@ const container = buildContainer();
 const staffApi = Router();
 staffApi.use(requireAuth(container.authService));
 staffApi.use('/trainees', requireRole('HR', 'ADMIN'), traineeRouter(container.traineeService));
+const docRouters = employeeDocumentRouter({
+  documents: container.repos.employeeDocuments,
+  firings: container.repos.slaFirings,
+  audit: container.repos.audit,
+});
+staffApi.use('/employees/:id/documents', docRouters.nested);
+staffApi.use('/employee-documents', docRouters.flat);
 staffApi.use('/employees', employeeRouter(container.employeeService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
 staffApi.use(

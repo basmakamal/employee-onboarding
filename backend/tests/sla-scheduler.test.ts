@@ -174,4 +174,53 @@ describe('SlaScheduler (generalized)', () => {
     await expect(scheduler.tick(NOW)).resolves.toBeUndefined();
     expect(deps.notifications.notifyRole).not.toHaveBeenCalled();
   });
+
+  it('deadline watchers (listDue) use their own template and meta params', async () => {
+    const expiryRule = rule({
+      processKey: 'DOCUMENT_EXPIRY',
+      status: 'ANY',
+      afterValue: 30,
+      afterUnit: 'CALENDAR_DAYS',
+      notifySubject: false,
+    });
+    const dueDoc: WatchedRecord = {
+      id: 'doc1',
+      name: 'Nora Khalid (EMP-0001)',
+      anchorAt: new Date('2026-08-20T00:00:00Z'), // the expiry date itself
+      employeeId: 'e1',
+      meta: { docType: 'IQAMA', daysLeft: 18, expiryDate: '2026-08-20' },
+    };
+    const deps = {
+      rules: { listAllActive: vi.fn().mockResolvedValue([expiryRule]) },
+      holidays: { listBetween: vi.fn().mockResolvedValue([]) },
+      firings: { lastFiring: vi.fn().mockResolvedValue(null), record: vi.fn().mockResolvedValue({}) },
+      audit: { append: vi.fn().mockResolvedValue({}) },
+      notifications: {
+        notifyExternal: vi.fn().mockResolvedValue(undefined),
+        notifyRole: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    const watcher: SlaWatcher = {
+      processKey: 'DOCUMENT_EXPIRY',
+      listInStatusSince: vi.fn().mockResolvedValue([]),
+      listDue: vi.fn().mockResolvedValue([dueDoc]),
+      templates: { stalled: 'staff.document_expiring' },
+    };
+
+    await new SlaScheduler(deps as never, [watcher]).tick(NOW);
+
+    // The watcher's dueness is trusted (no elapsed-time filtering) …
+    expect(watcher.listDue).toHaveBeenCalledWith(
+      expect.objectContaining({ afterValue: 30, status: 'ANY' }),
+      NOW,
+    );
+    // … the override template is used, and meta params flow through.
+    expect(deps.notifications.notifyRole).toHaveBeenCalledWith(
+      'HR',
+      'staff.document_expiring',
+      expect.objectContaining({ docType: 'IQAMA', daysLeft: 18, expiryDate: '2026-08-20' }),
+      { entity: 'DOCUMENT_EXPIRY', entityId: 'doc1' },
+    );
+    expect(deps.firings.record).toHaveBeenCalledWith('rule1', 'doc1', NOW);
+  });
 });

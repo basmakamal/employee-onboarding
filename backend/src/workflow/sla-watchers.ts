@@ -6,6 +6,7 @@ import type { TraineeRepository } from '../modules/trainees/trainee.repository.j
 import type { OffboardingRepository } from '../modules/offboarding/offboarding.repository.js';
 import type { GosiRepository } from '../modules/processes/gosi.repository.js';
 import type { MedicalInsuranceRepository } from '../modules/processes/medical-insurance.repository.js';
+import type { EmployeeDocumentRepository } from '../modules/employees/employee-document.repository.js';
 
 const TRAINEE_SUBJECT_TEMPLATES: Record<string, string> = {
   AWAITING_FORM: 'trainee.form_reminder',
@@ -50,6 +51,41 @@ export function offboardingWatcher(offboardings: OffboardingRepository): SlaWatc
         anchorAt: o.updatedAt,
         employeeId: o.employeeId,
       }));
+    },
+  };
+}
+
+/**
+ * Document expiry — DEADLINE semantics: rules fire `afterValue` days
+ * BEFORE expiryDate (and keep the record due after it passes, until the
+ * document is renewed). rule.status filters by document type ('ANY' = all).
+ */
+export function documentExpiryWatcher(documents: EmployeeDocumentRepository): SlaWatcher {
+  return {
+    processKey: 'DOCUMENT_EXPIRY',
+    // Unused for deadline watchers, but part of the contract.
+    listInStatusSince: () => Promise.resolve([]),
+    async listDue(rule, now): Promise<WatchedRecord[]> {
+      const rows = await documents.listExpiring(rule.afterValue, rule.status, now);
+      return rows.map((doc) => {
+        const daysLeft = Math.ceil((doc.expiryDate.getTime() - now.getTime()) / 86_400_000);
+        return {
+          id: doc.id,
+          name: `${doc.employee.firstName} ${doc.employee.lastName} (${doc.employee.employeeNo})`,
+          anchorAt: doc.expiryDate,
+          employeeId: doc.employeeId,
+          meta: {
+            docType: doc.type,
+            daysLeft,
+            expiryDate: doc.expiryDate.toISOString().slice(0, 10),
+            ...(doc.number ? { docNumber: doc.number } : {}),
+          },
+        };
+      });
+    },
+    templates: {
+      stalled: 'staff.document_expiring',
+      escalation: 'staff.document_expiry_escalation',
     },
   };
 }
