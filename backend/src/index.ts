@@ -13,6 +13,7 @@ import { offboardingRouter } from './modules/offboarding/offboarding.routes.js';
 import { settingsRouter } from './modules/settings/settings.routes.js';
 import { usersRouter } from './auth/users.routes.js';
 import { employeeDocumentRouter } from './modules/employees/employee-document.routes.js';
+import { reportsRouter } from './modules/reports/reports.routes.js';
 import { notificationRouter } from './notifications/notification.routes.js';
 import { linkRouter } from './modules/trainees/link.routes.js';
 import { asyncHandler } from './common/http.js';
@@ -33,6 +34,7 @@ staffApi.use('/employees/:id/documents', docRouters.nested);
 staffApi.use('/employee-documents', docRouters.flat);
 staffApi.use('/employees', employeeRouter(container.employeeService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
+staffApi.use('/reports', reportsRouter(container.reportsService));
 staffApi.use(
   '/settings',
   settingsRouter(
