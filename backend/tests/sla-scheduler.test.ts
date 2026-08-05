@@ -1,10 +1,10 @@
 /**
- * The SLA scheduler — the BRD automation table executed against fakes with
- * a controlled clock. Times are UTC; 2026-08-02 is a Sunday (working day).
+ * The generalized SLA scheduler — watchers + sla_firings memory, exercised
+ * with fakes and a controlled clock (2026-08-02 is a Sunday, a working day).
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SlaScheduler } from '../src/workflow/sla-scheduler.js';
-import type { Trainee, SlaRule } from '../src/generated/prisma/client.js';
+import { describe, expect, it, vi } from 'vitest';
+import { SlaScheduler, type SlaWatcher, type WatchedRecord } from '../src/workflow/sla-scheduler.js';
+import type { SlaRule } from '../src/generated/prisma/client.js';
 
 const NOW = new Date('2026-08-02T12:00:00Z');
 
@@ -18,53 +18,54 @@ function rule(overrides: Partial<SlaRule>): SlaRule {
     action: 'REMIND',
     notifySubject: true,
     notifyHr: true,
+    notifyRole: 'HR',
+    escalateToRole: null,
     active: true,
     createdAt: NOW,
     ...overrides,
   } as SlaRule;
 }
 
-function trainee(overrides: Partial<Trainee>): Trainee {
+function record(overrides: Partial<WatchedRecord> = {}): WatchedRecord {
   return {
     id: 't1',
-    firstName: 'Sara',
-    lastName: 'Ahmed',
+    name: 'Sara Ahmed',
     email: 'sara@example.com',
-    status: 'AWAITING_FORM',
-    statusChangedAt: new Date('2026-08-01T10:00:00Z'), // 26h before NOW
-    lastReminderAt: null,
+    anchorAt: new Date('2026-08-01T10:00:00Z'), // 26h before NOW
+    traineeId: 't1',
     ...overrides,
-  } as Trainee;
+  };
 }
 
-function makeDeps(rules: SlaRule[], candidates: Trainee[]) {
+function makeScheduler(rules: SlaRule[], records: WatchedRecord[], lastFiring: Date | null = null) {
   const deps = {
-    rules: { listActive: vi.fn().mockResolvedValue(rules) },
+    rules: { listAllActive: vi.fn().mockResolvedValue(rules) },
     holidays: { listBetween: vi.fn().mockResolvedValue([]) },
-    trainees: {
-      listInStatusSince: vi.fn().mockResolvedValue(candidates),
-      markReminded: vi.fn().mockResolvedValue({}),
+    firings: {
+      lastFiring: vi.fn().mockResolvedValue(lastFiring),
+      record: vi.fn().mockResolvedValue({}),
     },
-    workflow: { transition: vi.fn().mockResolvedValue({ from: 'AWAITING_FORM', to: 'EXPIRED' }) },
     audit: { append: vi.fn().mockResolvedValue({}) },
     notifications: {
       notifyExternal: vi.fn().mockResolvedValue(undefined),
-      notifyHr: vi.fn().mockResolvedValue(undefined),
+      notifyRole: vi.fn().mockResolvedValue(undefined),
     },
   };
-  return deps;
+  const expire = vi.fn().mockResolvedValue(undefined);
+  const watcher: SlaWatcher = {
+    processKey: 'TRAINEE',
+    listInStatusSince: vi.fn().mockResolvedValue(records),
+    subjectTemplate: (status) =>
+      status === 'AWAITING_FORM' ? 'trainee.form_reminder' : undefined,
+    expire,
+  };
+  return { scheduler: new SlaScheduler(deps as never, [watcher]), deps, watcher, expire };
 }
 
-describe('SlaScheduler', () => {
-  let deps: ReturnType<typeof makeDeps>;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('BRD rule 1: 24h reminder → trainee + HR, audited, marked', async () => {
-    deps = makeDeps([rule({})], [trainee({})]);
-    await new SlaScheduler(deps as never).tick(NOW);
+describe('SlaScheduler (generalized)', () => {
+  it('REMIND notifies subject + role group, audits, and records the firing', async () => {
+    const { scheduler, deps } = makeScheduler([rule({})], [record()]);
+    await scheduler.tick(NOW);
 
     expect(deps.notifications.notifyExternal).toHaveBeenCalledWith(
       'sara@example.com',
@@ -72,108 +73,154 @@ describe('SlaScheduler', () => {
       expect.objectContaining({ name: 'Sara Ahmed' }),
       { entity: 'TRAINEE', entityId: 't1' },
     );
-    expect(deps.notifications.notifyHr).toHaveBeenCalled();
+    expect(deps.notifications.notifyRole).toHaveBeenCalledWith(
+      'HR',
+      'staff.record_stalled',
+      expect.objectContaining({ name: 'Sara Ahmed', status: 'AWAITING_FORM', daysWaiting: 1 }),
+      expect.anything(),
+    );
     expect(deps.audit.append).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'SLA_REMINDER', actorType: 'SYSTEM' }),
     );
-    expect(deps.trainees.markReminded).toHaveBeenCalledWith('t1', NOW);
+    expect(deps.firings.record).toHaveBeenCalledWith('rule1', 't1', NOW);
   });
 
-  it('a one-shot REMIND does not fire twice (lastReminderAt set)', async () => {
-    deps = makeDeps([rule({})], [trainee({ lastReminderAt: new Date('2026-08-01T13:00:00Z') })]);
-    await new SlaScheduler(deps as never).tick(NOW);
-
-    expect(deps.notifications.notifyExternal).not.toHaveBeenCalled();
-    expect(deps.trainees.markReminded).not.toHaveBeenCalled();
+  it('a one-shot REMIND never fires twice (sla_firings memory)', async () => {
+    const { scheduler, deps } = makeScheduler(
+      [rule({})],
+      [record()],
+      new Date('2026-08-01T13:00:00Z'),
+    );
+    await scheduler.tick(NOW);
+    expect(deps.notifications.notifyRole).not.toHaveBeenCalled();
+    expect(deps.firings.record).not.toHaveBeenCalled();
   });
 
-  it('REMIND_DAILY re-fires after ~a day but not within the same day', async () => {
-    const daily = rule({ action: 'REMIND_DAILY', status: 'AWAITING_CONTRACT_APPROVAL' });
+  it('REMIND_DAILY re-fires after ~a day but not sooner', async () => {
+    const daily = rule({ action: 'REMIND_DAILY' });
 
-    // Reminded 22h ago → fires again.
-    deps = makeDeps(
-      [daily],
-      [
-        trainee({
-          status: 'AWAITING_CONTRACT_APPROVAL',
-          statusChangedAt: new Date('2026-07-20T10:00:00Z'),
-          lastReminderAt: new Date('2026-08-01T14:00:00Z'),
-        }),
-      ],
-    );
-    await new SlaScheduler(deps as never).tick(NOW);
-    expect(deps.notifications.notifyExternal).toHaveBeenCalledTimes(1);
+    const old = makeScheduler([daily], [record()], new Date('2026-08-01T14:00:00Z')); // 22h ago
+    await old.scheduler.tick(NOW);
+    expect(old.deps.notifications.notifyRole).toHaveBeenCalledTimes(1);
 
-    // Reminded 3h ago → silent.
-    deps = makeDeps(
-      [daily],
-      [
-        trainee({
-          status: 'AWAITING_CONTRACT_APPROVAL',
-          statusChangedAt: new Date('2026-07-20T10:00:00Z'),
-          lastReminderAt: new Date('2026-08-02T09:00:00Z'),
-        }),
-      ],
-    );
-    await new SlaScheduler(deps as never).tick(NOW);
-    expect(deps.notifications.notifyExternal).not.toHaveBeenCalled();
+    const fresh = makeScheduler([daily], [record()], new Date('2026-08-02T09:00:00Z')); // 3h ago
+    await fresh.scheduler.tick(NOW);
+    expect(fresh.deps.notifications.notifyRole).not.toHaveBeenCalled();
   });
 
-  it('BRD rule 2: EXPIRE goes through the state machine and notifies HR', async () => {
-    const expire = rule({ action: 'EXPIRE', afterValue: 10, afterUnit: 'CALENDAR_DAYS', notifySubject: false });
-    const old = trainee({ statusChangedAt: new Date('2026-07-20T10:00:00Z') }); // 13 days
-    deps = makeDeps([expire], [old]);
+  it('ESCALATE goes to the configured higher group, once, audited as escalation', async () => {
+    const esc = rule({
+      action: 'ESCALATE',
+      afterValue: 5,
+      afterUnit: 'CALENDAR_DAYS',
+      escalateToRole: 'ADMIN',
+    });
+    const stale = record({ anchorAt: new Date('2026-07-26T10:00:00Z') }); // 7 days
 
-    await new SlaScheduler(deps as never).tick(NOW);
+    const first = makeScheduler([esc], [stale]);
+    await first.scheduler.tick(NOW);
+    expect(first.deps.notifications.notifyRole).toHaveBeenCalledWith(
+      'ADMIN',
+      'staff.escalation',
+      expect.objectContaining({ daysWaiting: 7 }),
+      expect.anything(),
+    );
+    expect(first.deps.audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'SLA_ESCALATION' }),
+    );
 
-    expect(deps.workflow.transition).toHaveBeenCalledWith(
-      old,
-      'EXPIRE',
-      { type: 'SYSTEM' },
-      { rule: 'rule1' },
-    );
-    expect(deps.notifications.notifyHr).toHaveBeenCalledWith(
-      'hr.trainee_expired',
-      expect.objectContaining({ name: 'Sara Ahmed' }),
-      { entity: 'TRAINEE', entityId: 't1' },
-    );
+    const repeat = makeScheduler([esc], [stale], NOW); // already fired
+    await repeat.scheduler.tick(NOW);
+    expect(repeat.deps.notifications.notifyRole).not.toHaveBeenCalled();
   });
 
-  it('WORKING_DAYS rules skip the Fri/Sat weekend before firing', async () => {
-    const wd = rule({
-      status: 'CONTRACT_CREATION',
-      afterValue: 2,
-      afterUnit: 'WORKING_DAYS',
+  it('EXPIRE delegates to the watcher and notifies the role group', async () => {
+    const exp = rule({
+      action: 'EXPIRE',
+      afterValue: 10,
+      afterUnit: 'CALENDAR_DAYS',
       notifySubject: false,
     });
-    // Thursday 2026-07-30 10:00 → Fri+Sat are weekend → by Sunday noon only
-    // 1 working day (Sunday) has passed → must NOT fire.
-    deps = makeDeps(
-      [wd],
-      [trainee({ status: 'CONTRACT_CREATION', statusChangedAt: new Date('2026-07-30T10:00:00Z') })],
-    );
-    await new SlaScheduler(deps as never).tick(NOW);
-    expect(deps.notifications.notifyHr).not.toHaveBeenCalled();
+    const stale = record({ anchorAt: new Date('2026-07-20T10:00:00Z') });
 
-    // From Tuesday 2026-07-28: Wed + Thu + Sun = 3 working days → fires.
-    deps = makeDeps(
-      [wd],
-      [trainee({ status: 'CONTRACT_CREATION', statusChangedAt: new Date('2026-07-28T10:00:00Z') })],
+    const { scheduler, deps, expire } = makeScheduler([exp], [stale]);
+    await scheduler.tick(NOW);
+
+    expect(expire).toHaveBeenCalledWith(stale, 'rule1');
+    expect(deps.notifications.notifyRole).toHaveBeenCalledWith(
+      'HR',
+      'staff.record_expired',
+      expect.anything(),
+      expect.anything(),
     );
-    await new SlaScheduler(deps as never).tick(NOW);
-    expect(deps.notifications.notifyHr).toHaveBeenCalledTimes(1);
   });
 
-  it('a failing rule does not stop the remaining rules', async () => {
-    const bad = rule({ id: 'bad' });
-    const good = rule({ id: 'good', notifySubject: false });
-    deps = makeDeps([bad, good], [trainee({})]);
-    deps.notifications.notifyExternal.mockRejectedValueOnce(new Error('smtp down'));
+  it('WORKING_DAYS rules respect the Fri/Sat weekend', async () => {
+    const wd = rule({ afterValue: 2, afterUnit: 'WORKING_DAYS', notifySubject: false });
 
-    await new SlaScheduler(deps as never).tick(NOW);
+    // Thursday 10:00 → only Sunday counts by NOW → must NOT fire.
+    const early = makeScheduler([wd], [record({ anchorAt: new Date('2026-07-30T10:00:00Z') })]);
+    await early.scheduler.tick(NOW);
+    expect(early.deps.notifications.notifyRole).not.toHaveBeenCalled();
 
-    // Second rule still ran (notifyHr called for both attempts).
-    expect(deps.rules.listActive).toHaveBeenCalled();
-    expect(deps.notifications.notifyHr).toHaveBeenCalled();
+    // Tuesday → Wed + Thu + Sun = 3 working days → fires.
+    const due = makeScheduler([wd], [record({ anchorAt: new Date('2026-07-28T10:00:00Z') })]);
+    await due.scheduler.tick(NOW);
+    expect(due.deps.notifications.notifyRole).toHaveBeenCalledTimes(1);
+  });
+
+  it('rules for machines without a registered watcher are skipped safely', async () => {
+    const { scheduler, deps } = makeScheduler([rule({ processKey: 'UNKNOWN' })], [record()]);
+    await expect(scheduler.tick(NOW)).resolves.toBeUndefined();
+    expect(deps.notifications.notifyRole).not.toHaveBeenCalled();
+  });
+
+  it('deadline watchers (listDue) use their own template and meta params', async () => {
+    const expiryRule = rule({
+      processKey: 'DOCUMENT_EXPIRY',
+      status: 'ANY',
+      afterValue: 30,
+      afterUnit: 'CALENDAR_DAYS',
+      notifySubject: false,
+    });
+    const dueDoc: WatchedRecord = {
+      id: 'doc1',
+      name: 'Nora Khalid (EMP-0001)',
+      anchorAt: new Date('2026-08-20T00:00:00Z'), // the expiry date itself
+      employeeId: 'e1',
+      meta: { docType: 'IQAMA', daysLeft: 18, expiryDate: '2026-08-20' },
+    };
+    const deps = {
+      rules: { listAllActive: vi.fn().mockResolvedValue([expiryRule]) },
+      holidays: { listBetween: vi.fn().mockResolvedValue([]) },
+      firings: { lastFiring: vi.fn().mockResolvedValue(null), record: vi.fn().mockResolvedValue({}) },
+      audit: { append: vi.fn().mockResolvedValue({}) },
+      notifications: {
+        notifyExternal: vi.fn().mockResolvedValue(undefined),
+        notifyRole: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    const watcher: SlaWatcher = {
+      processKey: 'DOCUMENT_EXPIRY',
+      listInStatusSince: vi.fn().mockResolvedValue([]),
+      listDue: vi.fn().mockResolvedValue([dueDoc]),
+      templates: { stalled: 'staff.document_expiring' },
+    };
+
+    await new SlaScheduler(deps as never, [watcher]).tick(NOW);
+
+    // The watcher's dueness is trusted (no elapsed-time filtering) …
+    expect(watcher.listDue).toHaveBeenCalledWith(
+      expect.objectContaining({ afterValue: 30, status: 'ANY' }),
+      NOW,
+    );
+    // … the override template is used, and meta params flow through.
+    expect(deps.notifications.notifyRole).toHaveBeenCalledWith(
+      'HR',
+      'staff.document_expiring',
+      expect.objectContaining({ docType: 'IQAMA', daysLeft: 18, expiryDate: '2026-08-20' }),
+      { entity: 'DOCUMENT_EXPIRY', entityId: 'doc1' },
+    );
+    expect(deps.firings.record).toHaveBeenCalledWith('rule1', 'doc1', NOW);
   });
 });

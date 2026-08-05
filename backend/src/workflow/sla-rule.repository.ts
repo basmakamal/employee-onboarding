@@ -8,8 +8,28 @@ export class SlaRuleRepository {
     return this.db.slaRule.findMany({ where: { processKey, active: true } });
   }
 
+  /** Every active rule across all machines. */
+  listAllActive() {
+    return this.db.slaRule.findMany({ where: { active: true } });
+  }
+
   list() {
     return this.db.slaRule.findMany({ orderBy: [{ processKey: 'asc' }, { status: 'asc' }] });
+  }
+
+  update(
+    id: string,
+    data: {
+      afterValue?: number;
+      afterUnit?: 'HOURS' | 'CALENDAR_DAYS' | 'WORKING_DAYS';
+      notifySubject?: boolean;
+      notifyHr?: boolean;
+      notifyRole?: string;
+      escalateToRole?: string | null;
+      active?: boolean;
+    },
+  ) {
+    return this.db.slaRule.update({ where: { id }, data });
   }
 
   setActive(id: string, active: boolean) {
@@ -26,6 +46,10 @@ export class HolidayRepository {
       where: { date: { gte: from, lte: to } },
       orderBy: { date: 'asc' },
     });
+  }
+
+  list() {
+    return this.db.holiday.findMany({ orderBy: { date: 'asc' } });
   }
 
   add(date: Date, name: string) {

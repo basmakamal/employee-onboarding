@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { usePreferencesStore } from './stores/preferences';
 import { useAuthStore } from './stores/auth';
+import NotificationBell from './components/NotificationBell.vue';
 
 const prefs = usePreferencesStore();
 const auth = useAuthStore();
@@ -23,6 +24,8 @@ const NAV = [
   // hasRole() lets ADMIN through on any check; listing no other role makes
   // these entries effectively admin-only.
   { to: '/users', icon: 'mdi-account-cog', key: 'nav.users', roles: ['ADMIN'] },
+  { to: '/ownership', icon: 'mdi-sitemap', key: 'nav.ownership', roles: ['ADMIN'] },
+  { to: '/automation', icon: 'mdi-robot', key: 'nav.automation', roles: ['ADMIN'] },
   { to: '/settings', icon: 'mdi-cog', key: 'nav.settings', roles: ['ADMIN'] },
 ];
 
@@ -65,6 +68,8 @@ onMounted(() => prefs.apply());
           :aria-label="$t('actions.toggleTheme')"
           @click="prefs.toggleTheme()"
         />
+
+        <NotificationBell v-if="auth.user" />
 
         <v-menu v-if="auth.user">
           <template #activator="{ props }">

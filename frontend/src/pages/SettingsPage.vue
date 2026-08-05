@@ -132,11 +132,7 @@ onMounted(load);
               />
             </v-col>
             <v-col cols="12">
-              <v-text-field
-                v-model="form.user"
-                :label="$t('settings.user')"
-                autocomplete="off"
-              />
+              <v-text-field v-model="form.user" :label="$t('settings.user')" autocomplete="off" />
             </v-col>
             <v-col cols="12">
               <v-text-field

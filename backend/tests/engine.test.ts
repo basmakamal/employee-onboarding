@@ -121,4 +121,25 @@ describe('Workflow.transition', () => {
     expect(wf.availableActions('A', { type: 'LINK' })).toEqual([]);
     expect(wf.availableActions('B', { type: 'SYSTEM' })).toEqual(['DYNAMIC']);
   });
+
+  it('system-managed ownership overrides the machine defaults', async () => {
+    const roleMachine: MachineDef<Rec> = {
+      key: 'TEST',
+      transitions: [{ action: 'GO', from: 'A', to: 'B', actors: ['USER'], roles: ['HR'] }],
+    };
+    const ownership = { rolesFor: (key: string, status: string) =>
+      key === 'TEST' && status === 'A' ? ['FINANCE'] : undefined };
+    const wf = new Workflow(roleMachine, { ...makeDeps().deps, ownership });
+
+    // The override REPLACES the hardcoded HR: FINANCE may act, HR may not.
+    await expect(
+      wf.transition({ id: 'r1', status: 'A' }, 'GO', { type: 'USER', role: 'HR' }),
+    ).rejects.toThrow(/role HR/);
+    const ok = await wf.transition({ id: 'r1', status: 'A' }, 'GO', { type: 'USER', role: 'FINANCE' });
+    expect(ok.to).toBe('B');
+
+    expect(wf.availableActions('A', { type: 'USER', role: 'HR' })).toEqual([]);
+    expect(wf.availableActions('A', { type: 'USER', role: 'FINANCE' })).toEqual(['GO']);
+    expect(wf.availableActions('A', { type: 'USER', role: 'ADMIN' })).toEqual(['GO']);
+  });
 });

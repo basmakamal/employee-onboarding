@@ -1,4 +1,4 @@
-import type { Actor } from '../../workflow/engine.js';
+import type { Actor, OwnershipLookup } from '../../workflow/engine.js';
 import { Workflow } from '../../workflow/engine.js';
 import { offboardingMachine } from '../../workflow/machines/offboarding.machine.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
@@ -36,6 +36,7 @@ export class OffboardingService {
     },
     private readonly links: LinkTokenService,
     private readonly notifications: NotificationService,
+    ownership?: OwnershipLookup,
   ) {
     this.workflow = new Workflow<Offboarding>(
       offboardingMachine({
@@ -44,6 +45,7 @@ export class OffboardingService {
       {
         getId: (o) => o.id,
         getStatus: (o) => o.status,
+        ...(ownership ? { ownership } : {}),
         move: (o, from, to) =>
           repos.offboardings.moveStatus(o.id, from as OffboardingStatus, to as OffboardingStatus),
         audit: (entry) => repos.audit.append(entry),

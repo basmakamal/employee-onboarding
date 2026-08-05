@@ -37,4 +37,17 @@ export class NotificationRepository {
   markRead(id: string, readAt: Date) {
     return this.db.notification.update({ where: { id }, data: { readAt } });
   }
+
+  unreadCount(userId: string): Promise<number> {
+    return this.db.notification.count({
+      where: { recipientUserId: userId, channel: 'IN_APP', readAt: null },
+    });
+  }
+
+  markAllRead(userId: string, readAt: Date) {
+    return this.db.notification.updateMany({
+      where: { recipientUserId: userId, channel: 'IN_APP', readAt: null },
+      data: { readAt },
+    });
+  }
 }

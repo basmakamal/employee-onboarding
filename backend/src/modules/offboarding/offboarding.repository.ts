@@ -25,6 +25,14 @@ export class OffboardingRepository {
     });
   }
 
+  /** SLA scan input: records sitting in `status` since before `threshold`. */
+  listInStatusSince(status: string, threshold: Date) {
+    return this.db.offboarding.findMany({
+      where: { status: status as OffboardingStatus, updatedAt: { lt: threshold } },
+      include: { employee: { select: { firstName: true, lastName: true } } },
+    });
+  }
+
   /** Guarded lifecycle move; `stamp` writes the step's timestamp fields. */
   async moveStatus(
     id: string,

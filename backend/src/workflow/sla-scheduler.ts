@@ -1,53 +1,78 @@
-import type { Trainee } from '../generated/prisma/client.js';
 import type { SlaRule } from '../generated/prisma/client.js';
-import type { TraineeStatus } from '../generated/prisma/enums.js';
-import type { Workflow } from './engine.js';
-import type { TraineeRepository } from '../modules/trainees/trainee.repository.js';
 import type { SlaRuleRepository, HolidayRepository } from './sla-rule.repository.js';
+import type { SlaFiringRepository } from './sla-firing.repository.js';
 import type { AuditLogRepository } from './audit-log.repository.js';
 import type { NotificationService } from '../notifications/notification.service.js';
 import { workingDaysBetween } from './working-days.js';
 import { logger } from '../common/logger.js';
 
-/** Daily reminders re-fire after this many hours (a little under 24h so a
- *  tick that runs slightly early still counts as "the next day"). */
+/** Daily reminders re-fire after this many hours (slightly under 24h so a
+ *  tick that runs a little early still counts as "the next day"). */
 const DAILY_REFIRE_HOURS = 20;
 
-const TEMPLATES: Record<string, { subject: string; hr: string }> = {
-  AWAITING_FORM: { subject: 'trainee.form_reminder', hr: 'hr.trainee_waiting' },
-  CONTRACT_CREATION: { subject: 'trainee.form_reminder', hr: 'hr.contract_creation_due' },
-  AWAITING_CONTRACT_APPROVAL: {
-    subject: 'trainee.contract_approval_reminder',
-    hr: 'hr.trainee_waiting',
-  },
-};
+/** A record currently sitting in a watched status. */
+export interface WatchedRecord {
+  id: string;
+  /** Display name for notification templates. */
+  name: string;
+  /** Subject's email (trainee/employee) — omit when not applicable. */
+  email?: string;
+  /** When the record entered this status — the SLA anchor. */
+  anchorAt: Date;
+  traineeId?: string;
+  employeeId?: string;
+  /** Extra template parameters (e.g. daysLeft/docType for expiry alerts). */
+  meta?: Record<string, string | number>;
+}
+
+/** One per state machine the SLA engine watches. */
+export interface SlaWatcher {
+  processKey: string; // TRAINEE | OFFBOARDING | GOSI | MEDICAL_INSURANCE | ...
+  listInStatusSince(status: string, threshold: Date): Promise<WatchedRecord[]>;
+  /**
+   * Deadline-style dueness (e.g. "N days BEFORE a document expires").
+   * When present it replaces the elapsed-time check entirely — the watcher
+   * decides what is due; the scheduler still applies the firing memory.
+   */
+  listDue?(
+    rule: { status: string; afterValue: number; afterUnit: string },
+    now: Date,
+  ): Promise<WatchedRecord[]>;
+  /** Subject-facing template key per status (staff always get the generic one). */
+  subjectTemplate?(status: string): string | undefined;
+  /** Override the generic staff templates (stalled/escalation wording). */
+  templates?: { stalled?: string; escalation?: string };
+  /** EXPIRE support — transition through the machine (guarded + audited). */
+  expire?(record: WatchedRecord, ruleId: string): Promise<void>;
+}
 
 /**
- * The BRD automation table, executed. Every tick:
- *   1. load active TRAINEE rules from sla_rules (config-driven — admins can
- *      change the numbers without a deploy)
- *   2. find records that have sat in the rule's status long enough
- *   3. REMIND (once) / REMIND_DAILY (max once per day) / EXPIRE (through the
- *      state machine, so it's guarded + audited like any other transition)
- *
- * Reminders are audited (SLA_REMINDER) and idempotent via lastReminderAt —
- * BRD rule "Expired stops all reminders" holds because expired records are
- * no longer in the rule's status.
+ * The automation engine, generalized: every tick it evaluates the active
+ * sla_rules against their watcher and REMINDs (once), REMIND_DAILYs (max
+ * once/day), ESCALATEs to a higher group (once), or EXPIREs — with
+ * sla_firings as its exact memory, every action audited and every message
+ * through the notifications table.
  */
 export class SlaScheduler {
+  private readonly watchers: Map<string, SlaWatcher>;
+
   constructor(
     private readonly deps: {
       rules: SlaRuleRepository;
       holidays: HolidayRepository;
-      trainees: TraineeRepository;
-      workflow: Workflow<Trainee>;
+      firings: SlaFiringRepository;
       audit: AuditLogRepository;
       notifications: NotificationService;
+      /** System calendar: which weekdays are the weekend (admin-configured). */
+      calendar?: { getCalendar(): Promise<{ weekendDays: number[] }> };
     },
-  ) {}
+    watchers: SlaWatcher[],
+  ) {
+    this.watchers = new Map(watchers.map((w) => [w.processKey, w]));
+  }
 
   async tick(now: Date = new Date()): Promise<void> {
-    const rules = await this.deps.rules.listActive('TRAINEE');
+    const rules = await this.deps.rules.listAllActive();
     for (const rule of rules) {
       try {
         await this.applyRule(rule, now);
@@ -58,19 +83,36 @@ export class SlaScheduler {
   }
 
   private async applyRule(rule: SlaRule, now: Date): Promise<void> {
-    const candidates = await this.deps.trainees.listInStatusSince(
-      rule.status as TraineeStatus,
-      this.prefilterThreshold(rule, now),
-    );
+    const watcher = this.watchers.get(rule.processKey);
+    if (!watcher) return;
 
-    for (const trainee of candidates) {
-      if (!(await this.isDue(rule, trainee, now))) continue;
+    const candidates = watcher.listDue
+      ? await watcher.listDue(rule, now)
+      : await watcher.listInStatusSince(rule.status, this.prefilterThreshold(rule, now));
+
+    for (const record of candidates) {
+      // Deadline watchers decide dueness themselves; only dedupe applies.
+      if (!watcher.listDue && !(await this.elapsedEnough(rule, record, now))) continue;
+      if (!(await this.firingAllowed(rule, record, now))) continue;
 
       if (rule.action === 'EXPIRE') {
-        await this.expire(rule, trainee);
+        if (!watcher.expire) continue;
+        await watcher.expire(record, rule.id);
+        await this.notifyStaff(rule, record, now, rule.notifyRole, 'staff.record_expired');
+      } else if (rule.action === 'ESCALATE') {
+        await this.notifyStaff(
+          rule,
+          record,
+          now,
+          rule.escalateToRole ?? 'ADMIN',
+          watcher.templates?.escalation ?? 'staff.escalation',
+        );
+        await this.audit(rule, record, 'SLA_ESCALATION');
       } else {
-        await this.remind(rule, trainee, now);
+        await this.remind(rule, record, watcher, now);
+        await this.audit(rule, record, 'SLA_REMINDER');
       }
+      await this.deps.firings.record(rule.id, record.id, now);
     }
   }
 
@@ -82,69 +124,77 @@ export class SlaScheduler {
     return t;
   }
 
-  private async isDue(rule: SlaRule, trainee: Trainee, now: Date): Promise<boolean> {
-    if (rule.afterUnit === 'WORKING_DAYS') {
-      const holidays = (
-        await this.deps.holidays.listBetween(trainee.statusChangedAt, now)
-      ).map((h) => h.date);
-      if (workingDaysBetween(trainee.statusChangedAt, now, holidays) < rule.afterValue) {
-        return false;
-      }
-    }
-
-    if (rule.action === 'REMIND' && trainee.lastReminderAt !== null) return false; // one-shot
-    if (rule.action === 'REMIND_DAILY' && trainee.lastReminderAt !== null) {
-      const hoursSince = (now.getTime() - trainee.lastReminderAt.getTime()) / 3_600_000;
-      if (hoursSince < DAILY_REFIRE_HOURS) return false;
-    }
-    return true;
-  }
-
-  private async remind(rule: SlaRule, trainee: Trainee, now: Date): Promise<void> {
-    const name = `${trainee.firstName} ${trainee.lastName}`;
-    const daysWaiting = Math.floor(
-      (now.getTime() - trainee.statusChangedAt.getTime()) / 86_400_000,
+  private async elapsedEnough(rule: SlaRule, record: WatchedRecord, now: Date): Promise<boolean> {
+    if (rule.afterUnit !== 'WORKING_DAYS') return true; // hours/calendar prefiltered in SQL
+    const holidays = (await this.deps.holidays.listBetween(record.anchorAt, now)).map(
+      (h) => h.date,
     );
-    const templates = TEMPLATES[rule.status];
-
-    if (rule.notifySubject && templates) {
-      await this.deps.notifications.notifyExternal(
-        trainee.email,
-        templates.subject,
-        { name },
-        { entity: 'TRAINEE', entityId: trainee.id },
-      );
-    }
-    if (rule.notifyHr && templates) {
-      await this.deps.notifications.notifyHr(
-        templates.hr,
-        { name, daysWaiting },
-        { entity: 'TRAINEE', entityId: trainee.id },
-      );
-    }
-
-    await this.deps.audit.append({
-      entity: 'TRAINEE',
-      entityId: trainee.id,
-      action: 'SLA_REMINDER',
-      actorType: 'SYSTEM',
-      traineeId: trainee.id,
-      metadata: { rule: rule.id, status: rule.status, daysWaiting },
-    });
-    await this.deps.trainees.markReminded(trainee.id, now);
+    const weekend = (await this.deps.calendar?.getCalendar())?.weekendDays;
+    return workingDaysBetween(record.anchorAt, now, holidays, weekend) >= rule.afterValue;
   }
 
-  private async expire(rule: SlaRule, trainee: Trainee): Promise<void> {
-    // Through the state machine: guarded, race-safe, audited.
-    await this.deps.workflow.transition(trainee, 'EXPIRE', { type: 'SYSTEM' }, { rule: rule.id });
+  private async firingAllowed(rule: SlaRule, record: WatchedRecord, now: Date): Promise<boolean> {
+    const lastFiring = await this.deps.firings.lastFiring(rule.id, record.id);
+    if (lastFiring === null) return true;
+    if (rule.action !== 'REMIND_DAILY') return false; // one-shot already fired
+    return (now.getTime() - lastFiring.getTime()) / 3_600_000 >= DAILY_REFIRE_HOURS;
+  }
 
-    if (rule.notifyHr) {
-      await this.deps.notifications.notifyHr(
-        'hr.trainee_expired',
-        { name: `${trainee.firstName} ${trainee.lastName}` },
-        { entity: 'TRAINEE', entityId: trainee.id },
+  private async remind(rule: SlaRule, record: WatchedRecord, watcher: SlaWatcher, now: Date) {
+    const subjectTemplate = watcher.subjectTemplate?.(rule.status);
+    if (rule.notifySubject && subjectTemplate && record.email) {
+      await this.deps.notifications.notifyExternal(
+        record.email,
+        subjectTemplate,
+        { name: record.name },
+        this.ref(rule, record),
       );
     }
+    if (rule.notifyHr) {
+      await this.notifyStaff(
+        rule,
+        record,
+        now,
+        rule.notifyRole,
+        watcher.templates?.stalled ?? 'staff.record_stalled',
+      );
+    }
+  }
+
+  private notifyStaff(
+    rule: SlaRule,
+    record: WatchedRecord,
+    now: Date,
+    role: string,
+    template: string,
+  ) {
+    return this.deps.notifications.notifyRole(
+      role,
+      template,
+      {
+        name: record.name,
+        status: rule.status,
+        daysWaiting: Math.floor((now.getTime() - record.anchorAt.getTime()) / 86_400_000),
+        ...record.meta,
+      },
+      this.ref(rule, record),
+    );
+  }
+
+  private audit(rule: SlaRule, record: WatchedRecord, action: string) {
+    return this.deps.audit.append({
+      entity: rule.processKey,
+      entityId: record.id,
+      action,
+      actorType: 'SYSTEM',
+      ...(record.traineeId ? { traineeId: record.traineeId } : {}),
+      ...(record.employeeId ? { employeeId: record.employeeId } : {}),
+      metadata: { rule: rule.id, status: rule.status },
+    });
+  }
+
+  private ref(rule: SlaRule, record: WatchedRecord) {
+    return { entity: rule.processKey, entityId: record.id };
   }
 }
 
