@@ -258,13 +258,14 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  gosi           GosiProcess?
-  medical        MedicalInsuranceProcess?
-  criminalRecord CriminalRecordProcess?
-  assetForms     AssetForm[]
-  offboardings   Offboarding[]
-  linkTokens     LinkToken[]
-  auditLogs      AuditLog[]               @relation("EmployeeAudit")
+  gosi            GosiProcess?
+  medical         MedicalInsuranceProcess?
+  criminalRecord  CriminalRecordProcess?
+  assetForms      AssetForm[]
+  offboardings    Offboarding[]
+  linkTokens      LinkToken[]
+  expiryDocuments EmployeeDocument[]
+  auditLogs       AuditLog[]               @relation("EmployeeAudit")
 
   @@index([status])
   @@map("employees")
@@ -516,6 +517,25 @@ model Notification {
 
   @@index([recipientUserId, readAt])
   @@map("notifications")
+}
+
+/// Expiry-tracked identity/legal documents (Iqama, passport, contract end
+/// date, …). The SLA engine watches expiryDate and reminds/escalates the
+/// configured days ahead.
+model EmployeeDocument {
+  id         String   @id @default(cuid())
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId String
+  type       String // IQAMA | NATIONAL_ID | PASSPORT | CONTRACT | WORK_PERMIT | ...
+  number     String?
+  expiryDate DateTime @db.Date
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([expiryDate])
+  @@map("employee_documents")
 }
 
 /// Signed single-purpose link (trainee/employee actions). Only the token

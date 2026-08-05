@@ -136,6 +136,37 @@ const SLA_RULES: Array<{
     notifyHr: true,
     notifyRole: 'INSURANCE',
   },
+  // Document expiry — DEADLINE semantics: afterValue = days BEFORE expiry.
+  {
+    key: 'docs-any-30d-before',
+    processKey: 'DOCUMENT_EXPIRY',
+    status: 'ANY',
+    afterValue: 30,
+    afterUnit: SlaUnit.CALENDAR_DAYS,
+    action: SlaAction.REMIND,
+    notifySubject: false,
+    notifyHr: true,
+  },
+  {
+    key: 'docs-any-7d-daily',
+    processKey: 'DOCUMENT_EXPIRY',
+    status: 'ANY',
+    afterValue: 7,
+    afterUnit: SlaUnit.CALENDAR_DAYS,
+    action: SlaAction.REMIND_DAILY,
+    notifySubject: false,
+    notifyHr: true,
+  },
+  {
+    key: 'contract-60d-before',
+    processKey: 'DOCUMENT_EXPIRY',
+    status: 'CONTRACT',
+    afterValue: 60,
+    afterUnit: SlaUnit.CALENDAR_DAYS,
+    action: SlaAction.REMIND,
+    notifySubject: false,
+    notifyHr: true,
+  },
 ];
 
 async function main() {

@@ -48,6 +48,10 @@ export class HolidayRepository {
     });
   }
 
+  list() {
+    return this.db.holiday.findMany({ orderBy: { date: 'asc' } });
+  }
+
   add(date: Date, name: string) {
     return this.db.holiday.create({ data: { date, name } });
   }

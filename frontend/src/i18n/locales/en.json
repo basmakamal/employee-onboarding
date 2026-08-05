@@ -8,6 +8,8 @@
     "trainees": "Trainees",
     "employees": "Employees",
     "users": "Staff & roles",
+    "ownership": "Status ownership",
+    "automation": "Automation",
     "settings": "Settings"
   },
   "users": {
@@ -340,6 +342,32 @@
     "atLeastOne": "At least one group must own a status.",
     "hint": "A user outside the owning group gets no action buttons and a 403 from the API. ADMIN always has access. New records and existing ones follow the change immediately."
   },
+  "calendar": {
+    "title": "Work calendar",
+    "subtitle": "Defines what a \"working day\" means for the automation deadlines",
+    "weekend": "Weekend days",
+    "weekendHint": "Selected days are excluded when counting working days. Changes apply on the next scheduler check.",
+    "holidays": "Public holidays",
+    "noHolidays": "No holidays added yet — they are also excluded from working-day counts.",
+    "date": "Date",
+    "name": "Holiday name",
+    "add": "Add holiday",
+    "year": "Year",
+    "generate": "Generate Saudi holidays",
+    "generateHint": "Adds Founding Day, National Day, Eid al-Fitr and Eid al-Adha (Umm al-Qura calendar). Eid dates follow the reference calendar — adjust after official announcements if needed.",
+    "generated": "{n} holiday(s) added.",
+    "showYear": "Show year calendar",
+    "hideYear": "Hide year calendar",
+    "days": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    }
+  },
   "sla": {
     "title": "Automation rules",
     "subtitle": "Reminders, escalations and deadlines — evaluated every few minutes",
@@ -359,6 +387,27 @@
       "HOURS": "hours",
       "CALENDAR_DAYS": "calendar days",
       "WORKING_DAYS": "working days"
+    }
+  },
+  "expiryDocs": {
+    "title": "Documents & expiry",
+    "add": "Add document",
+    "edit": "Edit document",
+    "empty": "No tracked documents — add Iqama, passport, or the contract end date to get automatic expiry alerts.",
+    "number": "Document number",
+    "expiry": "Expiry date",
+    "customType": "Document name",
+    "daysLeft": "{n} day(s) left",
+    "expired": "expired {n} day(s) ago",
+    "renewHint": "Changing the expiry date (renewal) resets the alerts — the system will remind again before the new date.",
+    "types": {
+      "IQAMA": "Iqama",
+      "NATIONAL_ID": "National ID",
+      "PASSPORT": "Passport",
+      "CONTRACT": "Contract end date",
+      "WORK_PERMIT": "Work permit",
+      "DRIVING_LICENSE": "Driving license",
+      "CUSTOM": "Other…"
     }
   },
   "assetApproval": {

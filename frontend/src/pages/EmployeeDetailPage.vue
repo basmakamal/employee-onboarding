@@ -71,6 +71,17 @@ interface EmployeeDetail {
 
 const OFFBOARDING_REASONS = ['RESIGNATION', 'TERMINATION', 'CONTRACT_EXPIRY', 'RETIREMENT', 'DEATH'];
 
+// ---------------------------------------------------- expiry documents
+interface ExpiryDoc {
+  id: string;
+  type: string;
+  number: string | null;
+  expiryDate: string;
+  notes: string | null;
+}
+
+const DOC_TYPES = ['IQAMA', 'NATIONAL_ID', 'PASSPORT', 'CONTRACT', 'WORK_PERMIT', 'DRIVING_LICENSE'];
+
 const GOSI_REASONS = [
   'OPTIONAL_SUBSCRIPTION',
   'GOVERNMENT_EMPLOYEE',
@@ -120,8 +131,74 @@ function notify(text: string, color = 'success') {
   snackbar.value = { show: true, text, color };
 }
 
+const expiryDocs = ref<ExpiryDoc[]>([]);
+const docDialog = ref(false);
+const docForm = ref({ id: '', type: 'IQAMA', customType: '', number: '', expiryDate: '', notes: '' });
+
 async function load() {
-  employee.value = await api.get<EmployeeDetail>(`/api/employees/${id}`);
+  [employee.value, expiryDocs.value] = await Promise.all([
+    api.get<EmployeeDetail>(`/api/employees/${id}`),
+    api.get<ExpiryDoc[]>(`/api/employees/${id}/documents`),
+  ]);
+}
+
+function docDaysLeft(doc: ExpiryDoc): number {
+  return Math.ceil((new Date(doc.expiryDate).getTime() - Date.now()) / 86_400_000);
+}
+
+function docColor(doc: ExpiryDoc): string {
+  const days = docDaysLeft(doc);
+  if (days < 0) return 'error';
+  if (days <= 30) return 'warning';
+  return 'success';
+}
+
+function openDocDialog(doc?: ExpiryDoc) {
+  docForm.value = doc
+    ? {
+        id: doc.id,
+        type: DOC_TYPES.includes(doc.type) ? doc.type : 'CUSTOM',
+        customType: DOC_TYPES.includes(doc.type) ? '' : doc.type,
+        number: doc.number ?? '',
+        expiryDate: doc.expiryDate.slice(0, 10),
+        notes: doc.notes ?? '',
+      }
+    : { id: '', type: 'IQAMA', customType: '', number: '', expiryDate: '', notes: '' };
+  docDialog.value = true;
+}
+
+async function saveDoc() {
+  busy.value = 'doc';
+  try {
+    const body = {
+      type: docForm.value.type === 'CUSTOM' ? docForm.value.customType.trim() : docForm.value.type,
+      number: docForm.value.number.trim() || undefined,
+      expiryDate: docForm.value.expiryDate,
+      notes: docForm.value.notes.trim() || undefined,
+    };
+    if (docForm.value.id) await api.put(`/api/employee-documents/${docForm.value.id}`, body);
+    else await api.post(`/api/employees/${id}/documents`, body);
+    docDialog.value = false;
+    notify(t('common.saved'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
+async function removeDoc(docId: string) {
+  busy.value = docId;
+  try {
+    await api.delete(`/api/employee-documents/${docId}`);
+    notify(t('common.done'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
 }
 
 async function actOnProcess(
@@ -322,6 +399,68 @@ onMounted(load);
     <v-row>
       <!-- Assets -->
       <v-col cols="12" md="7">
+        <!-- Expiry-tracked documents -->
+        <v-card class="mb-4">
+          <v-card-item>
+            <v-card-title class="text-subtitle-1 font-weight-bold">
+              <v-icon icon="mdi-card-account-details" class="me-2" color="primary" />
+              {{ $t('expiryDocs.title') }}
+            </v-card-title>
+            <template #append>
+              <v-btn
+                v-if="auth.hasRole('HR')"
+                color="primary"
+                size="small"
+                prepend-icon="mdi-plus"
+                @click="openDocDialog()"
+              >
+                {{ $t('expiryDocs.add') }}
+              </v-btn>
+            </template>
+          </v-card-item>
+          <v-card-text v-if="expiryDocs.length === 0" class="text-medium-emphasis">
+            {{ $t('expiryDocs.empty') }}
+          </v-card-text>
+          <v-list v-else density="compact">
+            <v-list-item v-for="doc in expiryDocs" :key="doc.id">
+              <template #prepend>
+                <v-icon icon="mdi-file-clock" :color="docColor(doc)" />
+              </template>
+              <v-list-item-title>
+                {{ $t(`expiryDocs.types.${doc.type}`, doc.type) }}
+                <span v-if="doc.number" class="text-medium-emphasis">· {{ doc.number }}</span>
+              </v-list-item-title>
+              <v-list-item-subtitle>
+                {{ new Date(doc.expiryDate).toLocaleDateString() }}
+                <v-chip :color="docColor(doc)" size="x-small" variant="tonal" class="ms-1">
+                  {{
+                    docDaysLeft(doc) < 0
+                      ? $t('expiryDocs.expired', { n: -docDaysLeft(doc) })
+                      : $t('expiryDocs.daysLeft', { n: docDaysLeft(doc) })
+                  }}
+                </v-chip>
+              </v-list-item-subtitle>
+              <template #append>
+                <v-btn
+                  v-if="auth.hasRole('HR')"
+                  icon="mdi-pencil"
+                  variant="text"
+                  size="small"
+                  @click="openDocDialog(doc)"
+                />
+                <v-btn
+                  v-if="auth.hasRole('HR')"
+                  icon="mdi-delete"
+                  variant="text"
+                  size="small"
+                  color="error"
+                  :loading="busy === doc.id"
+                  @click="removeDoc(doc.id)"
+                />
+              </template>
+            </v-list-item>
+          </v-list>
+        </v-card>
         <v-card>
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
@@ -492,6 +631,45 @@ onMounted(load);
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="linkDialog.show = false">{{ $t('common.done') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Expiry document dialog -->
+    <v-dialog v-model="docDialog" max-width="480">
+      <v-card :title="docForm.id ? $t('expiryDocs.edit') : $t('expiryDocs.add')" class="pa-2">
+        <v-card-text>
+          <v-select
+            v-model="docForm.type"
+            :items="[
+              ...DOC_TYPES.map((type) => ({ title: $t(`expiryDocs.types.${type}`), value: type })),
+              { title: $t('expiryDocs.types.CUSTOM'), value: 'CUSTOM' },
+            ]"
+            :label="$t('assets.type')"
+          />
+          <v-text-field
+            v-if="docForm.type === 'CUSTOM'"
+            v-model="docForm.customType"
+            :label="$t('expiryDocs.customType')"
+          />
+          <v-text-field v-model="docForm.number" :label="$t('expiryDocs.number')" />
+          <v-text-field v-model="docForm.expiryDate" :label="$t('expiryDocs.expiry')" type="date" />
+          <v-textarea v-model="docForm.notes" :label="$t('assets.notes')" rows="2" />
+          <v-alert v-if="docForm.id" type="info" variant="tonal" density="compact">
+            {{ $t('expiryDocs.renewHint') }}
+          </v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="docDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn
+            color="primary"
+            :loading="busy === 'doc'"
+            :disabled="!docForm.expiryDate || (docForm.type === 'CUSTOM' && !docForm.customType.trim())"
+            @click="saveDoc"
+          >
+            {{ $t('common.save') }}
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
