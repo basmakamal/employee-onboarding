@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRoute } from 'vue-router';
-import { api, ApiError } from '../api/client';
+import { useRoute, useRouter } from 'vue-router';
+import { api, ApiError, getAccessToken } from '../api/client';
 import ProcessCard from '../components/ProcessCard.vue';
 import { useAuthStore } from '../stores/auth';
 
@@ -48,6 +48,30 @@ interface OffboardingRow {
   createdAt: string;
 }
 
+interface ContractSummary {
+  startDate: string | null;
+  durationMonths: number | null;
+  terms: string | null;
+  salary?: number | null;
+  sentAt: string | null;
+  approvedAt: string | null;
+}
+
+interface OnboardingDoc {
+  id: string;
+  type: string;
+  required: boolean;
+  uploaded: boolean;
+}
+
+interface RequestRow {
+  id: string;
+  type: string;
+  notes: string | null;
+  createdAt: string;
+  createdBy: { name: string };
+}
+
 interface EmployeeDetail {
   id: string;
   employeeNo: string;
@@ -55,11 +79,19 @@ interface EmployeeDetail {
   lastName: string;
   email: string;
   phone: string | null;
+  nationalId: string | null;
+  birthDate: string | null;
   department: string | null;
   project: string | null;
   jobTitle: string | null;
+  directManager: string | null;
+  employmentType: string;
+  photoKey: string | null;
   hireDate: string;
   status: string;
+  contract: ContractSummary | null;
+  onboardingDocuments: OnboardingDoc[];
+  requests: RequestRow[];
   gosi: ProcessData | null;
   medical: ProcessData | null;
   criminalRecord: ProcessData | null;
@@ -140,6 +172,126 @@ async function load() {
     api.get<EmployeeDetail>(`/api/employees/${id}`),
     api.get<ExpiryDoc[]>(`/api/employees/${id}/documents`),
   ]);
+  void loadPhoto();
+}
+
+// ------------------------------------------------------------- profile photo
+const photoUrl = ref('');
+const photoInput = ref<HTMLInputElement | null>(null);
+
+async function loadPhoto() {
+  if (!employee.value?.photoKey) {
+    photoUrl.value = '';
+    return;
+  }
+  const res = await fetch(`/api/employees/${id}/photo`, {
+    headers: { Authorization: `Bearer ${getAccessToken()}` },
+  });
+  if (res.ok) {
+    if (photoUrl.value) URL.revokeObjectURL(photoUrl.value);
+    photoUrl.value = URL.createObjectURL(await res.blob());
+  }
+}
+
+async function onPhotoPicked(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  busy.value = 'photo';
+  try {
+    const body = new FormData();
+    body.append('photo', file);
+    await api.post(`/api/employees/${id}/photo`, body);
+    notify(t('common.saved'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+    if (photoInput.value) photoInput.value.value = '';
+  }
+}
+
+const initials = computed(() => {
+  const e = employee.value;
+  return e ? `${e.firstName[0] ?? ''}${e.lastName[0] ?? ''}`.toUpperCase() : '';
+});
+
+/** The reference's "employee status" panel: is anything still missing? */
+const missingCount = computed(() => {
+  const e = employee.value;
+  if (!e) return 0;
+  const gaps = [e.phone, e.nationalId, e.birthDate, e.department, e.jobTitle].filter(
+    (v) => !v,
+  ).length;
+  const missingDocs = e.onboardingDocuments.filter((d) => d.required && !d.uploaded).length;
+  return gaps + missingDocs;
+});
+
+// ------------------------------------------------------------- edit profile
+const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'TEMPORARY'];
+const editDialog = ref(false);
+const editForm = ref({
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  nationalId: '',
+  birthDate: '',
+  department: '',
+  project: '',
+  jobTitle: '',
+  directManager: '',
+  employmentType: 'FULL_TIME',
+  hireDate: '',
+});
+
+function openEdit() {
+  const e = employee.value;
+  if (!e) return;
+  editForm.value = {
+    firstName: e.firstName,
+    lastName: e.lastName,
+    email: e.email,
+    phone: e.phone ?? '',
+    nationalId: e.nationalId ?? '',
+    birthDate: e.birthDate?.slice(0, 10) ?? '',
+    department: e.department ?? '',
+    project: e.project ?? '',
+    jobTitle: e.jobTitle ?? '',
+    directManager: e.directManager ?? '',
+    employmentType: e.employmentType,
+    hireDate: e.hireDate.slice(0, 10),
+  };
+  editDialog.value = true;
+}
+
+async function saveEdit() {
+  busy.value = 'edit';
+  try {
+    const f = editForm.value;
+    // Empty optional fields clear the column (null); required ones are trimmed.
+    await api.put(`/api/employees/${id}`, {
+      firstName: f.firstName.trim(),
+      lastName: f.lastName.trim(),
+      email: f.email.trim(),
+      phone: f.phone.trim() || null,
+      nationalId: f.nationalId.trim() || null,
+      birthDate: f.birthDate || null,
+      department: f.department.trim() || null,
+      project: f.project.trim() || null,
+      jobTitle: f.jobTitle.trim() || null,
+      directManager: f.directManager.trim() || null,
+      employmentType: f.employmentType,
+      hireDate: f.hireDate,
+    });
+    editDialog.value = false;
+    notify(t('common.saved'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
 }
 
 function docDaysLeft(doc: ExpiryDoc): number {
@@ -269,9 +421,6 @@ function formActions(status: string): Array<'send' | 'cancel' | 'revise'> {
 }
 
 // ------------------------------------------------------------- offboarding
-import { computed } from 'vue';
-import { useRouter } from 'vue-router';
-
 const router = useRouter();
 const offboardingDialog = ref(false);
 const offboardingForm = ref({ reason: 'RESIGNATION', notes: '' });
@@ -303,39 +452,184 @@ onMounted(load);
 <template>
   <v-container v-if="employee" class="py-8" style="max-width: 1200px">
     <!-- Header -->
-    <div class="d-flex align-center flex-wrap mb-6" style="gap: 12px">
+    <div class="d-flex align-center mb-4" style="gap: 8px">
       <v-btn icon="mdi-arrow-left" variant="text" to="/employees" class="flip-rtl" />
-      <div>
-        <h1 class="text-h4 font-weight-bold">
-          {{ employee.firstName }} {{ employee.lastName }}
-          <v-chip color="primary" variant="tonal" size="small" class="ms-2 font-weight-bold">
-            {{ employee.employeeNo }}
-          </v-chip>
-          <v-chip
-            :color="employee.status === 'ACTIVE' ? 'success' : 'grey'"
-            variant="tonal"
-            size="small"
-            class="ms-1"
-          >
-            {{ $t(`employees.statuses.${employee.status}`) }}
-          </v-chip>
-        </h1>
-        <p class="text-medium-emphasis mt-1">
-          {{ employee.jobTitle ?? '—' }} · {{ employee.department ?? '—' }} ·
-          {{ $t('employees.hired') }} {{ new Date(employee.hireDate).toLocaleDateString() }}
-        </p>
-      </div>
-      <v-spacer />
-      <v-btn
-        v-if="!openOffboarding && employee.status === 'ACTIVE' && auth.hasRole('HR')"
-        color="warning"
-        variant="tonal"
-        prepend-icon="mdi-exit-run"
-        @click="offboardingDialog = true"
-      >
-        {{ $t('offboarding.start') }}
-      </v-btn>
+      <span class="text-medium-emphasis text-body-2">
+        {{ $t('employees.title') }} / {{ employee.firstName }} {{ employee.lastName }}
+      </span>
     </div>
+
+    <!-- Profile card -->
+    <v-card class="mb-6 profile-card" elevation="1">
+      <v-card-text class="pa-6">
+        <div class="d-flex flex-wrap align-start" style="gap: 24px">
+          <!-- Photo -->
+          <div class="position-relative flex-shrink-0">
+            <v-avatar size="96" color="primary" variant="tonal">
+              <v-img v-if="photoUrl" :src="photoUrl" cover />
+              <span v-else class="text-h4 font-weight-bold">{{ initials }}</span>
+            </v-avatar>
+            <v-btn
+              v-if="auth.hasRole('HR')"
+              icon="mdi-camera"
+              size="x-small"
+              color="primary"
+              class="photo-edit-btn"
+              :loading="busy === 'photo'"
+              :title="$t('profile.uploadPhoto')"
+              @click="photoInput?.click()"
+            />
+            <input
+              ref="photoInput"
+              type="file"
+              accept="image/jpeg,image/png"
+              class="d-none"
+              @change="onPhotoPicked"
+            />
+          </div>
+
+          <!-- Identity -->
+          <div class="flex-grow-1" style="min-width: 220px">
+            <h1 class="text-h4 font-weight-bold mb-1">
+              {{ employee.firstName }} {{ employee.lastName }}
+            </h1>
+            <div class="text-medium-emphasis">
+              {{ employee.jobTitle ?? '—' }}<template v-if="employee.department">
+                · {{ employee.department }}</template
+              >
+            </div>
+            <v-chip
+              :color="employee.status === 'ACTIVE' ? 'success' : 'grey'"
+              variant="tonal"
+              size="small"
+              class="mt-2 font-weight-medium"
+              :prepend-icon="employee.status === 'ACTIVE' ? 'mdi-check-circle' : 'mdi-pause-circle'"
+            >
+              {{ $t(`employees.statuses.${employee.status}`) }}
+            </v-chip>
+          </div>
+
+          <!-- Status panel (حالة الموظف) -->
+          <v-sheet class="status-panel pa-4 text-center flex-shrink-0" rounded="lg">
+            <div class="text-subtitle-2 font-weight-bold mb-2">
+              {{ $t('profile.statusTitle') }}
+            </div>
+            <v-icon
+              :icon="employee.status === 'ACTIVE' ? 'mdi-check-circle-outline' : 'mdi-pause-circle-outline'"
+              :color="employee.status === 'ACTIVE' ? 'success' : 'grey'"
+              size="44"
+            />
+            <div class="mt-2">
+              <v-chip
+                :color="employee.status === 'ACTIVE' ? 'success' : 'grey'"
+                variant="tonal"
+                size="small"
+              >
+                {{ $t(`employees.statuses.${employee.status}`) }}
+              </v-chip>
+            </div>
+            <div
+              class="text-caption mt-2"
+              :class="missingCount === 0 ? 'text-success' : 'text-warning'"
+            >
+              {{
+                missingCount === 0
+                  ? $t('profile.dataComplete')
+                  : $t('profile.dataMissing', { n: missingCount })
+              }}
+            </div>
+          </v-sheet>
+        </div>
+
+        <v-divider class="my-5" />
+
+        <!-- Info grid -->
+        <v-row dense>
+          <v-col
+            v-for="field in [
+              { label: $t('employees.no'), value: employee.employeeNo },
+              { label: $t('trainees.department'), value: employee.department },
+              { label: $t('employees.project'), value: employee.project },
+              { label: $t('trainees.nationalId'), value: employee.nationalId },
+              {
+                label: $t('trainees.birthDate'),
+                value: employee.birthDate ? new Date(employee.birthDate).toLocaleDateString() : null,
+              },
+              { label: $t('trainees.phone'), value: employee.phone },
+              { label: $t('trainees.email'), value: employee.email },
+              {
+                label: $t('employees.hireDate'),
+                value: new Date(employee.hireDate).toLocaleDateString(),
+              },
+              {
+                label: $t('profile.employmentType'),
+                value: $t(`profile.types.${employee.employmentType}`),
+              },
+              { label: $t('profile.directManager'), value: employee.directManager },
+            ]"
+            :key="field.label"
+            cols="6"
+            sm="4"
+            md="2"
+            class="info-cell"
+          >
+            <div class="text-caption text-medium-emphasis">{{ field.label }}</div>
+            <div class="text-body-2 font-weight-medium">{{ field.value ?? '—' }}</div>
+          </v-col>
+        </v-row>
+
+        <v-divider class="my-5" />
+
+        <!-- Actions -->
+        <div class="d-flex flex-wrap align-center" style="gap: 12px">
+          <v-menu>
+            <template #activator="{ props }">
+              <v-btn v-bind="props" color="primary" variant="tonal" prepend-icon="mdi-plus-circle-outline">
+                {{ $t('profile.newAction') }}
+              </v-btn>
+            </template>
+            <v-list density="compact">
+              <v-list-item
+                v-if="auth.hasRole('IT')"
+                prepend-icon="mdi-laptop"
+                :title="$t('assets.newForm')"
+                @click="formDialog = true"
+              />
+              <v-list-item
+                v-if="auth.hasRole('HR')"
+                prepend-icon="mdi-file-clock"
+                :title="$t('expiryDocs.add')"
+                @click="openDocDialog()"
+              />
+              <v-list-item
+                v-if="auth.hasRole('HR') && !openOffboarding && employee.status === 'ACTIVE'"
+                prepend-icon="mdi-exit-run"
+                :title="$t('offboarding.start')"
+                @click="offboardingDialog = true"
+              />
+            </v-list>
+          </v-menu>
+          <v-btn
+            v-if="auth.hasRole('HR')"
+            variant="outlined"
+            prepend-icon="mdi-pencil"
+            @click="openEdit"
+          >
+            {{ $t('profile.edit') }}
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            v-if="!openOffboarding && employee.status === 'ACTIVE' && auth.hasRole('HR')"
+            color="error"
+            variant="outlined"
+            prepend-icon="mdi-logout-variant"
+            @click="offboardingDialog = true"
+          >
+            {{ $t('profile.endContract') }}
+          </v-btn>
+        </div>
+      </v-card-text>
+    </v-card>
 
     <!-- Offboarding banner -->
     <v-alert
@@ -674,6 +968,68 @@ onMounted(load);
       </v-card>
     </v-dialog>
 
+    <!-- Edit profile dialog -->
+    <v-dialog v-model="editDialog" max-width="720">
+      <v-card :title="$t('profile.edit')" class="pa-2">
+        <v-card-text>
+          <v-row dense>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.firstName" :label="$t('trainees.firstName')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.lastName" :label="$t('trainees.lastName')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.email" :label="$t('trainees.email')" type="email" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.phone" :label="$t('trainees.phone')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.nationalId" :label="$t('trainees.nationalId')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.birthDate" :label="$t('trainees.birthDate')" type="date" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.department" :label="$t('trainees.department')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.project" :label="$t('employees.project')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.jobTitle" :label="$t('trainees.jobTitle')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.directManager" :label="$t('profile.directManager')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="editForm.employmentType"
+                :items="EMPLOYMENT_TYPES.map((v) => ({ title: $t(`profile.types.${v}`), value: v }))"
+                :label="$t('profile.employmentType')"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.hireDate" :label="$t('employees.hireDate')" type="date" />
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="editDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn
+            color="primary"
+            :loading="busy === 'edit'"
+            :disabled="!editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim() || !editForm.hireDate"
+            @click="saveEdit"
+          >
+            {{ $t('common.save') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Start offboarding dialog -->
     <v-dialog v-model="offboardingDialog" max-width="480">
       <v-card :title="$t('offboarding.start')" class="pa-2">
@@ -708,5 +1064,21 @@ onMounted(load);
 <style scoped>
 [dir='rtl'] .flip-rtl {
   transform: scaleX(-1);
+}
+
+.photo-edit-btn {
+  position: absolute;
+  bottom: -2px;
+  inset-inline-end: -2px;
+}
+
+.status-panel {
+  min-width: 200px;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgba(var(--v-theme-on-surface), 0.02);
+}
+
+.info-cell {
+  padding-block: 8px;
 }
 </style>

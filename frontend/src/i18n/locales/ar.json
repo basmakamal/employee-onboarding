@@ -41,7 +41,10 @@
     "subtitle": "إعدادات النظام (لمدير النظام فقط)",
     "mail": "البريد الصادر",
     "provider": "مزوّد الخدمة",
-    "providers": { "console": "بيئة التطوير (سجل فقط)", "custom": "خادم SMTP مخصص" },
+    "providers": {
+      "console": "بيئة التطوير (سجل فقط)",
+      "custom": "خادم SMTP مخصص"
+    },
     "host": "خادم SMTP",
     "port": "المنفذ",
     "user": "اسم المستخدم / البريد",
@@ -66,7 +69,10 @@
     "hired": "تاريخ التعيين",
     "holdReason": "سبب التعليق",
     "holdNote": "ملاحظة (اختياري)",
-    "statuses": { "ACTIVE": "نشط", "INACTIVE": "غير نشط" }
+    "statuses": {
+      "ACTIVE": "نشط",
+      "INACTIVE": "غير نشط"
+    }
   },
   "processes": {
     "gosi": "التأمينات الاجتماعية",
@@ -117,7 +123,11 @@
     "rejectReason": "سبب الرفض",
     "linkSent": "تم إرسال رابط الاعتماد",
     "linkHint": "استلم الموظف هذا الرابط عبر البريد الإلكتروني (في بيئة التطوير يظهر هنا أيضًا).",
-    "actions": { "send": "إرسال للاعتماد", "cancel": "إلغاء", "revise": "تعديل" }
+    "actions": {
+      "send": "إرسال للاعتماد",
+      "cancel": "إلغاء",
+      "revise": "تعديل"
+    }
   },
   "assetStatus": {
     "DRAFT": "مسودة",
@@ -127,7 +137,10 @@
     "REJECTED": "مرفوض",
     "CANCELLED": "ملغي"
   },
-  "conditions": { "NEW": "جديدة", "USED": "مستخدمة" },
+  "conditions": {
+    "NEW": "جديدة",
+    "USED": "مستخدمة"
+  },
   "entities": {
     "TRAINEE": "المتدرب",
     "EMPLOYEE": "الموظف",
@@ -235,7 +248,9 @@
     "SEND_CONTRACT": "إرسال العقد",
     "APPROVE_CONTRACT": "اعتماد العقد",
     "EXPIRE": "انتهاء المهلة",
-    "REOPEN": "إعادة فتح"
+    "REOPEN": "إعادة فتح",
+    "UPDATE_PROFILE": "تعديل البيانات",
+    "UPDATE_PHOTO": "تحديث الصورة"
   },
   "actors": {
     "USER": "موظف النظام",
@@ -398,7 +413,12 @@
     "completion": "اكتمال ملفات الموظفين",
     "expiry": "صلاحية المستندات",
     "offReasons": "إنهاء الخدمة حسب السبب",
-    "buckets": { "expired": "منتهية", "in30": "≤ 30 يوم", "in60": "≤ 60 يوم", "in90": "≤ 90 يوم" },
+    "buckets": {
+      "expired": "منتهية",
+      "in30": "≤ 30 يوم",
+      "in60": "≤ 60 يوم",
+      "in90": "≤ 90 يوم"
+    },
     "exports": {
       "employees": "الموظفون",
       "trainees": "المتدربون",
@@ -442,5 +462,21 @@
     "QUALIFICATION": "شهادة المؤهل",
     "PHOTO": "الصورة الشخصية",
     "IBAN_LETTER": "شهادة الآيبان"
+  },
+  "profile": {
+    "edit": "تعديل البيانات",
+    "newAction": "إجراء جديد",
+    "endContract": "إنهاء العلاقة التعاقدية",
+    "uploadPhoto": "تحديث الصورة",
+    "statusTitle": "حالة الموظف",
+    "dataComplete": "جميع البيانات والمستندات مكتملة",
+    "dataMissing": "{n} عنصر غير مكتمل",
+    "employmentType": "الحالة الوظيفية",
+    "directManager": "المدير المباشر",
+    "types": {
+      "FULL_TIME": "دوام كامل",
+      "PART_TIME": "دوام جزئي",
+      "TEMPORARY": "مؤقت"
+    }
   }
 }

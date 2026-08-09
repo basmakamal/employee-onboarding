@@ -41,7 +41,10 @@
     "subtitle": "System configuration (administrators only)",
     "mail": "Outgoing email",
     "provider": "Provider",
-    "providers": { "console": "Development (log only)", "custom": "Custom SMTP" },
+    "providers": {
+      "console": "Development (log only)",
+      "custom": "Custom SMTP"
+    },
     "host": "SMTP host",
     "port": "Port",
     "user": "Username / email",
@@ -66,7 +69,10 @@
     "hired": "Hired",
     "holdReason": "Hold reason",
     "holdNote": "Note (optional)",
-    "statuses": { "ACTIVE": "Active", "INACTIVE": "Inactive" }
+    "statuses": {
+      "ACTIVE": "Active",
+      "INACTIVE": "Inactive"
+    }
   },
   "processes": {
     "gosi": "GOSI",
@@ -117,7 +123,11 @@
     "rejectReason": "Rejection reason",
     "linkSent": "Approval link sent",
     "linkHint": "The employee received this link by email (in development it is also shown here).",
-    "actions": { "send": "Send for approval", "cancel": "Cancel", "revise": "Revise" }
+    "actions": {
+      "send": "Send for approval",
+      "cancel": "Cancel",
+      "revise": "Revise"
+    }
   },
   "assetStatus": {
     "DRAFT": "Draft",
@@ -127,7 +137,10 @@
     "REJECTED": "Rejected",
     "CANCELLED": "Cancelled"
   },
-  "conditions": { "NEW": "New", "USED": "Used" },
+  "conditions": {
+    "NEW": "New",
+    "USED": "Used"
+  },
   "entities": {
     "TRAINEE": "Trainee",
     "EMPLOYEE": "Employee",
@@ -235,7 +248,9 @@
     "SEND_CONTRACT": "Contract sent",
     "APPROVE_CONTRACT": "Contract approved",
     "EXPIRE": "Deadline expired",
-    "REOPEN": "Reopened"
+    "REOPEN": "Reopened",
+    "UPDATE_PROFILE": "Profile updated",
+    "UPDATE_PHOTO": "Photo updated"
   },
   "actors": {
     "USER": "Staff",
@@ -398,7 +413,12 @@
     "completion": "Employee-file completion",
     "expiry": "Document expiry",
     "offReasons": "Offboarding by reason",
-    "buckets": { "expired": "Expired", "in30": "≤ 30 days", "in60": "≤ 60 days", "in90": "≤ 90 days" },
+    "buckets": {
+      "expired": "Expired",
+      "in30": "≤ 30 days",
+      "in60": "≤ 60 days",
+      "in90": "≤ 90 days"
+    },
     "exports": {
       "employees": "Employees",
       "trainees": "Trainees",
@@ -442,5 +462,21 @@
     "QUALIFICATION": "Qualification certificate",
     "PHOTO": "Personal photo",
     "IBAN_LETTER": "IBAN letter"
+  },
+  "profile": {
+    "edit": "Edit data",
+    "newAction": "New action",
+    "endContract": "End contract",
+    "uploadPhoto": "Update photo",
+    "statusTitle": "Employee status",
+    "dataComplete": "All data and documents are complete",
+    "dataMissing": "{n} item(s) still missing",
+    "employmentType": "Employment status",
+    "directManager": "Direct manager",
+    "types": {
+      "FULL_TIME": "Full time",
+      "PART_TIME": "Part time",
+      "TEMPORARY": "Temporary"
+    }
   }
 }
