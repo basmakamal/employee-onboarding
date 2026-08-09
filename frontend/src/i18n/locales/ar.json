@@ -148,7 +148,8 @@
     "MEDICAL_INSURANCE": "التأمين الطبي",
     "CRIMINAL_RECORD": "خلو السوابق",
     "ASSET_FORM": "العهدة",
-    "OFFBOARDING": "إنهاء الخدمة"
+    "OFFBOARDING": "إنهاء الخدمة",
+    "EMPLOYEE_REQUEST": "طلب"
   },
   "common": {
     "cancel": "إلغاء",
@@ -250,7 +251,15 @@
     "EXPIRE": "انتهاء المهلة",
     "REOPEN": "إعادة فتح",
     "UPDATE_PROFILE": "تعديل البيانات",
-    "UPDATE_PHOTO": "تحديث الصورة"
+    "UPDATE_PHOTO": "تحديث الصورة",
+    "SALARY_LETTER": "تعريف راتب",
+    "BANK_LETTER": "تعريف آيبان",
+    "DEPARTMENT_CHANGE": "تغيير القسم",
+    "JOB_TITLE_CHANGE": "تغيير المسمى الوظيفي",
+    "PROMOTION": "ترقية",
+    "PROJECT_TRANSFER": "نقل بين المشاريع",
+    "WARNING": "إنذار",
+    "INVESTIGATION": "تحقيق"
   },
   "actors": {
     "USER": "موظف النظام",
@@ -477,6 +486,45 @@
       "FULL_TIME": "دوام كامل",
       "PART_TIME": "دوام جزئي",
       "TEMPORARY": "مؤقت"
+    },
+    "overview": "نظرة عامة",
+    "timelineTab": "السجل الزمني",
+    "processes": "عمليات الموظف",
+    "onboardingDocs": "المستندات"
+  },
+  "requests": {
+    "title": "الطلبات والخدمات",
+    "empty": "لا توجد طلبات بعد — استخدم الأزرار أعلاه لتسجيل طلب.",
+    "new": "طلب جديد",
+    "recent": "أحدث الطلبات",
+    "notes": "ملاحظات (اختياري)",
+    "by": "بواسطة {name}",
+    "types": {
+      "SALARY_LETTER": "تعريف راتب",
+      "BANK_LETTER": "تعريف آيبان",
+      "DEPARTMENT_CHANGE": "تغيير القسم",
+      "JOB_TITLE_CHANGE": "تغيير المسمى الوظيفي",
+      "PROMOTION": "ترقية",
+      "PROJECT_TRANSFER": "نقل بين المشاريع",
+      "WARNING": "إنذار",
+      "INVESTIGATION": "تحقيق"
     }
+  },
+  "contractCard": {
+    "title": "العقد",
+    "type": "نوع العقد",
+    "fixedTerm": "عقد محدد المدة",
+    "start": "تاريخ بداية العقد",
+    "end": "تاريخ نهاية العقد",
+    "duration": "مدة العقد",
+    "months": "{n} شهر",
+    "remaining": "المتبقي من العقد",
+    "status": "حالة العقد",
+    "active": "ساري",
+    "expired": "منتهي",
+    "awaiting": "بانتظار الاعتماد",
+    "salary": "الراتب",
+    "none": "لا يوجد عقد في الملف — أُضيف هذا الموظف مباشرة.",
+    "view": "عرض البنود"
   }
 }

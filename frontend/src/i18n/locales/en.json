@@ -148,7 +148,8 @@
     "MEDICAL_INSURANCE": "Medical insurance",
     "CRIMINAL_RECORD": "Criminal record",
     "ASSET_FORM": "Asset custody",
-    "OFFBOARDING": "Offboarding"
+    "OFFBOARDING": "Offboarding",
+    "EMPLOYEE_REQUEST": "Request"
   },
   "common": {
     "cancel": "Cancel",
@@ -250,7 +251,15 @@
     "EXPIRE": "Deadline expired",
     "REOPEN": "Reopened",
     "UPDATE_PROFILE": "Profile updated",
-    "UPDATE_PHOTO": "Photo updated"
+    "UPDATE_PHOTO": "Photo updated",
+    "SALARY_LETTER": "Salary letter",
+    "BANK_LETTER": "Bank (IBAN) letter",
+    "DEPARTMENT_CHANGE": "Department change",
+    "JOB_TITLE_CHANGE": "Job title change",
+    "PROMOTION": "Promotion",
+    "PROJECT_TRANSFER": "Project transfer",
+    "WARNING": "Warning",
+    "INVESTIGATION": "Investigation"
   },
   "actors": {
     "USER": "Staff",
@@ -477,6 +486,45 @@
       "FULL_TIME": "Full time",
       "PART_TIME": "Part time",
       "TEMPORARY": "Temporary"
+    },
+    "overview": "Overview",
+    "timelineTab": "Timeline",
+    "processes": "Employee processes",
+    "onboardingDocs": "Documents"
+  },
+  "requests": {
+    "title": "Requests & services",
+    "empty": "No requests yet — use the buttons above to log one.",
+    "new": "New request",
+    "recent": "Recent requests",
+    "notes": "Notes (optional)",
+    "by": "By {name}",
+    "types": {
+      "SALARY_LETTER": "Salary letter",
+      "BANK_LETTER": "Bank (IBAN) letter",
+      "DEPARTMENT_CHANGE": "Department change",
+      "JOB_TITLE_CHANGE": "Job title change",
+      "PROMOTION": "Promotion",
+      "PROJECT_TRANSFER": "Project transfer",
+      "WARNING": "Warning",
+      "INVESTIGATION": "Investigation"
     }
+  },
+  "contractCard": {
+    "title": "Contract",
+    "type": "Contract type",
+    "fixedTerm": "Fixed term",
+    "start": "Start date",
+    "end": "End date",
+    "duration": "Duration",
+    "months": "{n} month(s)",
+    "remaining": "Remaining",
+    "status": "Contract status",
+    "active": "Active",
+    "expired": "Expired",
+    "awaiting": "Awaiting approval",
+    "salary": "Salary",
+    "none": "No contract on file — this employee was added directly.",
+    "view": "View terms"
   }
 }
