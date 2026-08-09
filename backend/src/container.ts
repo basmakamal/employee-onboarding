@@ -5,6 +5,7 @@ import { TraineeRepository } from './modules/trainees/trainee.repository.js';
 import { TraineeDocumentRepository } from './modules/trainees/trainee-document.repository.js';
 import { ContractRepository } from './modules/trainees/contract.repository.js';
 import { EmployeeRepository } from './modules/employees/employee.repository.js';
+import { EmployeeRequestRepository } from './modules/employees/employee-request.repository.js';
 import { UserRepository } from './auth/user.repository.js';
 import { LinkTokenRepository } from './auth/link-token.repository.js';
 import { LinkTokenService } from './auth/link-token.service.js';
@@ -47,6 +48,7 @@ export function buildContainer() {
   const documents = new TraineeDocumentRepository(prisma);
   const contracts = new ContractRepository(prisma);
   const employees = new EmployeeRepository(prisma);
+  const employeeRequests = new EmployeeRequestRepository(prisma);
   const gosi = new GosiRepository(prisma);
   const medical = new MedicalInsuranceRepository(prisma);
   const criminal = new CriminalRecordRepository(prisma);
@@ -96,7 +98,7 @@ export function buildContainer() {
   );
 
   const employeeService = new EmployeeService(
-    { employees, gosi, medical, criminal, audit },
+    { employees, requests: employeeRequests, gosi, medical, criminal, audit },
     ownershipService,
   );
 

@@ -1,5 +1,5 @@
 import type { Db } from '../../common/prisma.js';
-import type { EmployeeStatus } from '../../generated/prisma/enums.js';
+import type { EmployeeStatus, EmploymentType } from '../../generated/prisma/enums.js';
 
 export interface CreateEmployeeData {
   employeeNo: string;
@@ -12,8 +12,26 @@ export interface CreateEmployeeData {
   department?: string;
   project?: string;
   jobTitle?: string;
+  directManager?: string;
+  employmentType?: EmploymentType;
   hireDate: Date;
   traineeId?: string;
+}
+
+/** Profile fields HR may edit in place; null clears an optional column. */
+export interface UpdateEmployeeData {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string | null;
+  nationalId?: string | null;
+  birthDate?: Date | null;
+  department?: string | null;
+  project?: string | null;
+  jobTitle?: string | null;
+  directManager?: string | null;
+  employmentType?: EmploymentType;
+  hireDate?: Date;
 }
 
 export class EmployeeRepository {
@@ -39,7 +57,15 @@ export class EmployeeRepository {
     return this.db.employee.findUnique({ where: { id } });
   }
 
-  /** The employee-file page: processes, assets, offboarding, timeline. */
+  update(id: string, data: UpdateEmployeeData) {
+    return this.db.employee.update({ where: { id }, data });
+  }
+
+  setPhoto(id: string, photoKey: string) {
+    return this.db.employee.update({ where: { id }, data: { photoKey } });
+  }
+
+  /** The employee-file page: profile, processes, contract, assets, timeline. */
   findWithDetails(id: string) {
     return this.db.employee.findUnique({
       where: { id },
@@ -47,6 +73,11 @@ export class EmployeeRepository {
         gosi: true,
         medical: true,
         criminalRecord: true,
+        trainee: { include: { contract: true, documents: true } },
+        requests: {
+          orderBy: { createdAt: 'desc' },
+          include: { createdBy: { select: { name: true } } },
+        },
         assetForms: { include: { items: true }, orderBy: { createdAt: 'desc' } },
         offboardings: { orderBy: { createdAt: 'desc' } },
         auditLogs: { orderBy: { at: 'asc' } },

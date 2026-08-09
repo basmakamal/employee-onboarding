@@ -5,7 +5,8 @@ import {
   criminalRecordMachine,
 } from '../../workflow/machines/employee-process.machine.js';
 import { NotFoundError } from '../../workflow/errors.js';
-import type { EmployeeRepository } from './employee.repository.js';
+import type { EmployeeRepository, UpdateEmployeeData } from './employee.repository.js';
+import type { EmployeeRequestRepository } from './employee-request.repository.js';
 import type { GosiRepository } from '../processes/gosi.repository.js';
 import type { MedicalInsuranceRepository } from '../processes/medical-insurance.repository.js';
 import type { CriminalRecordRepository } from '../processes/criminal-record.repository.js';
@@ -15,6 +16,7 @@ import type {
   GosiHoldReason,
   MedicalHoldReason,
   CriminalRecordStatus,
+  EmployeeRequestType,
 } from '../../generated/prisma/enums.js';
 
 export type ProcessKind = 'gosi' | 'medical' | 'criminal';
@@ -40,6 +42,7 @@ export class EmployeeService {
   constructor(
     private readonly repos: {
       employees: EmployeeRepository;
+      requests: EmployeeRequestRepository;
       gosi: GosiRepository;
       medical: MedicalInsuranceRepository;
       criminal: CriminalRecordRepository;
@@ -92,6 +95,76 @@ export class EmployeeService {
     return employee;
   }
 
+  /**
+   * HR edits the profile in place. Audited with the list of touched fields
+   * so the timeline shows WHAT changed, not just that something did.
+   */
+  async update(id: string, input: UpdateEmployeeData, actor: Actor) {
+    const existing = await this.repos.employees.findById(id);
+    if (!existing) throw new NotFoundError('employee', id);
+
+    const updated = await this.repos.employees.update(id, input);
+    await this.repos.audit.append({
+      entity: 'EMPLOYEE',
+      entityId: id,
+      action: 'UPDATE_PROFILE',
+      actorType: actor.type,
+      ...(actor.id ? { actorId: actor.id } : {}),
+      employeeId: id,
+      metadata: { fields: Object.keys(input) },
+    });
+    return updated;
+  }
+
+  async setPhoto(id: string, photoKey: string, actor: Actor) {
+    const existing = await this.repos.employees.findById(id);
+    if (!existing) throw new NotFoundError('employee', id);
+
+    await this.repos.employees.setPhoto(id, photoKey);
+    await this.repos.audit.append({
+      entity: 'EMPLOYEE',
+      entityId: id,
+      action: 'UPDATE_PHOTO',
+      actorType: actor.type,
+      ...(actor.id ? { actorId: actor.id } : {}),
+      employeeId: id,
+    });
+    return { photoKey };
+  }
+
+  async getPhotoKey(id: string): Promise<string> {
+    const employee = await this.repos.employees.findById(id);
+    if (!employee?.photoKey) throw new NotFoundError('photo', id);
+    return employee.photoKey;
+  }
+
+  /** Log an HR service request (salary letter, promotion, warning…). */
+  async createRequest(
+    employeeId: string,
+    type: EmployeeRequestType,
+    actor: Actor,
+    notes?: string,
+  ) {
+    const existing = await this.repos.employees.findById(employeeId);
+    if (!existing) throw new NotFoundError('employee', employeeId);
+
+    const request = await this.repos.requests.create({
+      employeeId,
+      type,
+      ...(notes ? { notes } : {}),
+      createdById: actor.id as string,
+    });
+    await this.repos.audit.append({
+      entity: 'EMPLOYEE_REQUEST',
+      entityId: request.id,
+      action: type,
+      actorType: actor.type,
+      ...(actor.id ? { actorId: actor.id } : {}),
+      employeeId,
+    });
+    return request;
+  }
+
   async getDetails(id: string, actor: Actor) {
     const employee = await this.repos.employees.findWithDetails(id);
     if (!employee) throw new NotFoundError('employee', id);
@@ -99,8 +172,33 @@ export class EmployeeService {
     const processMachine = new Workflow(employeeProcessMachine('GOSI'), noopDeps(this.ownership));
     const criminalMachine = new Workflow(criminalRecordMachine(), noopDeps(this.ownership));
 
+    // Slim the trainee relation down to what the profile shows: the contract
+    // summary (salary only for the groups that should see money) and the
+    // onboarding document checklist.
+    const { trainee, ...rest } = employee;
+    const seesSalary = actor.role === 'HR' || actor.role === 'FINANCE' || actor.role === 'ADMIN';
+    const details = (trainee?.contract?.details ?? null) as Record<string, unknown> | null;
+    const contract = trainee?.contract
+      ? {
+          startDate: details?.['startDate'] ?? null,
+          durationMonths: details?.['durationMonths'] ?? null,
+          terms: details?.['terms'] ?? null,
+          ...(seesSalary ? { salary: details?.['salary'] ?? null } : {}),
+          sentAt: trainee.contract.sentAt,
+          approvedAt: trainee.contract.approvedAt,
+        }
+      : null;
+
     return {
-      ...employee,
+      ...rest,
+      contract,
+      onboardingDocuments:
+        trainee?.documents.map((d) => ({
+          id: d.id,
+          type: d.type,
+          required: d.required,
+          uploaded: d.storageKey !== null,
+        })) ?? [],
       processActions: {
         gosi: employee.gosi ? processMachine.availableActions(employee.gosi.status, actor) : [],
         medical: employee.medical
