@@ -7,8 +7,9 @@ const COLORS: Record<string, string> = {
   FORM_RECEIVED: 'blue',
   CONTRACT_CREATION: 'indigo',
   AWAITING_CONTRACT_APPROVAL: 'amber',
-  EMPLOYEE_CREATED: 'success',
   EXPIRED: 'error',
+  ACTIVE: 'success',
+  INACTIVE: 'grey',
 };
 
 const color = COLORS[props.status] ?? 'grey';

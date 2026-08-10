@@ -7,7 +7,7 @@ type CountMap = Record<string, number>;
 
 interface Summary {
   headcountByDepartment: Array<{ department: string; active: number; inactive: number }>;
-  traineeFunnel: CountMap;
+  onboardingFunnel: CountMap;
   processes: { gosi: CountMap; medical: CountMap; criminal: CountMap };
   assetForms: CountMap;
   unreturnedAssetItems: number;
@@ -15,13 +15,13 @@ interface Summary {
   expiringDocuments: { expired: number; in30: number; in60: number; in90: number };
 }
 
-const TRAINEE_STAGES = [
+const FUNNEL_STAGES = [
   'CREATED',
   'AWAITING_FORM',
   'FORM_RECEIVED',
   'CONTRACT_CREATION',
   'AWAITING_CONTRACT_APPROVAL',
-  'EMPLOYEE_CREATED',
+  'ACTIVE',
   'EXPIRED',
 ];
 
@@ -33,7 +33,7 @@ const maxDept = computed(() =>
   Math.max(1, ...(data.value?.headcountByDepartment.map((d) => d.active + d.inactive) ?? [1])),
 );
 const funnelTotal = computed(() =>
-  Math.max(1, Object.values(data.value?.traineeFunnel ?? {}).reduce((a, b) => a + b, 0)),
+  Math.max(1, Object.values(data.value?.onboardingFunnel ?? {}).reduce((a, b) => a + b, 0)),
 );
 
 function pct(map: CountMap | undefined, key: string): number {
@@ -83,7 +83,7 @@ onMounted(async () => {
       </div>
       <v-spacer />
       <v-btn
-        v-for="exp in ['employees', 'trainees', 'expiring-documents', 'audit']"
+        v-for="exp in ['employees', 'onboarding', 'expiring-documents', 'audit']"
         :key="exp"
         variant="tonal"
         color="primary"
@@ -123,22 +123,22 @@ onMounted(async () => {
           </v-card>
         </v-col>
 
-        <!-- Trainee funnel -->
+        <!-- Onboarding funnel -->
         <v-col cols="12" md="6">
           <v-card :title="$t('reports.funnel')" class="h-100">
             <v-card-text>
               <div
-                v-for="stage in TRAINEE_STAGES.filter((s) => (data!.traineeFunnel[s] ?? 0) > 0)"
+                v-for="stage in FUNNEL_STAGES.filter((s) => (data!.onboardingFunnel[s] ?? 0) > 0)"
                 :key="stage"
                 class="mb-3"
               >
                 <div class="d-flex justify-space-between text-body-2 mb-1">
                   <span>{{ $t(`status.${stage}`) }}</span>
-                  <span class="font-weight-medium">{{ data!.traineeFunnel[stage] }}</span>
+                  <span class="font-weight-medium">{{ data!.onboardingFunnel[stage] }}</span>
                 </div>
                 <v-progress-linear
-                  :model-value="((data!.traineeFunnel[stage] ?? 0) / funnelTotal) * 100"
-                  :color="stage === 'EXPIRED' ? 'error' : stage === 'EMPLOYEE_CREATED' ? 'success' : 'indigo'"
+                  :model-value="((data!.onboardingFunnel[stage] ?? 0) / funnelTotal) * 100"
+                  :color="stage === 'EXPIRED' ? 'error' : stage === 'ACTIVE' ? 'success' : 'indigo'"
                   height="8"
                   rounded
                 />

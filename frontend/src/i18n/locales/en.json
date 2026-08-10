@@ -1,11 +1,10 @@
 {
   "app": {
     "title": "HR System",
-    "tagline": "Trainee onboarding, employee file, and offboarding — one auditable workflow."
+    "tagline": "Onboarding, employee file, and offboarding — one auditable workflow."
   },
   "nav": {
     "home": "Dashboard",
-    "trainees": "Trainees",
     "employees": "Employees",
     "reports": "Reports",
     "users": "Staff & roles",
@@ -26,15 +25,15 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "trainees": "Trainees in progress",
     "activeEmployees": "Active employees",
     "openOffboardings": "Open offboardings",
     "pendingApprovals": "Awaiting e-approval",
-    "traineesByStage": "Trainees by stage",
     "processes": "Employee file processes",
     "offboardings": "Offboarding",
     "noOffboardings": "No offboarding requests.",
-    "recent": "Recent activity"
+    "recent": "Recent activity",
+    "onboarding": "In onboarding",
+    "onboardingByStage": "Onboarding pipeline"
   },
   "settings": {
     "title": "Settings",
@@ -59,11 +58,11 @@
   },
   "employees": {
     "title": "Employees",
-    "subtitle": "Stage 2 — the employee file: GOSI, insurance, criminal record, assets",
+    "subtitle": "One record for the whole journey — onboarding, employment, offboarding",
     "no": "Employee no.",
-    "empty": "No employees yet — they are created automatically when a trainee's contract is approved.",
+    "empty": "No employees yet — start with a new hire or add existing staff directly.",
     "new": "New employee",
-    "directHint": "For existing staff joining the system directly. New hires normally arrive automatically when their trainee contract is approved.",
+    "directHint": "For existing staff joining the system directly — created active, with an employee number, skipping the onboarding pipeline.",
     "project": "Project",
     "hireDate": "Hire date",
     "hired": "Hired",
@@ -72,6 +71,12 @@
     "statuses": {
       "ACTIVE": "Active",
       "INACTIVE": "Inactive"
+    },
+    "filters": {
+      "all": "All",
+      "onboarding": "Onboarding",
+      "active": "Active",
+      "inactive": "Inactive"
     }
   },
   "processes": {
@@ -142,7 +147,6 @@
     "USED": "Used"
   },
   "entities": {
-    "TRAINEE": "Trainee",
     "EMPLOYEE": "Employee",
     "GOSI": "GOSI",
     "MEDICAL_INSURANCE": "Medical insurance",
@@ -161,53 +165,6 @@
     "error": "Something went wrong",
     "submit": "Submit"
   },
-  "home": {
-    "welcome": "Welcome",
-    "apiStatus": "API status",
-    "checking": "Checking…",
-    "up": "Connected",
-    "down": "Unavailable",
-    "stages": {
-      "trainee": {
-        "title": "Trainee Management",
-        "desc": "Data collection, contract creation and electronic approval — with automatic reminders and deadlines."
-      },
-      "profile": {
-        "title": "Employee File",
-        "desc": "GOSI, medical insurance, criminal record certificate, and asset custody — four independent tracks."
-      },
-      "offboarding": {
-        "title": "Offboarding",
-        "desc": "Exit interview, asset return, termination notice, and final settlement — down to file closure."
-      }
-    }
-  },
-  "trainees": {
-    "title": "Trainees",
-    "subtitle": "Stage 1 — from record creation to contract approval",
-    "new": "New trainee",
-    "empty": "No trainees yet — create the first one.",
-    "name": "Name",
-    "firstName": "First name",
-    "lastName": "Last name",
-    "email": "Email",
-    "phone": "Phone",
-    "nationalId": "National ID",
-    "birthDate": "Birth date",
-    "department": "Department",
-    "jobTitle": "Job title",
-    "status": "Status",
-    "docsHint": "The default document checklist (ID, qualification, photo, IBAN letter) is created automatically.",
-    "info": "Personal information",
-    "documents": "Document checklist",
-    "uploaded": "Uploaded",
-    "missing": "Not uploaded",
-    "optional": "optional",
-    "contract": "Contract",
-    "timeline": "Timeline",
-    "missingNotes": "What is missing? (sent to the trainee)",
-    "becameEmployee": "Contract approved — employee profile {no} was created automatically."
-  },
   "contract": {
     "salary": "Salary",
     "durationMonths": "Duration (months)",
@@ -225,8 +182,9 @@
     "FORM_RECEIVED": "Form received",
     "CONTRACT_CREATION": "Contract creation",
     "AWAITING_CONTRACT_APPROVAL": "Awaiting approval",
-    "EMPLOYEE_CREATED": "Employee created",
-    "EXPIRED": "Expired"
+    "EXPIRED": "Expired",
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive"
   },
   "actions": {
     "toggleTheme": "Toggle dark mode",
@@ -259,11 +217,12 @@
     "PROMOTION": "Promotion",
     "PROJECT_TRANSFER": "Project transfer",
     "WARNING": "Warning",
-    "INVESTIGATION": "Investigation"
+    "INVESTIGATION": "Investigation",
+    "ACTIVATED": "Employee activated"
   },
   "actors": {
     "USER": "Staff",
-    "LINK": "Trainee (signed link)",
+    "LINK": "Signed link",
     "SYSTEM": "System"
   },
   "login": {
@@ -283,13 +242,14 @@
   },
   "publicForm": {
     "title": "Complete your onboarding data",
-    "greeting": "Hello {name}, welcome aboard!",
+    "greeting": "Hello {name}",
     "fileHint": "Accepted files: PDF, JPG, PNG, DOC — up to 10 MB each.",
     "requiredHint": "All documents marked * are required before submitting.",
     "invalidTitle": "This link is no longer valid",
     "invalidHint": "The link may have expired or already been used. Please contact HR for a new one.",
     "doneTitle": "Thank you! Your data was submitted.",
-    "doneHint": "HR will review your documents and contact you with the next step."
+    "doneHint": "HR will review your documents and contact you with the next step.",
+    "info": "Your information"
   },
   "approval": {
     "title": "Your employment contract",
@@ -418,7 +378,7 @@
     "title": "Reports",
     "subtitle": "Live numbers across all stages — with Excel exports",
     "headcount": "Headcount by department",
-    "funnel": "Trainee funnel",
+    "funnel": "Onboarding funnel",
     "completion": "Employee-file completion",
     "expiry": "Document expiry",
     "offReasons": "Offboarding by reason",
@@ -430,9 +390,9 @@
     },
     "exports": {
       "employees": "Employees",
-      "trainees": "Trainees",
       "expiring-documents": "Expiring docs",
-      "audit": "Audit (30d)"
+      "audit": "Audit (30d)",
+      "onboarding": "Onboarding"
     }
   },
   "expiryDocs": {
@@ -526,5 +486,31 @@
     "salary": "Salary",
     "none": "No contract on file — this employee was added directly.",
     "view": "View terms"
+  },
+  "fields": {
+    "name": "Name",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email",
+    "phone": "Phone",
+    "nationalId": "National ID",
+    "birthDate": "Birth date",
+    "department": "Department",
+    "jobTitle": "Job title",
+    "status": "Status"
+  },
+  "onboarding": {
+    "title": "Onboarding",
+    "section": "Onboarding progress",
+    "newHire": "New hire (onboarding)",
+    "newHireHint": "Opens the onboarding pipeline: the new hire receives a signed link to complete their data and documents, then approves the contract electronically. The employee number is assigned on activation.",
+    "existing": "Existing employee (direct)",
+    "docsHint": "The default document checklist (ID, qualification, photo, IBAN letter) is created automatically.",
+    "documents": "Onboarding documents",
+    "uploaded": "Uploaded",
+    "missing": "Not uploaded",
+    "optional": "optional",
+    "missingNotes": "What is missing? (sent to the new hire)",
+    "activated": "Contract approved — the employee was activated with number {no}."
   }
 }

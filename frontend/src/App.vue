@@ -19,7 +19,6 @@ const isPublicPage = () =>
 
 const NAV = [
   { to: '/', icon: 'mdi-view-dashboard', key: 'nav.home', roles: [] as string[] },
-  { to: '/trainees', icon: 'mdi-school', key: 'nav.trainees', roles: ['HR'] },
   { to: '/employees', icon: 'mdi-badge-account', key: 'nav.employees', roles: [] as string[] },
   { to: '/reports', icon: 'mdi-chart-box', key: 'nav.reports', roles: ['HR'] },
   // hasRole() lets ADMIN through on any check; listing no other role makes

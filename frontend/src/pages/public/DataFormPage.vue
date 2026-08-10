@@ -15,7 +15,7 @@ interface FormDoc {
 
 interface FormContext {
   purpose: string;
-  trainee: { firstName: string; lastName: string; phone: string | null; nationalId: string | null; birthDate: string | null };
+  employee: { firstName: string; lastName: string; phone: string | null; nationalId: string | null; birthDate: string | null };
   documents: FormDoc[];
 }
 
@@ -36,9 +36,9 @@ onMounted(async () => {
     if (data.purpose !== 'DATA_FORM') throw new Error();
     ctx.value = data;
     fields.value = {
-      phone: data.trainee.phone ?? '',
-      nationalId: data.trainee.nationalId ?? '',
-      birthDate: data.trainee.birthDate?.slice(0, 10) ?? '',
+      phone: data.employee.phone ?? '',
+      nationalId: data.employee.nationalId ?? '',
+      birthDate: data.employee.birthDate?.slice(0, 10) ?? '',
     };
     state.value = 'ready';
   } catch {
@@ -102,27 +102,27 @@ async function submit() {
             {{ $t('publicForm.title') }}
           </v-card-title>
           <v-card-subtitle>
-            {{ $t('publicForm.greeting', { name: `${ctx.trainee.firstName} ${ctx.trainee.lastName}` }) }}
+            {{ $t('publicForm.greeting', { name: `${ctx.employee.firstName} ${ctx.employee.lastName}` }) }}
           </v-card-subtitle>
         </v-card-item>
 
         <v-card-text>
           <v-alert v-if="error" type="error" variant="tonal" class="mb-4">{{ error }}</v-alert>
 
-          <h3 class="text-subtitle-1 font-weight-bold mb-3">{{ $t('trainees.info') }}</h3>
+          <h3 class="text-subtitle-1 font-weight-bold mb-3">{{ $t('publicForm.info') }}</h3>
           <v-row dense>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.phone" :label="$t('trainees.phone')" />
+              <v-text-field v-model="fields.phone" :label="$t('fields.phone')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.nationalId" :label="$t('trainees.nationalId')" />
+              <v-text-field v-model="fields.nationalId" :label="$t('fields.nationalId')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.birthDate" :label="$t('trainees.birthDate')" type="date" />
+              <v-text-field v-model="fields.birthDate" :label="$t('fields.birthDate')" type="date" />
             </v-col>
           </v-row>
 
-          <h3 class="text-subtitle-1 font-weight-bold mt-6 mb-3">{{ $t('trainees.documents') }}</h3>
+          <h3 class="text-subtitle-1 font-weight-bold mt-6 mb-3">{{ $t('onboarding.documents') }}</h3>
           <div v-for="doc in ctx.documents" :key="doc.id" class="mb-3">
             <v-file-input
               v-if="!doc.uploaded"
@@ -133,7 +133,7 @@ async function submit() {
               @update:model-value="onFile(doc.id, $event)"
             />
             <v-alert v-else type="success" variant="tonal" density="compact">
-              {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }} — {{ $t('trainees.uploaded') }}
+              {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }} — {{ $t('onboarding.uploaded') }}
             </v-alert>
           </div>
           <p class="text-caption text-medium-emphasis">{{ $t('publicForm.fileHint') }}</p>

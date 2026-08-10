@@ -1,20 +1,30 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, ApiError } from '../api/client';
+import StatusChip from '../components/StatusChip.vue';
 import { useAuthStore } from '../stores/auth';
 
 interface EmployeeRow {
   id: string;
-  employeeNo: string;
+  employeeNo: string | null;
   firstName: string;
   lastName: string;
   email: string;
   department: string | null;
   jobTitle: string | null;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: string;
 }
+
+const PIPELINE = [
+  'CREATED',
+  'AWAITING_FORM',
+  'FORM_RECEIVED',
+  'CONTRACT_CREATION',
+  'AWAITING_CONTRACT_APPROVAL',
+  'EXPIRED',
+];
 
 const { t } = useI18n();
 const router = useRouter();
@@ -24,8 +34,10 @@ const loading = ref(true);
 const dialog = ref(false);
 const saving = ref(false);
 const error = ref('');
+const filter = ref<'all' | 'onboarding' | 'active' | 'inactive'>('all');
 
 const form = ref({
+  mode: 'onboarding' as 'onboarding' | 'direct',
   firstName: '',
   lastName: '',
   email: '',
@@ -43,12 +55,29 @@ async function load() {
   loading.value = false;
 }
 
+const filtered = computed(() => {
+  if (filter.value === 'all') return employees.value;
+  if (filter.value === 'active') return employees.value.filter((e) => e.status === 'ACTIVE');
+  if (filter.value === 'inactive') return employees.value.filter((e) => e.status === 'INACTIVE');
+  return employees.value.filter((e) => PIPELINE.includes(e.status));
+});
+
+const counts = computed(() => ({
+  all: employees.value.length,
+  onboarding: employees.value.filter((e) => PIPELINE.includes(e.status)).length,
+  active: employees.value.filter((e) => e.status === 'ACTIVE').length,
+  inactive: employees.value.filter((e) => e.status === 'INACTIVE').length,
+}));
+
 async function createEmployee() {
   saving.value = true;
   error.value = '';
   try {
-    const body: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(form.value)) if (v.trim()) body[k] = v.trim();
+    const body: Record<string, unknown> = { direct: form.value.mode === 'direct' };
+    for (const [k, v] of Object.entries(form.value)) {
+      if (k !== 'mode' && v.trim()) body[k] = v.trim();
+    }
+    if (form.value.mode === 'onboarding') delete body['hireDate']; // set on activation
     const created = await api.post<EmployeeRow>('/api/employees', body);
     dialog.value = false;
     await router.push(`/employees/${created.id}`);
@@ -63,13 +92,13 @@ function openRow(_e: unknown, row: { item: EmployeeRow }) {
   void router.push(`/employees/${row.item.id}`);
 }
 
-const headers = [
+const headers = computed(() => [
   { title: t('employees.no'), key: 'employeeNo' },
-  { title: t('trainees.name'), key: 'name', sortable: false },
-  { title: t('trainees.email'), key: 'email' },
-  { title: t('trainees.department'), key: 'department' },
-  { title: t('trainees.status'), key: 'status' },
-];
+  { title: t('fields.name'), key: 'name', sortable: false },
+  { title: t('fields.email'), key: 'email' },
+  { title: t('fields.department'), key: 'department' },
+  { title: t('fields.status'), key: 'status' },
+]);
 
 onMounted(load);
 </script>
@@ -87,22 +116,29 @@ onMounted(load);
       </v-btn>
     </div>
 
+    <!-- Lifecycle filter -->
+    <v-chip-group v-model="filter" mandatory class="mb-3" selected-class="text-primary">
+      <v-chip
+        v-for="key in ['all', 'onboarding', 'active', 'inactive'] as const"
+        :key="key"
+        :value="key"
+        variant="tonal"
+        filter
+      >
+        {{ $t(`employees.filters.${key}`) }} ({{ counts[key] }})
+      </v-chip>
+    </v-chip-group>
+
     <v-card>
-      <v-data-table :headers="headers" :items="employees" :loading="loading" hover @click:row="openRow">
+      <v-data-table :headers="headers" :items="filtered" :loading="loading" hover @click:row="openRow">
         <template #item.employeeNo="{ item }">
-          <span class="font-weight-bold">{{ item.employeeNo }}</span>
+          <span class="font-weight-bold">{{ item.employeeNo ?? '—' }}</span>
         </template>
         <template #item.name="{ item }">
           {{ item.firstName }} {{ item.lastName }}
         </template>
         <template #item.status="{ item }">
-          <v-chip
-            :color="item.status === 'ACTIVE' ? 'success' : 'grey'"
-            size="small"
-            variant="tonal"
-          >
-            {{ $t(`employees.statuses.${item.status}`) }}
-          </v-chip>
+          <StatusChip :status="item.status" />
         </template>
         <template #no-data>
           <div class="pa-8 text-medium-emphasis">{{ $t('employees.empty') }}</div>
@@ -110,25 +146,41 @@ onMounted(load);
       </v-data-table>
     </v-card>
 
-    <!-- Direct add: existing staff who never went through the trainee flow -->
+    <!-- New employee: onboarding pipeline (default) or direct add -->
     <v-dialog v-model="dialog" max-width="620">
       <v-card :title="$t('employees.new')" class="pa-2">
         <v-card-text>
           <v-alert v-if="error" type="error" variant="tonal" class="mb-4">{{ error }}</v-alert>
+
+          <v-btn-toggle v-model="form.mode" mandatory color="primary" class="mb-4" divided>
+            <v-btn value="onboarding" prepend-icon="mdi-school">
+              {{ $t('onboarding.newHire') }}
+            </v-btn>
+            <v-btn value="direct" prepend-icon="mdi-badge-account">
+              {{ $t('onboarding.existing') }}
+            </v-btn>
+          </v-btn-toggle>
+
           <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-            {{ $t('employees.directHint') }}
+            {{ form.mode === 'onboarding' ? $t('onboarding.newHireHint') : $t('employees.directHint') }}
           </v-alert>
+
           <v-row dense>
-            <v-col cols="6"><v-text-field v-model="form.firstName" :label="$t('trainees.firstName')" /></v-col>
-            <v-col cols="6"><v-text-field v-model="form.lastName" :label="$t('trainees.lastName')" /></v-col>
-            <v-col cols="12"><v-text-field v-model="form.email" :label="$t('trainees.email')" type="email" /></v-col>
-            <v-col cols="6"><v-text-field v-model="form.phone" :label="$t('trainees.phone')" /></v-col>
-            <v-col cols="6"><v-text-field v-model="form.nationalId" :label="$t('trainees.nationalId')" /></v-col>
-            <v-col cols="6"><v-text-field v-model="form.department" :label="$t('trainees.department')" /></v-col>
+            <v-col cols="6"><v-text-field v-model="form.firstName" :label="$t('fields.firstName')" /></v-col>
+            <v-col cols="6"><v-text-field v-model="form.lastName" :label="$t('fields.lastName')" /></v-col>
+            <v-col cols="12"><v-text-field v-model="form.email" :label="$t('fields.email')" type="email" /></v-col>
+            <v-col cols="6"><v-text-field v-model="form.phone" :label="$t('fields.phone')" /></v-col>
+            <v-col cols="6"><v-text-field v-model="form.nationalId" :label="$t('fields.nationalId')" /></v-col>
+            <v-col cols="6"><v-text-field v-model="form.department" :label="$t('fields.department')" /></v-col>
             <v-col cols="6"><v-text-field v-model="form.project" :label="$t('employees.project')" /></v-col>
-            <v-col cols="6"><v-text-field v-model="form.jobTitle" :label="$t('trainees.jobTitle')" /></v-col>
-            <v-col cols="6"><v-text-field v-model="form.hireDate" :label="$t('employees.hireDate')" type="date" /></v-col>
+            <v-col cols="6"><v-text-field v-model="form.jobTitle" :label="$t('fields.jobTitle')" /></v-col>
+            <v-col v-if="form.mode === 'direct'" cols="6">
+              <v-text-field v-model="form.hireDate" :label="$t('employees.hireDate')" type="date" />
+            </v-col>
           </v-row>
+          <p v-if="form.mode === 'onboarding'" class="text-caption text-medium-emphasis mb-0">
+            {{ $t('onboarding.docsHint') }}
+          </p>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
