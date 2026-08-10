@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, compact, validate } from '../common/http.js';
+import { asyncHandler, compact, pagedQuery, validate, validateQuery } from '../common/http.js';
 import { requireRole } from './require-auth.middleware.js';
 import { AuthService } from './auth.service.js';
 import type { UserRepository } from './user.repository.js';
@@ -29,10 +29,18 @@ export function usersRouter(users: UserRepository): Router {
   const router = Router();
   router.use(requireRole('ADMIN'));
 
+  const listQuerySchema = z.object({
+    q: z.string().max(200).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+  });
+
+  /** Server-side paged staff list: { items, total }. */
   router.get(
     '/',
-    asyncHandler(async (_req, res) => {
-      res.json(await users.list());
+    validateQuery(listQuerySchema),
+    asyncHandler(async (req, res) => {
+      res.json(await users.listPaged(pagedQuery(req)));
     }),
   );
 

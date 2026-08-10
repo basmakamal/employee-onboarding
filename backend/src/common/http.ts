@@ -33,6 +33,23 @@ export function validate(schema: ZodType): RequestHandler {
 }
 
 /**
+ * Parse req.query against a Zod schema (coercions, defaults, whitelists) and
+ * stash the typed result on req.pagedQuery — query strings are all strings,
+ * so every consumer needs the same coerce-and-clamp treatment.
+ */
+export function validateQuery(schema: ZodType): RequestHandler {
+  return (req, _res, next) => {
+    (req as { pagedQuery?: unknown }).pagedQuery = schema.parse(req.query);
+    next();
+  };
+}
+
+/** The query parsed by validateQuery, typed at the call site. */
+export function pagedQuery<T>(req: unknown): T {
+  return (req as { pagedQuery: T }).pagedQuery;
+}
+
+/**
  * Central error handler — the ONLY place errors become HTTP responses.
  * Typed domain errors carry their own status; Zod errors are 400 with
  * field details; anything else is a logged 500 with no leaked internals.
