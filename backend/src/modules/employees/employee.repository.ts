@@ -96,10 +96,20 @@ export class EmployeeRepository {
     });
   }
 
-  /** Next EMP-#### — counts only employees that ever got a number. */
-  async nextEmployeeNo(): Promise<string> {
-    const numbered = await this.db.employee.count({ where: { employeeNo: { not: null } } });
-    return `EMP-${String(numbered + 1).padStart(4, '0')}`;
+  /**
+   * Next EMP-#### from the atomic sequence row. The increment takes a row
+   * lock, so when this runs inside the activation transaction two concurrent
+   * approvals serialize instead of both computing the same number (which the
+   * old count()+1 approach allowed). The create branch only fires on a fresh
+   * database — the migration seeds the row from the existing numbered count.
+   */
+  async allocateEmployeeNo(): Promise<string> {
+    const seq = await this.db.sequence.upsert({
+      where: { key: 'EMPLOYEE_NO' },
+      update: { value: { increment: 1 } },
+      create: { key: 'EMPLOYEE_NO', value: 1 },
+    });
+    return `EMP-${String(seq.value).padStart(4, '0')}`;
   }
 
   findById(id: string) {
@@ -115,15 +125,41 @@ export class EmployeeRepository {
   }
 
   /** The public form writes exactly these three fields. */
-  updatePersonal(id: string, fields: { phone?: string; nationalId?: string; birthDate?: Date }) {
-    return this.db.employee.update({
-      where: { id },
-      data: {
-        ...(fields.phone !== undefined ? { phone: fields.phone } : {}),
-        ...(fields.nationalId !== undefined ? { nationalId: fields.nationalId } : {}),
-        ...(fields.birthDate !== undefined ? { birthDate: fields.birthDate } : {}),
-      },
-    });
+  /**
+   * Personal details captured by the employee data form.
+   *
+   * Every key is applied only when present, so this stays usable for the
+   * partial updates HR makes from the employee file as well as for the full
+   * form submission.
+   */
+  updatePersonal(
+    id: string,
+    fields: {
+      firstName?: string;
+      fatherName?: string;
+      grandfatherName?: string;
+      lastName?: string;
+      phone?: string;
+      email?: string;
+      nationalId?: string;
+      birthDate?: Date;
+      birthDateHijri?: string;
+      gender?: 'MALE' | 'FEMALE';
+      nationality?: string;
+      maritalStatus?: 'SINGLE' | 'MARRIED' | 'DIVORCED' | 'WIDOWED';
+      splAddress?: string;
+      iban?: string;
+      qualification?: 'HIGH_SCHOOL' | 'DIPLOMA' | 'BACHELOR' | 'MASTER' | 'PHD' | 'OTHER';
+      major?: string;
+      emergencyContactName?: string;
+      emergencyContactPhone?: string;
+    },
+  ) {
+    const data: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined) data[key] = value;
+    }
+    return this.db.employee.update({ where: { id }, data });
   }
 
   /** The employee-file page: profile, checklist, contract, processes, timeline. */
@@ -174,24 +210,57 @@ export class EmployeeRepository {
   }
 
   /**
+   * Every stored file attached to this employee, collected BEFORE a hard
+   * delete so the caller can remove them from disk after the rows are gone.
+   */
+  async collectStorageKeys(id: string): Promise<string[]> {
+    const [employee, docs, contract, criminal, offboardings] = await Promise.all([
+      this.db.employee.findUnique({ where: { id }, select: { photoKey: true } }),
+      this.db.onboardingDocument.findMany({
+        where: { employeeId: id, storageKey: { not: null } },
+        select: { storageKey: true },
+      }),
+      this.db.contract.findUnique({ where: { employeeId: id }, select: { storageKey: true } }),
+      this.db.criminalRecordProcess.findUnique({
+        where: { employeeId: id },
+        select: { certificateStorageKey: true },
+      }),
+      this.db.offboarding.findMany({
+        where: { employeeId: id, noticeStorageKey: { not: null } },
+        select: { noticeStorageKey: true },
+      }),
+    ]);
+    return [
+      employee?.photoKey,
+      ...docs.map((d) => d.storageKey),
+      contract?.storageKey,
+      criminal?.certificateStorageKey,
+      ...offboardings.map((o) => o.noticeStorageKey),
+    ].filter((k): k is string => !!k);
+  }
+
+  /**
    * Hard delete with full child cleanup — for wrongly created or test
    * records. Audit rows survive with their anchor nulled (ON DELETE SET
    * NULL); the deletion itself is audited separately by the service.
+   *
+   * Plain sequential deletes: the service runs this inside its unit of
+   * work, so the whole cleanup (plus the DELETE audit row) is one
+   * transaction there — nesting another one here would fail on a
+   * transaction client.
    */
-  deleteCascade(id: string) {
-    return this.db.$transaction([
-      this.db.employeeRequest.deleteMany({ where: { employeeId: id } }),
-      this.db.employeeDocument.deleteMany({ where: { employeeId: id } }),
-      this.db.offboarding.deleteMany({ where: { employeeId: id } }),
-      this.db.assetFormItem.deleteMany({ where: { form: { employeeId: id } } }),
-      this.db.assetForm.deleteMany({ where: { employeeId: id } }),
-      this.db.gosiProcess.deleteMany({ where: { employeeId: id } }),
-      this.db.medicalInsuranceProcess.deleteMany({ where: { employeeId: id } }),
-      this.db.criminalRecordProcess.deleteMany({ where: { employeeId: id } }),
-      this.db.onboardingDocument.deleteMany({ where: { employeeId: id } }),
-      this.db.contract.deleteMany({ where: { employeeId: id } }),
-      this.db.employee.delete({ where: { id } }),
-    ]);
+  async deleteCascade(id: string) {
+    await this.db.employeeRequest.deleteMany({ where: { employeeId: id } });
+    await this.db.employeeDocument.deleteMany({ where: { employeeId: id } });
+    await this.db.offboarding.deleteMany({ where: { employeeId: id } });
+    await this.db.assetFormItem.deleteMany({ where: { form: { employeeId: id } } });
+    await this.db.assetForm.deleteMany({ where: { employeeId: id } });
+    await this.db.gosiProcess.deleteMany({ where: { employeeId: id } });
+    await this.db.medicalInsuranceProcess.deleteMany({ where: { employeeId: id } });
+    await this.db.criminalRecordProcess.deleteMany({ where: { employeeId: id } });
+    await this.db.onboardingDocument.deleteMany({ where: { employeeId: id } });
+    await this.db.contract.deleteMany({ where: { employeeId: id } });
+    await this.db.employee.delete({ where: { id } });
   }
 
   /**

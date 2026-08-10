@@ -42,7 +42,12 @@ export class NotificationService {
       ...ref,
     });
     try {
-      await this.notifier.send({ to: email, subject: message.subject, text: message.text });
+      await this.notifier.send({
+        to: email,
+        subject: message.subject,
+        text: message.text,
+        ...(message.html ? { html: message.html } : {}),
+      });
       await this.notifications.markSent(row.id, new Date());
     } catch (err) {
       logger.error({ err, notificationId: row.id }, 'email send failed');

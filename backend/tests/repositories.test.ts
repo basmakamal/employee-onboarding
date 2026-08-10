@@ -31,12 +31,16 @@ describe('EmployeeRepository.moveStatus', () => {
     expect(await repo.moveStatus('e1', 'CREATED', 'AWAITING_FORM')).toBe(false);
   });
 
-  it('allocates the next number from employees that ever got one', async () => {
-    const count = vi.fn().mockResolvedValue(7);
-    const repo = new EmployeeRepository({ employee: { count } } as unknown as Db);
+  it('allocates the next number by atomically incrementing the sequence row', async () => {
+    const upsert = vi.fn().mockResolvedValue({ key: 'EMPLOYEE_NO', value: 8 });
+    const repo = new EmployeeRepository({ sequence: { upsert } } as unknown as Db);
 
-    expect(await repo.nextEmployeeNo()).toBe('EMP-0008');
-    expect(count).toHaveBeenCalledWith({ where: { employeeNo: { not: null } } });
+    expect(await repo.allocateEmployeeNo()).toBe('EMP-0008');
+    expect(upsert).toHaveBeenCalledWith({
+      where: { key: 'EMPLOYEE_NO' },
+      update: { value: { increment: 1 } },
+      create: { key: 'EMPLOYEE_NO', value: 1 },
+    });
   });
 });
 

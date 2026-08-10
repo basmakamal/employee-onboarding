@@ -1,17 +1,23 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
-import { documentUpload } from '../../common/storage.js';
+import {
+  discardUploads,
+  documentUpload,
+  employeeSubdir,
+  removeStoredFiles,
+  storageKeyFor,
+  verifyUploadedFiles,
+} from '../../common/storage.js';
+import { NotFoundError } from '../../workflow/errors.js';
 import type { OnboardingService } from './onboarding.service.js';
 import type { AssetService } from '../assets/asset.service.js';
 import type { OffboardingService } from '../offboarding/offboarding.service.js';
 import type { LinkTokenService } from '../../auth/link-token.service.js';
+// The full employee data form — every field required, Saudi formats checked
+// server-side because a public signed link is the only gate in front of it.
+import { dataFormSchema } from './data-form.schema.js';
 
-const formFieldsSchema = z.object({
-  phone: z.string().optional(),
-  nationalId: z.string().optional(),
-  birthDate: z.coerce.date().optional(),
-});
 
 const decisionSchema = z.object({
   decision: z.enum(['APPROVE', 'REJECT']),
@@ -70,20 +76,47 @@ export function linkRouter(
   /**
    * Data-form submission: multipart. Each file's field name is the
    * checklist row id it fulfills; text fields carry personal data.
+   *
+   * The token gate runs BEFORE multer parses the body, so no byte is
+   * written to disk for an invalid, expired or wrong-purpose link. Files
+   * are then sniffed (magic bytes vs declared type), and any failure after
+   * that point discards everything this request wrote.
    */
   router.post(
     '/:token/form',
+    asyncHandler(async (req, _res, next) => {
+      const row = await links.verify(req.params['token'] as string);
+      if (row.purpose !== 'DATA_FORM' || !row.employeeId) {
+        throw new NotFoundError('link', 'not a data-form link');
+      }
+      req.uploadSubdir = employeeSubdir(row.employeeId);
+      next();
+    }),
     documentUpload.any(),
     asyncHandler(async (req, res) => {
-      const fields = compact(formFieldsSchema.parse(req.body ?? {}));
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-      const uploads = files.map((f) => ({
-        documentId: f.fieldname,
-        storageKey: f.filename,
-        mimeType: f.mimetype,
-        sizeBytes: f.size,
-      }));
-      res.json(await service.submitForm(req.params['token'] as string, fields, uploads));
+      try {
+        await verifyUploadedFiles(files);
+        const fields = compact(dataFormSchema.parse(req.body ?? {}));
+        const uploads = files.map((f) => ({
+          documentId: f.fieldname,
+          storageKey: storageKeyFor(req.uploadSubdir as string, f.filename),
+          mimeType: f.mimetype,
+          sizeBytes: f.size,
+        }));
+        const { orphanedKeys, ...result } = await service.submitForm(
+          req.params['token'] as string,
+          fields,
+          uploads,
+        );
+        // Files this submission made unreferenced: replaced re-uploads and
+        // unknown field names. Removed only after the commit.
+        await removeStoredFiles(orphanedKeys);
+        res.json(result);
+      } catch (err) {
+        await discardUploads(files);
+        throw err;
+      }
     }),
   );
 
