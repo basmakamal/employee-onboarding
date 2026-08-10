@@ -143,7 +143,7 @@ const ASSET_STATUS_COLORS: Record<string, string> = {
   CANCELLED: 'grey',
 };
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const route = useRoute();
 const auth = useAuthStore();
 const id = route.params['id'] as string;
@@ -233,6 +233,12 @@ const missingCount = computed(() => {
 // ------------------------------------------------------------- edit profile
 const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'TEMPORARY'];
 const editDialog = ref(false);
+
+/** Known departments / job titles — new typed values join the list on save. */
+const fieldOptions = ref<{ departments: string[]; jobTitles: string[] }>({
+  departments: [],
+  jobTitles: [],
+});
 const editForm = ref({
   firstName: '',
   lastName: '',
@@ -251,6 +257,9 @@ const editForm = ref({
 function openEdit() {
   const e = employee.value;
   if (!e) return;
+  void api
+    .get<{ departments: string[]; jobTitles: string[] }>('/api/employees/options')
+    .then((opts) => (fieldOptions.value = opts));
   editForm.value = {
     firstName: e.firstName,
     lastName: e.lastName,
@@ -280,9 +289,9 @@ async function saveEdit() {
       phone: f.phone.trim() || null,
       nationalId: f.nationalId.trim() || null,
       birthDate: f.birthDate || null,
-      department: f.department.trim() || null,
+      department: (f.department ?? '').trim() || null,
       project: f.project.trim() || null,
-      jobTitle: f.jobTitle.trim() || null,
+      jobTitle: (f.jobTitle ?? '').trim() || null,
       directManager: f.directManager.trim() || null,
       employmentType: f.employmentType,
       ...(f.hireDate ? { hireDate: f.hireDate } : {}),
@@ -543,6 +552,21 @@ const REQUEST_TYPES = [
   { type: 'INVESTIGATION', icon: 'mdi-magnify' },
 ];
 
+/** type → icon lookup for the recent-requests log and dialogs. */
+const REQUEST_ICON: Record<string, string> = Object.fromEntries(
+  REQUEST_TYPES.map((r) => [r.type, r.icon]),
+);
+
+/** Expiry-tracked document types get a recognizable icon each. */
+const DOC_ICON: Record<string, string> = {
+  IQAMA: 'mdi-card-account-details-outline',
+  NATIONAL_ID: 'mdi-card-account-details',
+  PASSPORT: 'mdi-passport',
+  CONTRACT: 'mdi-file-sign',
+  WORK_PERMIT: 'mdi-briefcase-check-outline',
+  DRIVING_LICENSE: 'mdi-car-outline',
+};
+
 const requestDialog = ref({ show: false, type: 'SALARY_LETTER', notes: '' });
 
 function openRequest(type: string) {
@@ -563,6 +587,134 @@ async function submitRequest() {
     notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
+  }
+}
+
+// ------------------------------------------------------------- AI letter
+const letterDialog = ref({ show: false, type: '', text: '', loading: false });
+
+async function generateLetter(request: RequestRow) {
+  letterDialog.value = { show: true, type: request.type, text: '', loading: true };
+  try {
+    const { letter } = await api.post<{ letter: string }>('/api/ai/letters', {
+      employeeId: id,
+      type: request.type,
+      notes: request.notes ?? undefined,
+      locale: locale.value.startsWith('ar') ? 'ar' : 'en',
+    });
+    letterDialog.value.text = letter;
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    letterDialog.value.show = false;
+  } finally {
+    letterDialog.value.loading = false;
+  }
+}
+
+async function copyLetter() {
+  await navigator.clipboard.writeText(letterDialog.value.text);
+  notify(t('ai.copied'));
+}
+
+function printLetter() {
+  const w = window.open('', '_blank', 'width=800,height=900');
+  if (!w) return;
+  const dir = locale.value.startsWith('ar') ? 'rtl' : 'ltr';
+  const safe = letterDialog.value.text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  w.document.write(
+    `<pre style="font-family: 'Times New Roman', serif; font-size: 16px; line-height: 1.9; white-space: pre-wrap; direction: ${dir}; padding: 48px;">${safe}</pre>`,
+  );
+  w.document.close();
+  w.print();
+}
+
+// ------------------------------------------------------------- print profile
+function printProfile() {
+  if (!employee.value) return;
+  const e = employee.value;
+  const w = window.open('', '_blank', 'width=800,height=900');
+  if (!w) return;
+  const dir = locale.value.startsWith('ar') ? 'rtl' : 'ltr';
+  const esc = (v: unknown) =>
+    String(v ?? '—')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  const rows: Array<[string, unknown]> = [
+    [t('employees.no'), e.employeeNo],
+    [t('fields.name'), `${e.firstName} ${e.lastName}`],
+    [t('fields.jobTitle'), e.jobTitle],
+    [t('fields.department'), e.department],
+    [t('employees.project'), e.project],
+    [t('fields.status'), t(`employees.statuses.${e.status}`)],
+    [t('fields.nationalId'), e.nationalId],
+    [t('fields.birthDate'), e.birthDate ? new Date(e.birthDate).toLocaleDateString() : null],
+    [t('fields.phone'), e.phone],
+    [t('fields.email'), e.email],
+    [t('employees.hireDate'), e.hireDate ? new Date(e.hireDate).toLocaleDateString() : null],
+    [
+      t('profile.employmentType'),
+      e.employmentType ? t(`profile.types.${e.employmentType}`) : null,
+    ],
+    [t('profile.directManager'), e.directManager],
+  ];
+  const table = rows
+    .map(
+      ([label, v]) => `<tr>
+        <td style="padding:8px 12px;border:1px solid #bbb;background:#f4f4f4;width:35%;font-weight:600;">${esc(label)}</td>
+        <td style="padding:8px 12px;border:1px solid #bbb;">${esc(v)}</td>
+      </tr>`,
+    )
+    .join('');
+  w.document.write(
+    `<div style="font-family:'Segoe UI',Tahoma,sans-serif;direction:${dir};padding:40px;">
+      <h2 style="margin:0 0 4px;">${esc(`${e.firstName} ${e.lastName}`)}</h2>
+      <div style="color:#666;margin-bottom:24px;">
+        ${e.employeeNo ? `${esc(e.employeeNo)} · ` : ''}${esc(e.jobTitle ?? '')}
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">${table}</table>
+      <div style="margin-top:28px;color:#888;font-size:12px;">${esc(new Date().toLocaleString())}</div>
+    </div>`,
+  );
+  w.document.close();
+  w.print();
+}
+
+// -------------------------------------------------- AI document extraction
+const scanInput = ref<HTMLInputElement | null>(null);
+
+async function onScanPicked(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  busy.value = 'scan';
+  try {
+    const body = new FormData();
+    body.append('document', file);
+    const extracted = await api.post<{
+      type: string;
+      number: string | null;
+      expiryDate: string | null;
+      notes: string | null;
+    }>('/api/ai/extract-document', body);
+
+    if (DOC_TYPES.includes(extracted.type)) {
+      docForm.value.type = extracted.type;
+    } else {
+      docForm.value.type = 'CUSTOM';
+      docForm.value.customType = extracted.type;
+    }
+    if (extracted.number) docForm.value.number = extracted.number;
+    if (extracted.expiryDate) docForm.value.expiryDate = extracted.expiryDate;
+    if (extracted.notes) docForm.value.notes = extracted.notes;
+    notify(t('ai.scanned'));
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+    if (scanInput.value) scanInput.value.value = '';
   }
 }
 
@@ -601,8 +753,23 @@ const custodySummary = computed(() => {
   };
 });
 
-// ------------------------------------------------------------- offboarding
+// ------------------------------------------------------------- hard delete
 const router = useRouter();
+const deleteDialog = ref(false);
+
+async function removeEmployee() {
+  busy.value = 'delete';
+  try {
+    await api.delete(`/api/employees/${id}`);
+    deleteDialog.value = false;
+    await router.push('/employees');
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    busy.value = '';
+  }
+}
+
+// ------------------------------------------------------------- offboarding
 const offboardingDialog = ref(false);
 const offboardingForm = ref({ reason: 'RESIGNATION', notes: '' });
 
@@ -728,25 +895,28 @@ onMounted(load);
         <v-row dense>
           <v-col
             v-for="field in [
-              { label: $t('employees.no'), value: employee.employeeNo },
-              { label: $t('fields.department'), value: employee.department },
-              { label: $t('employees.project'), value: employee.project },
-              { label: $t('fields.nationalId'), value: employee.nationalId },
+              { icon: 'mdi-pound', label: $t('employees.no'), value: employee.employeeNo },
+              { icon: 'mdi-sitemap-outline', label: $t('fields.department'), value: employee.department },
+              { icon: 'mdi-briefcase-outline', label: $t('employees.project'), value: employee.project },
+              { icon: 'mdi-card-account-details-outline', label: $t('fields.nationalId'), value: employee.nationalId },
               {
+                icon: 'mdi-cake-variant-outline',
                 label: $t('fields.birthDate'),
                 value: employee.birthDate ? new Date(employee.birthDate).toLocaleDateString() : null,
               },
-              { label: $t('fields.phone'), value: employee.phone },
-              { label: $t('fields.email'), value: employee.email },
+              { icon: 'mdi-phone-outline', label: $t('fields.phone'), value: employee.phone },
+              { icon: 'mdi-email-outline', label: $t('fields.email'), value: employee.email },
               {
+                icon: 'mdi-calendar-check-outline',
                 label: $t('employees.hireDate'),
                 value: employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : null,
               },
               {
+                icon: 'mdi-briefcase-clock-outline',
                 label: $t('profile.employmentType'),
                 value: $t(`profile.types.${employee.employmentType}`),
               },
-              { label: $t('profile.directManager'), value: employee.directManager },
+              { icon: 'mdi-account-tie-outline', label: $t('profile.directManager'), value: employee.directManager },
             ]"
             :key="field.label"
             cols="6"
@@ -754,7 +924,9 @@ onMounted(load);
             md="2"
             class="info-cell"
           >
-            <div class="text-caption text-medium-emphasis">{{ field.label }}</div>
+            <div class="text-caption text-medium-emphasis">
+              <v-icon :icon="field.icon" size="14" class="me-1" />{{ field.label }}
+            </div>
             <div class="text-body-2 font-weight-medium">{{ field.value ?? '—' }}</div>
           </v-col>
         </v-row>
@@ -826,6 +998,9 @@ onMounted(load);
           >
             {{ $t('profile.edit') }}
           </v-btn>
+          <v-btn variant="outlined" prepend-icon="mdi-printer-outline" @click="printProfile">
+            {{ $t('common.print') }}
+          </v-btn>
           <v-spacer />
           <v-btn
             v-if="!openOffboarding && employee.status === 'ACTIVE' && auth.hasRole('HR')"
@@ -836,6 +1011,21 @@ onMounted(load);
           >
             {{ $t('profile.endContract') }}
           </v-btn>
+          <v-tooltip
+            v-if="auth.user?.role === 'ADMIN'"
+            location="top"
+            :text="$t('profile.delete')"
+          >
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon="mdi-delete-forever-outline"
+                variant="text"
+                color="error"
+                @click="deleteDialog = true"
+              />
+            </template>
+          </v-tooltip>
         </div>
       </v-card-text>
     </v-card>
@@ -1098,7 +1288,7 @@ onMounted(load);
           <v-list v-else density="compact">
             <v-list-item v-for="doc in expiryDocs" :key="doc.id">
               <template #prepend>
-                <v-icon icon="mdi-file-clock" :color="docColor(doc)" />
+                <v-icon :icon="DOC_ICON[doc.type] ?? 'mdi-file-clock'" :color="docColor(doc)" />
               </template>
               <v-list-item-title>
                 {{ $t(`expiryDocs.types.${doc.type}`, doc.type) }}
@@ -1244,7 +1434,12 @@ onMounted(load);
               <v-list density="compact" class="pa-0">
                 <v-list-item v-for="r in employee.requests.slice(0, 5)" :key="r.id" class="px-0">
                   <template #prepend>
-                    <v-icon icon="mdi-clipboard-text-clock-outline" size="20" class="me-2" />
+                    <v-icon
+                      :icon="REQUEST_ICON[r.type] ?? 'mdi-clipboard-text-clock-outline'"
+                      size="20"
+                      class="me-2"
+                      color="primary"
+                    />
                   </template>
                   <v-list-item-title>{{ $t(`requests.types.${r.type}`) }}</v-list-item-title>
                   <v-list-item-subtitle>
@@ -1252,6 +1447,20 @@ onMounted(load);
                     {{ $t('requests.by', { name: r.createdBy.name }) }}
                     <template v-if="r.notes"> · {{ r.notes }}</template>
                   </v-list-item-subtitle>
+                  <template #append>
+                    <v-tooltip location="top" :text="$t('ai.letter')">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon="mdi-creation"
+                          variant="text"
+                          size="small"
+                          color="primary"
+                          @click="generateLetter(r)"
+                        />
+                      </template>
+                    </v-tooltip>
+                  </template>
                 </v-list-item>
               </v-list>
             </template>
@@ -1267,34 +1476,31 @@ onMounted(load);
               {{ $t('onboarding.documents') }}
             </v-card-title>
           </v-card-item>
-          <v-list density="compact">
-            <v-list-item v-for="doc in employee.onboardingDocuments" :key="doc.id">
-              <template #prepend>
-                <v-icon
-                  :icon="doc.uploaded ? 'mdi-file-check' : 'mdi-file-remove-outline'"
+          <!-- Inline checklist: chip per document, click to download when uploaded -->
+          <v-card-text class="d-flex flex-wrap pt-0" style="gap: 8px">
+            <v-tooltip
+              v-for="doc in employee.onboardingDocuments"
+              :key="doc.id"
+              location="top"
+              :text="doc.uploaded ? $t('onboarding.uploaded') : $t('onboarding.missing')"
+            >
+              <template #activator="{ props }">
+                <v-chip
+                  v-bind="props"
+                  :prepend-icon="doc.uploaded ? 'mdi-file-check' : 'mdi-file-remove-outline'"
                   :color="doc.uploaded ? 'success' : doc.required ? 'error' : 'grey'"
-                />
-              </template>
-              <v-list-item-title>
-                {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }}
-                <v-chip v-if="!doc.required" size="x-small" variant="tonal" class="ms-1">
-                  {{ $t('onboarding.optional') }}
+                  variant="tonal"
+                  :append-icon="doc.uploaded && auth.hasRole('HR') ? 'mdi-download' : undefined"
+                  @click="doc.uploaded && auth.hasRole('HR') && downloadOnboardingDoc(doc)"
+                >
+                  {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }}
+                  <span v-if="!doc.required" class="text-caption ms-1">
+                    ({{ $t('onboarding.optional') }})
+                  </span>
                 </v-chip>
-              </v-list-item-title>
-              <v-list-item-subtitle>
-                {{ doc.uploaded ? $t('onboarding.uploaded') : $t('onboarding.missing') }}
-              </v-list-item-subtitle>
-              <template #append>
-                <v-btn
-                  v-if="doc.uploaded && auth.hasRole('HR')"
-                  icon="mdi-download"
-                  variant="text"
-                  size="small"
-                  @click="downloadOnboardingDoc(doc)"
-                />
               </template>
-            </v-list-item>
-          </v-list>
+            </v-tooltip>
+          </v-card-text>
         </v-card>
       </v-col>
     </v-row>
@@ -1398,11 +1604,38 @@ onMounted(load);
     <v-dialog v-model="docDialog" max-width="480">
       <v-card :title="docForm.id ? $t('expiryDocs.edit') : $t('expiryDocs.add')" class="pa-2">
         <v-card-text>
+          <v-btn
+            variant="tonal"
+            color="secondary"
+            prepend-icon="mdi-line-scan"
+            class="mb-1"
+            block
+            :loading="busy === 'scan'"
+            @click="scanInput?.click()"
+          >
+            {{ $t('ai.scan') }}
+          </v-btn>
+          <p class="text-caption text-medium-emphasis mb-4">{{ $t('ai.scanHint') }}</p>
+          <input
+            ref="scanInput"
+            type="file"
+            accept="image/jpeg,image/png,application/pdf"
+            class="d-none"
+            @change="onScanPicked"
+          />
           <v-select
             v-model="docForm.type"
             :items="[
-              ...DOC_TYPES.map((type) => ({ title: $t(`expiryDocs.types.${type}`), value: type })),
-              { title: $t('expiryDocs.types.CUSTOM'), value: 'CUSTOM' },
+              ...DOC_TYPES.map((type) => ({
+                title: $t(`expiryDocs.types.${type}`),
+                value: type,
+                props: { prependIcon: DOC_ICON[type] },
+              })),
+              {
+                title: $t('expiryDocs.types.CUSTOM'),
+                value: 'CUSTOM',
+                props: { prependIcon: 'mdi-file-question-outline' },
+              },
             ]"
             :label="$t('assets.type')"
           />
@@ -1429,6 +1662,76 @@ onMounted(load);
           >
             {{ $t('common.save') }}
           </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Hard delete confirmation (ADMIN) -->
+    <v-dialog v-model="deleteDialog" max-width="480">
+      <v-card :title="$t('profile.delete')" class="pa-2">
+        <v-card-text>
+          <v-alert type="error" variant="tonal" class="mb-3">
+            {{ $t('profile.deleteWarning') }}
+          </v-alert>
+          <p class="text-body-2">
+            <strong>{{ employee.firstName }} {{ employee.lastName }}</strong>
+            <template v-if="employee.employeeNo"> · {{ employee.employeeNo }}</template>
+          </p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="deleteDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="error" variant="flat" :loading="busy === 'delete'" @click="removeEmployee">
+            {{ $t('profile.deleteConfirm') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- AI letter dialog -->
+    <v-dialog v-model="letterDialog.show" max-width="720">
+      <v-card class="pa-2">
+        <v-card-item>
+          <v-card-title class="text-subtitle-1 font-weight-bold">
+            <v-icon icon="mdi-creation" class="me-2" color="primary" />
+            {{ $t('ai.letterTitle') }} — {{ $t(`requests.types.${letterDialog.type}`, letterDialog.type) }}
+          </v-card-title>
+        </v-card-item>
+        <v-card-text>
+          <div v-if="letterDialog.loading" class="text-center py-10">
+            <v-progress-circular indeterminate color="primary" size="40" />
+            <p class="text-medium-emphasis mt-3">{{ $t('ai.generating') }}</p>
+          </div>
+          <v-textarea
+            v-else
+            v-model="letterDialog.text"
+            auto-grow
+            rows="14"
+            max-rows="24"
+            variant="outlined"
+            class="letter-text"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-btn
+            variant="tonal"
+            prepend-icon="mdi-content-copy"
+            :disabled="letterDialog.loading"
+            @click="copyLetter"
+          >
+            {{ $t('ai.copy') }}
+          </v-btn>
+          <v-btn
+            variant="tonal"
+            color="primary"
+            prepend-icon="mdi-printer"
+            :disabled="letterDialog.loading"
+            @click="printLetter"
+          >
+            {{ $t('ai.print') }}
+          </v-btn>
+          <v-spacer />
+          <v-btn variant="text" @click="letterDialog.show = false">{{ $t('common.done') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -1489,7 +1792,13 @@ onMounted(load);
         <v-card-text>
           <v-select
             v-model="requestDialog.type"
-            :items="REQUEST_TYPES.map((r) => ({ title: $t(`requests.types.${r.type}`), value: r.type }))"
+            :items="
+              REQUEST_TYPES.map((r) => ({
+                title: $t(`requests.types.${r.type}`),
+                value: r.type,
+                props: { prependIcon: r.icon },
+              }))
+            "
             :label="$t('requests.title')"
           />
           <v-textarea v-model="requestDialog.notes" :label="$t('requests.notes')" rows="3" />
@@ -1528,13 +1837,25 @@ onMounted(load);
               <v-text-field v-model="editForm.birthDate" :label="$t('fields.birthDate')" type="date" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.department" :label="$t('fields.department')" />
+              <v-combobox
+                v-model="editForm.department"
+                :items="fieldOptions.departments"
+                :label="$t('fields.department')"
+                :hint="$t('fields.comboHint')"
+                persistent-hint
+              />
             </v-col>
             <v-col cols="12" sm="6">
               <v-text-field v-model="editForm.project" :label="$t('employees.project')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.jobTitle" :label="$t('fields.jobTitle')" />
+              <v-combobox
+                v-model="editForm.jobTitle"
+                :items="fieldOptions.jobTitles"
+                :label="$t('fields.jobTitle')"
+                :hint="$t('fields.comboHint')"
+                persistent-hint
+              />
             </v-col>
             <v-col cols="12" sm="6">
               <v-text-field v-model="editForm.directManager" :label="$t('profile.directManager')" />
@@ -1621,5 +1942,10 @@ onMounted(load);
 .service-btn {
   border-color: rgba(var(--v-border-color), var(--v-border-opacity));
   font-weight: 500;
+}
+
+.letter-text :deep(textarea) {
+  font-family: 'Times New Roman', serif;
+  line-height: 1.9;
 }
 </style>

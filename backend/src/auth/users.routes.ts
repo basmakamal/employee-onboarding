@@ -17,6 +17,7 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
   role: z.enum(ROLES).optional(),
   active: z.boolean().optional(),
 });
@@ -55,6 +56,7 @@ export function usersRouter(users: UserRepository): Router {
     asyncHandler(async (req, res) => {
       const id = req.params['id'] as string;
       const changes = compact(req.body as z.infer<typeof updateSchema>);
+      if (changes.email) changes.email = changes.email.toLowerCase();
       // Self-lockout guard: admins cannot demote or deactivate themselves.
       if (id === req.actor?.id && (changes.role !== undefined || changes.active !== undefined)) {
         throw new GuardFailedError('SELF_LOCKOUT', 'you cannot change your own role or status');

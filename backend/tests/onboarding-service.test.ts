@@ -28,12 +28,13 @@ function makeService(overrides: { employee?: Partial<Employee> } = {}) {
       findById: vi.fn().mockResolvedValue(employee),
       createOnboarding: vi.fn(),
       updatePersonal: vi.fn().mockResolvedValue({}),
-      nextEmployeeNo: vi.fn().mockResolvedValue('EMP-0042'),
+      allocateEmployeeNo: vi.fn().mockResolvedValue('EMP-0042'),
       completeActivation: vi.fn().mockResolvedValue({}),
     },
     documents: {
       listByEmployee: vi.fn().mockResolvedValue([
         { id: 'd1', type: 'NATIONAL_ID', label: null, required: true, storageKey: null },
+        { id: 'd2', type: 'IBAN_LETTER', label: null, required: true, storageKey: null },
       ]),
       attachUpload: vi.fn().mockResolvedValue({}),
     },
@@ -64,11 +65,16 @@ function makeService(overrides: { employee?: Partial<Employee> } = {}) {
     notifyExternal: vi.fn().mockResolvedValue(undefined),
     notifyHr: vi.fn().mockResolvedValue(undefined),
   };
+  // Unit of work under test = the same fakes; the consumed link's stamp
+  // delegates to the fake links service so assertions stay in one place.
+  const scope = { ...repos, workflow, markLinkUsed: links.markUsed };
+  const transact = (fn: (s: typeof scope) => Promise<unknown>) => fn(scope);
   const service = new OnboardingService(
     repos as never,
     workflow,
     links as never,
     notifications as never,
+    transact as never,
   );
   return { service, repos, workflow, links, notifications };
 }
@@ -133,6 +139,7 @@ describe('OnboardingService signed-link surface', () => {
     expect(ctx.employee['firstName']).toBe('Nora');
     expect(ctx.documents).toEqual([
       { id: 'd1', type: 'NATIONAL_ID', label: null, required: true, uploaded: false },
+      { id: 'd2', type: 'IBAN_LETTER', label: null, required: true, uploaded: false },
     ]);
   });
 
@@ -149,11 +156,12 @@ describe('OnboardingService signed-link surface', () => {
       { phone: '0500000000' },
       [
         { documentId: 'd1', storageKey: 'a.pdf', mimeType: 'application/pdf', sizeBytes: 10 },
-        { documentId: 'ghost', storageKey: 'b.pdf', mimeType: 'application/pdf', sizeBytes: 10 },
+        { documentId: 'd2', storageKey: 'b.pdf', mimeType: 'application/pdf', sizeBytes: 10 },
+        { documentId: 'ghost', storageKey: 'c.pdf', mimeType: 'application/pdf', sizeBytes: 10 },
       ],
     );
 
-    expect(repos.documents.attachUpload).toHaveBeenCalledTimes(1);
+    expect(repos.documents.attachUpload).toHaveBeenCalledTimes(2);
     expect(repos.employees.updatePersonal).toHaveBeenCalledWith('e1', { phone: '0500000000' });
     expect(workflow.transition).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'e1' }),
@@ -161,5 +169,46 @@ describe('OnboardingService signed-link surface', () => {
       { type: 'LINK', id: 'tok1' },
     );
     expect(links.markUsed).toHaveBeenCalled();
+  });
+
+  it('submitForm refuses to advance the record without both attachments', async () => {
+    const { service, repos, links, workflow } = makeService();
+    (links.verify as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'tok1',
+      purpose: 'DATA_FORM',
+      employee: PIPELINE_EMPLOYEE,
+    });
+
+    // Only the ID copy — the IBAN letter is missing.
+    await expect(
+      service.submitForm('raw', { phone: '0500000000' }, [
+        { documentId: 'd1', storageKey: 'a.pdf', mimeType: 'application/pdf', sizeBytes: 10 },
+      ]),
+    ).rejects.toThrow(/IBAN_LETTER/);
+
+    // The record must not move on, and the link must stay usable so the
+    // employee can come back and finish.
+    expect(workflow.transition).not.toHaveBeenCalled();
+    expect(links.markUsed).not.toHaveBeenCalled();
+    expect(repos.employees.updatePersonal).not.toHaveBeenCalled();
+  });
+
+  it('submitForm accepts a resubmission that only fixes a text field', async () => {
+    const { service, repos, links, workflow } = makeService();
+    (links.verify as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'tok1',
+      purpose: 'DATA_FORM',
+      employee: PIPELINE_EMPLOYEE,
+    });
+    // Both files already on record from an earlier attempt.
+    (repos.documents.listByEmployee as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'd1', type: 'NATIONAL_ID', label: null, required: true, storageKey: 'a.pdf' },
+      { id: 'd2', type: 'IBAN_LETTER', label: null, required: true, storageKey: 'b.pdf' },
+    ]);
+
+    await service.submitForm('raw', { phone: '0501111111' }, []);
+
+    expect(repos.documents.attachUpload).not.toHaveBeenCalled();
+    expect(workflow.transition).toHaveBeenCalled();
   });
 });

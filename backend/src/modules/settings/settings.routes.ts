@@ -28,6 +28,27 @@ const ownershipSchema = z.object({
   roles: z.array(z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN'])).min(1),
 });
 
+/** Only machines with a registered scheduler watcher may be watched. */
+const WATCHED_PROCESS_KEYS = [
+  'EMPLOYEE',
+  'OFFBOARDING',
+  'GOSI',
+  'MEDICAL_INSURANCE',
+  'DOCUMENT_EXPIRY',
+] as const;
+
+const ruleCreateSchema = z.object({
+  processKey: z.enum(WATCHED_PROCESS_KEYS),
+  status: z.string().min(1).max(64),
+  afterValue: z.number().int().positive(),
+  afterUnit: z.enum(['HOURS', 'CALENDAR_DAYS', 'WORKING_DAYS']),
+  action: z.enum(['REMIND', 'REMIND_DAILY', 'ESCALATE', 'EXPIRE']),
+  notifySubject: z.boolean().default(false),
+  notifyRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).default('HR'),
+  escalateToRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).nullable().optional(),
+  active: z.boolean().default(true),
+});
+
 /** ADMIN-only system settings. */
 export function settingsRouter(
   service: SettingsService,
@@ -112,6 +133,28 @@ export function settingsRouter(
     '/sla',
     asyncHandler(async (_req, res) => {
       res.json(await slaRules.list());
+    }),
+  );
+
+  /** Create a new automation rule (watcher) from the admin screen. */
+  router.post(
+    '/sla',
+    validate(ruleCreateSchema),
+    asyncHandler(async (req, res) => {
+      const body = req.body as z.infer<typeof ruleCreateSchema>;
+      res.status(201).json(
+        await slaRules.create({
+          processKey: body.processKey,
+          status: body.status,
+          afterValue: body.afterValue,
+          afterUnit: body.afterUnit,
+          action: body.action,
+          notifySubject: body.notifySubject,
+          notifyRole: body.notifyRole,
+          escalateToRole: body.escalateToRole ?? null,
+          active: body.active,
+        }),
+      );
     }),
   );
 

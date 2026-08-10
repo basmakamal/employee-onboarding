@@ -15,6 +15,7 @@ import { employeeDocumentRouter } from './modules/employees/employee-document.ro
 import { reportsRouter } from './modules/reports/reports.routes.js';
 import { notificationRouter } from './notifications/notification.routes.js';
 import { linkRouter } from './modules/employees/link.routes.js';
+import { aiRouter } from './ai/ai.routes.js';
 import { asyncHandler } from './common/http.js';
 
 const container = buildContainer();
@@ -44,6 +45,7 @@ staffApi.use(
 );
 staffApi.use('/users', usersRouter(container.repos.users));
 staffApi.use('/notifications', notificationRouter(container.repos.notificationRepo));
+staffApi.use('/ai', aiRouter(container.aiService));
 staffApi.get(
   '/dashboard',
   asyncHandler(async (_req, res) => {

@@ -28,6 +28,12 @@ export const router = createRouter({
       meta: { roles: ['HR'] },
     },
     {
+      path: '/assistant',
+      name: 'assistant',
+      component: () => import('../pages/AssistantPage.vue'),
+      meta: { roles: ['HR'] },
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('../pages/SettingsPage.vue'),
@@ -37,6 +43,12 @@ export const router = createRouter({
       path: '/automation',
       name: 'automation',
       component: () => import('../pages/AutomationPage.vue'),
+      meta: { roles: ['ADMIN'] },
+    },
+    {
+      path: '/calendar',
+      name: 'calendar',
+      component: () => import('../pages/CalendarPage.vue'),
       meta: { roles: ['ADMIN'] },
     },
     {

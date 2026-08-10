@@ -10,6 +10,8 @@ const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const drawer = ref(true);
+/** Desktop: collapse the menu to an icons-only rail; mobile: hide it fully. */
+const rail = ref(false);
 
 /** Public pages (signed links, login) render without the staff chrome. */
 const isPublicPage = () =>
@@ -21,11 +23,13 @@ const NAV = [
   { to: '/', icon: 'mdi-view-dashboard', key: 'nav.home', roles: [] as string[] },
   { to: '/employees', icon: 'mdi-badge-account', key: 'nav.employees', roles: [] as string[] },
   { to: '/reports', icon: 'mdi-chart-box', key: 'nav.reports', roles: ['HR'] },
+  { to: '/assistant', icon: 'mdi-robot-happy-outline', key: 'nav.assistant', roles: ['HR'] },
   // hasRole() lets ADMIN through on any check; listing no other role makes
   // these entries effectively admin-only.
   { to: '/users', icon: 'mdi-account-cog', key: 'nav.users', roles: ['ADMIN'] },
   { to: '/ownership', icon: 'mdi-sitemap', key: 'nav.ownership', roles: ['ADMIN'] },
   { to: '/automation', icon: 'mdi-robot', key: 'nav.automation', roles: ['ADMIN'] },
+  { to: '/calendar', icon: 'mdi-calendar-star', key: 'nav.calendar', roles: ['ADMIN'] },
   { to: '/settings', icon: 'mdi-cog', key: 'nav.settings', roles: ['ADMIN'] },
 ];
 
@@ -54,7 +58,9 @@ onMounted(() => prefs.apply());
   <v-app>
     <template v-if="!isPublicPage()">
       <v-app-bar flat border density="comfortable">
-        <v-app-bar-nav-icon class="d-md-none" @click="drawer = !drawer" />
+        <v-app-bar-nav-icon
+          @click="$vuetify.display.mdAndUp ? (rail = !rail) : (drawer = !drawer)"
+        />
         <v-app-bar-title class="font-weight-bold">
           <v-icon icon="mdi-account-group" color="primary" class="me-2" />
           {{ $t('app.title') }}
@@ -92,17 +98,30 @@ onMounted(() => prefs.apply());
         </v-menu>
       </v-app-bar>
 
-      <v-navigation-drawer v-model="drawer" :permanent="$vuetify.display.mdAndUp">
+      <v-navigation-drawer
+        v-model="drawer"
+        :permanent="$vuetify.display.mdAndUp"
+        :rail="$vuetify.display.mdAndUp && rail"
+      >
         <v-list nav density="comfortable">
-          <v-list-item
+          <v-tooltip
             v-for="item in navItems"
             :key="item.to"
-            :to="item.to"
-            :prepend-icon="item.icon"
-            :title="$t(item.key)"
-            exact
-            rounded="xl"
-          />
+            :disabled="!rail"
+            location="end"
+            :text="$t(item.key)"
+          >
+            <template #activator="{ props }">
+              <v-list-item
+                v-bind="props"
+                :to="item.to"
+                :prepend-icon="item.icon"
+                :title="$t(item.key)"
+                exact
+                rounded="xl"
+              />
+            </template>
+          </v-tooltip>
         </v-list>
       </v-navigation-drawer>
     </template>

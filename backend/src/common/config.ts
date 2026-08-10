@@ -22,6 +22,20 @@ const envSchema = z
     UPLOAD_DIR: z.string().default('./storage'),
     /** Signed-link lifetime in hours. */
     LINK_TTL_HOURS: z.coerce.number().int().positive().default(240),
+    /** Anthropic API key — AI features are disabled until this is set. */
+    ANTHROPIC_API_KEY: z.string().optional(),
+    /** Claude model for AI features. */
+    AI_MODEL: z.string().default('claude-opus-5'),
+    /**
+     * Redact personal identifiers (national ID / Iqama) from data sent to
+     * the AI API. Defaults ON — sending national identifiers to an external
+     * service is a PDPL decision, so it must be opted OUT of explicitly
+     * with AI_REDACT_PII=false.
+     */
+    AI_REDACT_PII: z
+      .string()
+      .default('true')
+      .transform((v) => v !== 'false'),
   })
   .refine((env) => env.NOTIFIER !== 'smtp' || (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS), {
     message: 'NOTIFIER=smtp requires SMTP_HOST, SMTP_USER and SMTP_PASS',

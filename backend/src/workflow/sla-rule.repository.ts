@@ -17,6 +17,21 @@ export class SlaRuleRepository {
     return this.db.slaRule.findMany({ orderBy: [{ processKey: 'asc' }, { status: 'asc' }] });
   }
 
+  /** Admin-created automation rule (the seeded set is just the starting point). */
+  create(data: {
+    processKey: string;
+    status: string;
+    afterValue: number;
+    afterUnit: 'HOURS' | 'CALENDAR_DAYS' | 'WORKING_DAYS';
+    action: 'REMIND' | 'REMIND_DAILY' | 'ESCALATE' | 'EXPIRE';
+    notifySubject: boolean;
+    notifyRole: string;
+    escalateToRole?: string | null;
+    active?: boolean;
+  }) {
+    return this.db.slaRule.create({ data });
+  }
+
   update(
     id: string,
     data: {

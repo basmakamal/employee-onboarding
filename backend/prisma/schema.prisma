@@ -46,6 +46,29 @@ enum EmploymentType {
   TEMPORARY
 }
 
+/// Collected on the employee data form; required on every employment contract.
+enum Gender {
+  MALE
+  FEMALE
+}
+
+/// Arabic renders these gendered (أعزب / عزباء), resolved in the UI from Gender.
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+
+enum EducationLevel {
+  HIGH_SCHOOL
+  DIPLOMA
+  BACHELOR
+  MASTER
+  PHD
+  OTHER
+}
+
 /// HR services requested from the employee profile (BRD "الطلبات والخدمات").
 /// A simple log for now — each request records who asked for what and when;
 /// dedicated approval workflows can grow out of individual types later.
@@ -188,12 +211,34 @@ model Employee {
   id             String         @id @default(cuid())
   /// e.g. EMP-0001 — allocated when the employee becomes ACTIVE, never before.
   employeeNo     String?        @unique
-  firstName      String
-  lastName       String
-  email          String         @unique
-  phone          String?
-  nationalId     String?
-  birthDate      DateTime?
+  /// الاسم الرباعي — kept as four parts because contracts, GOSI and Absher
+  /// all expect them separately, and splitting a single string later is
+  /// guesswork. firstName/lastName remain the display pair.
+  firstName        String
+  fatherName       String?
+  grandfatherName  String?
+  lastName         String
+  email            String         @unique
+  phone            String?
+  nationalId       String?
+  /// Gregorian — the value every downstream system (contract, GOSI) needs.
+  birthDate        DateTime?
+  /// The Hijri date the employee actually entered, kept verbatim (e.g.
+  /// 1400-05-12) so what HR reads back matches what was typed. birthDate is
+  /// the converted equivalent; this is the source of truth for display.
+  birthDateHijri   String?
+  gender           Gender?
+  nationality      String?
+  maritalStatus    MaritalStatus?
+  /// العنوان الوطني المختصر (سبل) — 4 letters + 4 digits, e.g. RRRD2929.
+  splAddress       String?
+  /// Saudi IBAN: SA + 22 digits. Validated with the mod-97 checksum on entry
+  /// so a mistyped digit surfaces at the form, not at payroll.
+  iban             String?
+  qualification    EducationLevel?
+  major            String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
   department     String?
   project        String?
   jobTitle       String?
@@ -477,6 +522,17 @@ model Holiday {
   name String
 
   @@map("holidays")
+}
+
+/// Named atomic counters. EMPLOYEE_NO backs employee-number allocation:
+/// the value is incremented inside the activation transaction, so two
+/// concurrent approvals can never mint the same number (the old count()+1
+/// approach could).
+model Sequence {
+  key   String @id
+  value Int
+
+  @@map("sequences")
 }
 
 /// Admin-editable system settings (JSON values keyed by area, e.g. "mail").

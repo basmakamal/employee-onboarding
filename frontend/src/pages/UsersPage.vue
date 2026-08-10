@@ -26,6 +26,33 @@ const createForm = ref({ name: '', email: '', role: 'HR', password: '' });
 
 const resetDialog = ref({ show: false, userId: '', name: '', password: '' });
 
+const editDialog = ref({ show: false, userId: '', name: '', email: '', role: 'HR', active: true });
+
+function openEdit(user: UserRow) {
+  editDialog.value = { show: true, userId: user.id, ...user, email: user.email };
+}
+
+async function saveEdit() {
+  busy.value = 'edit';
+  try {
+    const d = editDialog.value;
+    const changes: Record<string, unknown> = { name: d.name.trim(), email: d.email.trim() };
+    // Own row: role/active are locked server-side (SELF_LOCKOUT) — don't send them.
+    if (d.userId !== auth.user?.id) {
+      changes['role'] = d.role;
+      changes['active'] = d.active;
+    }
+    await api.put(`/api/users/${d.userId}`, changes);
+    editDialog.value.show = false;
+    notify(t('common.saved'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
 function notify(text: string, color = 'success') {
   snackbar.value = { show: true, text, color };
 }
@@ -106,28 +133,59 @@ onMounted(load);
     <v-card>
       <v-data-table :headers="headers" :items="users" :loading="loading">
         <template #item.role="{ item }">
+          <!-- Your own row: read-only — you cannot demote or deactivate yourself. -->
+          <template v-if="item.id === auth.user?.id">
+            <span>{{ $t(`roles.${item.role}`) }}</span>
+            <v-chip size="x-small" color="primary" variant="tonal" class="ms-2 font-weight-bold">
+              {{ $t('users.you') }}
+            </v-chip>
+          </template>
           <v-select
+            v-else
             :model-value="item.role"
             :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
             density="compact"
             hide-details
             variant="plain"
             style="max-width: 200px"
-            :disabled="item.id === auth.user?.id || busy === item.id"
+            :disabled="busy === item.id"
             @update:model-value="(role: string) => updateUser(item, { role })"
           />
         </template>
         <template #item.active="{ item }">
+          <v-tooltip v-if="item.id === auth.user?.id" location="top" :text="$t('users.selfHint')">
+            <template #activator="{ props }">
+              <v-chip
+                v-bind="props"
+                :color="item.active ? 'success' : 'error'"
+                size="small"
+                variant="tonal"
+                prepend-icon="mdi-lock"
+              >
+                {{ $t(`employees.statuses.${item.active ? 'ACTIVE' : 'INACTIVE'}`) }}
+              </v-chip>
+            </template>
+          </v-tooltip>
           <v-switch
+            v-else
             :model-value="item.active"
             color="success"
             density="compact"
             hide-details
-            :disabled="item.id === auth.user?.id || busy === item.id"
+            :disabled="busy === item.id"
             @update:model-value="(active: unknown) => updateUser(item, { active: Boolean(active) })"
           />
         </template>
         <template #item.actions="{ item }">
+          <v-btn
+            size="small"
+            variant="tonal"
+            prepend-icon="mdi-pencil"
+            class="me-2"
+            @click="openEdit(item)"
+          >
+            {{ $t('common.edit') }}
+          </v-btn>
           <v-btn
             size="small"
             variant="tonal"
@@ -169,6 +227,43 @@ onMounted(load);
             @click="createUser"
           >
             {{ $t('common.create') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Edit user -->
+    <v-dialog v-model="editDialog.show" max-width="520">
+      <v-card :title="`${$t('common.edit')} — ${editDialog.name}`" class="pa-2">
+        <v-card-text>
+          <v-text-field v-model="editDialog.name" :label="$t('fields.name')" />
+          <v-text-field v-model="editDialog.email" :label="$t('fields.email')" type="email" />
+          <v-select
+            v-model="editDialog.role"
+            :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
+            :label="$t('users.role')"
+            :disabled="editDialog.userId === auth.user?.id"
+            :hint="editDialog.userId === auth.user?.id ? $t('users.selfHint') : ''"
+            persistent-hint
+          />
+          <v-switch
+            v-model="editDialog.active"
+            :label="$t('users.active')"
+            color="success"
+            :disabled="editDialog.userId === auth.user?.id"
+            hide-details
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="editDialog.show = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn
+            color="primary"
+            :loading="busy === 'edit'"
+            :disabled="!editDialog.name.trim() || !editDialog.email.trim()"
+            @click="saveEdit"
+          >
+            {{ $t('common.save') }}
           </v-btn>
         </v-card-actions>
       </v-card>
