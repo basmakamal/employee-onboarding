@@ -112,7 +112,33 @@ const headers = computed(() => [
   { title: t('fields.email'), key: 'email' },
   { title: t('fields.department'), key: 'department' },
   { title: t('fields.status'), key: 'status' },
+  ...(auth.user?.role === 'ADMIN' ? [{ title: '', key: 'actions', sortable: false }] : []),
 ]);
+
+// ------------------------------------------------------------- hard delete (ADMIN)
+const deleteDialog = ref({ show: false, employee: null as EmployeeRow | null });
+const deleting = ref(false);
+
+async function removeEmployee() {
+  const target = deleteDialog.value.employee;
+  if (!target) return;
+  deleting.value = true;
+  try {
+    await api.delete(`/api/employees/${target.id}`);
+    deleteDialog.value = { show: false, employee: null };
+    await load();
+  } catch (e) {
+    snackbar.value = {
+      show: true,
+      text: e instanceof ApiError ? e.message : t('common.error'),
+    };
+    deleteDialog.value.show = false;
+  } finally {
+    deleting.value = false;
+  }
+}
+
+const snackbar = ref({ show: false, text: '' });
 
 onMounted(load);
 </script>
@@ -154,11 +180,51 @@ onMounted(load);
         <template #item.status="{ item }">
           <StatusChip :status="item.status" />
         </template>
+        <template #item.actions="{ item }">
+          <v-tooltip location="top" :text="$t('profile.delete')">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon="mdi-delete-forever-outline"
+                variant="text"
+                size="small"
+                color="error"
+                @click.stop="deleteDialog = { show: true, employee: item }"
+              />
+            </template>
+          </v-tooltip>
+        </template>
         <template #no-data>
           <div class="pa-8 text-medium-emphasis">{{ $t('employees.empty') }}</div>
         </template>
       </v-data-table>
     </v-card>
+
+    <!-- Hard delete confirmation (ADMIN) -->
+    <v-dialog v-model="deleteDialog.show" max-width="480">
+      <v-card :title="$t('profile.delete')" class="pa-2">
+        <v-card-text>
+          <v-alert type="error" variant="tonal" class="mb-3">
+            {{ $t('profile.deleteWarning') }}
+          </v-alert>
+          <p class="text-body-2">
+            <strong>
+              {{ deleteDialog.employee?.firstName }} {{ deleteDialog.employee?.lastName }}
+            </strong>
+            <template v-if="deleteDialog.employee?.employeeNo">
+              · {{ deleteDialog.employee?.employeeNo }}
+            </template>
+          </p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="deleteDialog.show = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="error" variant="flat" :loading="deleting" @click="removeEmployee">
+            {{ $t('profile.deleteConfirm') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- New employee: onboarding pipeline (default) or direct add -->
     <v-dialog v-model="dialog" max-width="620">
@@ -235,5 +301,9 @@ onMounted(load);
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-snackbar v-model="snackbar.show" color="error" timeout="3500">
+      {{ snackbar.text }}
+    </v-snackbar>
   </v-container>
 </template>

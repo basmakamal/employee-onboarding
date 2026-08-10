@@ -552,6 +552,21 @@ const REQUEST_TYPES = [
   { type: 'INVESTIGATION', icon: 'mdi-magnify' },
 ];
 
+/** type → icon lookup for the recent-requests log and dialogs. */
+const REQUEST_ICON: Record<string, string> = Object.fromEntries(
+  REQUEST_TYPES.map((r) => [r.type, r.icon]),
+);
+
+/** Expiry-tracked document types get a recognizable icon each. */
+const DOC_ICON: Record<string, string> = {
+  IQAMA: 'mdi-card-account-details-outline',
+  NATIONAL_ID: 'mdi-card-account-details',
+  PASSPORT: 'mdi-passport',
+  CONTRACT: 'mdi-file-sign',
+  WORK_PERMIT: 'mdi-briefcase-check-outline',
+  DRIVING_LICENSE: 'mdi-car-outline',
+};
+
 const requestDialog = ref({ show: false, type: 'SALARY_LETTER', notes: '' });
 
 function openRequest(type: string) {
@@ -611,6 +626,58 @@ function printLetter() {
     .replace(/>/g, '&gt;');
   w.document.write(
     `<pre style="font-family: 'Times New Roman', serif; font-size: 16px; line-height: 1.9; white-space: pre-wrap; direction: ${dir}; padding: 48px;">${safe}</pre>`,
+  );
+  w.document.close();
+  w.print();
+}
+
+// ------------------------------------------------------------- print profile
+function printProfile() {
+  if (!employee.value) return;
+  const e = employee.value;
+  const w = window.open('', '_blank', 'width=800,height=900');
+  if (!w) return;
+  const dir = locale.value.startsWith('ar') ? 'rtl' : 'ltr';
+  const esc = (v: unknown) =>
+    String(v ?? '—')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  const rows: Array<[string, unknown]> = [
+    [t('employees.no'), e.employeeNo],
+    [t('fields.name'), `${e.firstName} ${e.lastName}`],
+    [t('fields.jobTitle'), e.jobTitle],
+    [t('fields.department'), e.department],
+    [t('employees.project'), e.project],
+    [t('fields.status'), t(`employees.statuses.${e.status}`)],
+    [t('fields.nationalId'), e.nationalId],
+    [t('fields.birthDate'), e.birthDate ? new Date(e.birthDate).toLocaleDateString() : null],
+    [t('fields.phone'), e.phone],
+    [t('fields.email'), e.email],
+    [t('employees.hireDate'), e.hireDate ? new Date(e.hireDate).toLocaleDateString() : null],
+    [
+      t('profile.employmentType'),
+      e.employmentType ? t(`profile.types.${e.employmentType}`) : null,
+    ],
+    [t('profile.directManager'), e.directManager],
+  ];
+  const table = rows
+    .map(
+      ([label, v]) => `<tr>
+        <td style="padding:8px 12px;border:1px solid #bbb;background:#f4f4f4;width:35%;font-weight:600;">${esc(label)}</td>
+        <td style="padding:8px 12px;border:1px solid #bbb;">${esc(v)}</td>
+      </tr>`,
+    )
+    .join('');
+  w.document.write(
+    `<div style="font-family:'Segoe UI',Tahoma,sans-serif;direction:${dir};padding:40px;">
+      <h2 style="margin:0 0 4px;">${esc(`${e.firstName} ${e.lastName}`)}</h2>
+      <div style="color:#666;margin-bottom:24px;">
+        ${e.employeeNo ? `${esc(e.employeeNo)} · ` : ''}${esc(e.jobTitle ?? '')}
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">${table}</table>
+      <div style="margin-top:28px;color:#888;font-size:12px;">${esc(new Date().toLocaleString())}</div>
+    </div>`,
   );
   w.document.close();
   w.print();
@@ -828,25 +895,28 @@ onMounted(load);
         <v-row dense>
           <v-col
             v-for="field in [
-              { label: $t('employees.no'), value: employee.employeeNo },
-              { label: $t('fields.department'), value: employee.department },
-              { label: $t('employees.project'), value: employee.project },
-              { label: $t('fields.nationalId'), value: employee.nationalId },
+              { icon: 'mdi-pound', label: $t('employees.no'), value: employee.employeeNo },
+              { icon: 'mdi-sitemap-outline', label: $t('fields.department'), value: employee.department },
+              { icon: 'mdi-briefcase-outline', label: $t('employees.project'), value: employee.project },
+              { icon: 'mdi-card-account-details-outline', label: $t('fields.nationalId'), value: employee.nationalId },
               {
+                icon: 'mdi-cake-variant-outline',
                 label: $t('fields.birthDate'),
                 value: employee.birthDate ? new Date(employee.birthDate).toLocaleDateString() : null,
               },
-              { label: $t('fields.phone'), value: employee.phone },
-              { label: $t('fields.email'), value: employee.email },
+              { icon: 'mdi-phone-outline', label: $t('fields.phone'), value: employee.phone },
+              { icon: 'mdi-email-outline', label: $t('fields.email'), value: employee.email },
               {
+                icon: 'mdi-calendar-check-outline',
                 label: $t('employees.hireDate'),
                 value: employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : null,
               },
               {
+                icon: 'mdi-briefcase-clock-outline',
                 label: $t('profile.employmentType'),
                 value: $t(`profile.types.${employee.employmentType}`),
               },
-              { label: $t('profile.directManager'), value: employee.directManager },
+              { icon: 'mdi-account-tie-outline', label: $t('profile.directManager'), value: employee.directManager },
             ]"
             :key="field.label"
             cols="6"
@@ -854,7 +924,9 @@ onMounted(load);
             md="2"
             class="info-cell"
           >
-            <div class="text-caption text-medium-emphasis">{{ field.label }}</div>
+            <div class="text-caption text-medium-emphasis">
+              <v-icon :icon="field.icon" size="14" class="me-1" />{{ field.label }}
+            </div>
             <div class="text-body-2 font-weight-medium">{{ field.value ?? '—' }}</div>
           </v-col>
         </v-row>
@@ -925,6 +997,9 @@ onMounted(load);
             @click="openEdit"
           >
             {{ $t('profile.edit') }}
+          </v-btn>
+          <v-btn variant="outlined" prepend-icon="mdi-printer-outline" @click="printProfile">
+            {{ $t('common.print') }}
           </v-btn>
           <v-spacer />
           <v-btn
@@ -1213,7 +1288,7 @@ onMounted(load);
           <v-list v-else density="compact">
             <v-list-item v-for="doc in expiryDocs" :key="doc.id">
               <template #prepend>
-                <v-icon icon="mdi-file-clock" :color="docColor(doc)" />
+                <v-icon :icon="DOC_ICON[doc.type] ?? 'mdi-file-clock'" :color="docColor(doc)" />
               </template>
               <v-list-item-title>
                 {{ $t(`expiryDocs.types.${doc.type}`, doc.type) }}
@@ -1359,7 +1434,12 @@ onMounted(load);
               <v-list density="compact" class="pa-0">
                 <v-list-item v-for="r in employee.requests.slice(0, 5)" :key="r.id" class="px-0">
                   <template #prepend>
-                    <v-icon icon="mdi-clipboard-text-clock-outline" size="20" class="me-2" />
+                    <v-icon
+                      :icon="REQUEST_ICON[r.type] ?? 'mdi-clipboard-text-clock-outline'"
+                      size="20"
+                      class="me-2"
+                      color="primary"
+                    />
                   </template>
                   <v-list-item-title>{{ $t(`requests.types.${r.type}`) }}</v-list-item-title>
                   <v-list-item-subtitle>
@@ -1396,34 +1476,31 @@ onMounted(load);
               {{ $t('onboarding.documents') }}
             </v-card-title>
           </v-card-item>
-          <v-list density="compact">
-            <v-list-item v-for="doc in employee.onboardingDocuments" :key="doc.id">
-              <template #prepend>
-                <v-icon
-                  :icon="doc.uploaded ? 'mdi-file-check' : 'mdi-file-remove-outline'"
+          <!-- Inline checklist: chip per document, click to download when uploaded -->
+          <v-card-text class="d-flex flex-wrap pt-0" style="gap: 8px">
+            <v-tooltip
+              v-for="doc in employee.onboardingDocuments"
+              :key="doc.id"
+              location="top"
+              :text="doc.uploaded ? $t('onboarding.uploaded') : $t('onboarding.missing')"
+            >
+              <template #activator="{ props }">
+                <v-chip
+                  v-bind="props"
+                  :prepend-icon="doc.uploaded ? 'mdi-file-check' : 'mdi-file-remove-outline'"
                   :color="doc.uploaded ? 'success' : doc.required ? 'error' : 'grey'"
-                />
-              </template>
-              <v-list-item-title>
-                {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }}
-                <v-chip v-if="!doc.required" size="x-small" variant="tonal" class="ms-1">
-                  {{ $t('onboarding.optional') }}
+                  variant="tonal"
+                  :append-icon="doc.uploaded && auth.hasRole('HR') ? 'mdi-download' : undefined"
+                  @click="doc.uploaded && auth.hasRole('HR') && downloadOnboardingDoc(doc)"
+                >
+                  {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }}
+                  <span v-if="!doc.required" class="text-caption ms-1">
+                    ({{ $t('onboarding.optional') }})
+                  </span>
                 </v-chip>
-              </v-list-item-title>
-              <v-list-item-subtitle>
-                {{ doc.uploaded ? $t('onboarding.uploaded') : $t('onboarding.missing') }}
-              </v-list-item-subtitle>
-              <template #append>
-                <v-btn
-                  v-if="doc.uploaded && auth.hasRole('HR')"
-                  icon="mdi-download"
-                  variant="text"
-                  size="small"
-                  @click="downloadOnboardingDoc(doc)"
-                />
               </template>
-            </v-list-item>
-          </v-list>
+            </v-tooltip>
+          </v-card-text>
         </v-card>
       </v-col>
     </v-row>
@@ -1549,8 +1626,16 @@ onMounted(load);
           <v-select
             v-model="docForm.type"
             :items="[
-              ...DOC_TYPES.map((type) => ({ title: $t(`expiryDocs.types.${type}`), value: type })),
-              { title: $t('expiryDocs.types.CUSTOM'), value: 'CUSTOM' },
+              ...DOC_TYPES.map((type) => ({
+                title: $t(`expiryDocs.types.${type}`),
+                value: type,
+                props: { prependIcon: DOC_ICON[type] },
+              })),
+              {
+                title: $t('expiryDocs.types.CUSTOM'),
+                value: 'CUSTOM',
+                props: { prependIcon: 'mdi-file-question-outline' },
+              },
             ]"
             :label="$t('assets.type')"
           />
@@ -1707,7 +1792,13 @@ onMounted(load);
         <v-card-text>
           <v-select
             v-model="requestDialog.type"
-            :items="REQUEST_TYPES.map((r) => ({ title: $t(`requests.types.${r.type}`), value: r.type }))"
+            :items="
+              REQUEST_TYPES.map((r) => ({
+                title: $t(`requests.types.${r.type}`),
+                value: r.type,
+                props: { prependIcon: r.icon },
+              }))
+            "
             :label="$t('requests.title')"
           />
           <v-textarea v-model="requestDialog.notes" :label="$t('requests.notes')" rows="3" />
