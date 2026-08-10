@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, compact, validate } from '../../common/http.js';
+import { asyncHandler, compact, pagedQuery, validate, validateQuery } from '../../common/http.js';
+import {
+  EMPLOYEE_SORT_FIELDS,
+  type EmployeeListQuery,
+} from './employee.repository.js';
 import {
   discardUploads,
   employeeSubdir,
@@ -109,14 +113,46 @@ const createRequestSchema = z.object({
 
 const KINDS = ['gosi', 'medical', 'criminal'] as const;
 
+const EMPLOYEE_STATUSES = [
+  'CREATED',
+  'AWAITING_FORM',
+  'FORM_RECEIVED',
+  'CONTRACT_CREATION',
+  'AWAITING_CONTRACT_APPROVAL',
+  'EXPIRED',
+  'ACTIVE',
+  'INACTIVE',
+] as const;
+
+/** List query: everything optional, everything clamped server-side. */
+const listQuerySchema = z.object({
+  q: z.string().max(200).optional(),
+  filter: z.enum(['all', 'onboarding', 'active', 'inactive']).default('all'),
+  status: z.enum(EMPLOYEE_STATUSES).optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  basis: z.enum(['hireDate', 'createdAt']).default('hireDate'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  sortBy: z.enum(EMPLOYEE_SORT_FIELDS).default('createdAt'),
+  sortDir: z.enum(['asc', 'desc']).default('desc'),
+});
+
+const auditQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export function employeeRouter(service: EmployeeService, onboarding: OnboardingService): Router {
   const router = Router();
   const actor = (req: { actor?: Actor }): Actor => req.actor ?? { type: 'USER' };
 
+  /** Server-side paged list: { items, total, counts }. */
   router.get(
     '/',
-    asyncHandler(async (_req, res) => {
-      res.json(await service.list());
+    validateQuery(listQuerySchema),
+    asyncHandler(async (req, res) => {
+      res.json(await service.list(pagedQuery<EmployeeListQuery>(req)));
     }),
   );
 
@@ -157,6 +193,16 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     '/:id',
     asyncHandler(async (req, res) => {
       res.json(await service.getDetails(req.params['id'] as string, actor(req)));
+    }),
+  );
+
+  /** Older timeline pages — the detail payload carries only the latest 20. */
+  router.get(
+    '/:id/audit',
+    validateQuery(auditQuerySchema),
+    asyncHandler(async (req, res) => {
+      const { page, limit } = pagedQuery<{ page: number; limit: number }>(req);
+      res.json(await service.auditPage(req.params['id'] as string, page, limit));
     }),
   );
 

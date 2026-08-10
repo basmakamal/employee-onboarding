@@ -7,7 +7,11 @@ import {
 import { NotFoundError } from '../../workflow/errors.js';
 import type { Employee } from '../../generated/prisma/client.js';
 import type { UnitOfWork } from '../../common/prisma.js';
-import type { EmployeeRepository, UpdateEmployeeData } from './employee.repository.js';
+import type {
+  EmployeeListQuery,
+  EmployeeRepository,
+  UpdateEmployeeData,
+} from './employee.repository.js';
 import type { EmployeeRequestRepository } from './employee-request.repository.js';
 import type { GosiRepository } from '../processes/gosi.repository.js';
 import type { MedicalInsuranceRepository } from '../processes/medical-insurance.repository.js';
@@ -67,8 +71,17 @@ export class EmployeeService {
     private readonly onboarding?: Workflow<Employee>,
   ) {}
 
-  list() {
-    return this.repos.employees.list();
+  /** One server-side page plus the tab badge counts, in parallel. */
+  async list(query: EmployeeListQuery) {
+    const [{ items, total }, counts] = await Promise.all([
+      this.repos.employees.listPaged(query),
+      this.repos.employees.statusCounts(),
+    ]);
+    return { items, total, counts };
+  }
+
+  auditPage(employeeId: string, page: number, limit: number) {
+    return this.repos.employees.auditPage(employeeId, page, limit);
   }
 
   fieldOptions() {
@@ -233,7 +246,7 @@ export class EmployeeService {
     const criminalMachine = new Workflow(criminalRecordMachine(), noopDeps(this.ownership));
 
     // Contract summary — salary only for the groups that should see money.
-    const { documents, contract: contractRow, ...rest } = employee;
+    const { documents, contract: contractRow, _count, ...rest } = employee;
     const seesSalary = actor.role === 'HR' || actor.role === 'FINANCE' || actor.role === 'ADMIN';
     const details = (contractRow?.details ?? null) as Record<string, unknown> | null;
     const contract = contractRow
@@ -249,6 +262,8 @@ export class EmployeeService {
 
     return {
       ...rest,
+      /** Full timeline length — auditLogs above holds only the latest page. */
+      auditTotal: _count.auditLogs,
       contract,
       onboardingDocuments: documents.map((d) => ({
         id: d.id,

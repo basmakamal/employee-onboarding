@@ -270,7 +270,10 @@ model Employee {
   requests        EmployeeRequest[]
   auditLogs       AuditLog[]               @relation("EmployeeAudit")
 
-  @@index([status])
+  /// (status, statusChangedAt) serves both the status filters and the SLA
+  /// scan "in status X for longer than Y"; createdAt serves the list sort.
+  @@index([status, statusChangedAt])
+  @@index([createdAt])
   @@map("employees")
 }
 
@@ -336,6 +339,8 @@ model GosiProcess {
   updatedAt  DateTime        @updatedAt
   createdAt  DateTime        @default(now())
 
+  /// SLA scan + dashboard groupBy both filter/aggregate on status.
+  @@index([status, updatedAt])
   @@map("gosi_processes")
 }
 
@@ -349,6 +354,8 @@ model MedicalInsuranceProcess {
   updatedAt  DateTime           @updatedAt
   createdAt  DateTime           @default(now())
 
+  /// SLA scan + dashboard groupBy both filter/aggregate on status.
+  @@index([status, updatedAt])
   @@map("medical_insurance_processes")
 }
 
@@ -468,7 +475,8 @@ model Offboarding {
   linkTokens LinkToken[]
 
   @@index([employeeId])
-  @@index([status])
+  /// (status, updatedAt) also serves the SLA scan's stale-status filter.
+  @@index([status, updatedAt])
   @@map("offboardings")
 }
 
@@ -582,6 +590,8 @@ model Notification {
   createdAt      DateTime            @default(now())
 
   @@index([recipientUserId, readAt])
+  /// The bell fetches "my latest N" — recipient + recency.
+  @@index([recipientUserId, createdAt])
   @@map("notifications")
 }
 
@@ -650,5 +660,7 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@index([employeeId, at])
+  /// Time-bounded exports and "latest activity" both order by at alone.
+  @@index([at])
   @@map("audit_logs")
 }

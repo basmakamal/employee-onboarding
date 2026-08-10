@@ -17,11 +17,21 @@ export class UserRepository {
     return this.db.user.findMany({ where: { role, active: true } });
   }
 
-  list() {
-    return this.db.user.findMany({
-      select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    });
+  /** Server-side page of staff accounts (search across name/email). */
+  async listPaged(query: { q?: string; page: number; limit: number }) {
+    const q = query.q?.trim();
+    const where = q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }] } : {};
+    const [items, total] = await Promise.all([
+      this.db.user.findMany({
+        where,
+        select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      this.db.user.count({ where }),
+    ]);
+    return { items, total };
   }
 
   update(
