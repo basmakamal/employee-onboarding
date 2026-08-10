@@ -1,6 +1,6 @@
 /**
  * Bilingual notification templates. Every message exists in Arabic and
- * English; the recipient's locale picks the variant (trainees get Arabic by
+ * English; the recipient's locale picks the variant (new hires get Arabic by
  * default, staff get their UI language later).
  */
 export type Locale = 'ar' | 'en';
@@ -14,14 +14,18 @@ interface TemplateParams {
   name?: string;
   status?: string;
   daysWaiting?: number;
+  daysLeft?: number;
+  docType?: string;
+  docNumber?: string;
+  expiryDate?: string;
   linkUrl?: string;
 }
 
 type Template = (p: TemplateParams) => RenderedMessage;
 
 const T: Record<string, Record<Locale, Template>> = {
-  /** 24h reminder — trainee has not completed the data form. */
-  'trainee.form_reminder': {
+  /** 24h reminder — the new hire has not completed the data form. */
+  'employee.form_reminder': {
     ar: (p) => ({
       subject: 'تذكير: استكمال نموذج البيانات',
       text:
@@ -37,6 +41,46 @@ const T: Record<string, Record<Locale, Template>> = {
         `This is a reminder to complete your data form and required documents.` +
         (p.linkUrl ? `\n\nForm link: ${p.linkUrl}` : '') +
         `\n\nHR Department`,
+    }),
+  },
+
+  /** A tracked document is approaching (or past) its expiry date. */
+  'staff.document_expiring': {
+    ar: (p) => ({
+      subject:
+        (p.daysLeft ?? 0) < 0
+          ? `منتهي: ${p.docType ?? 'مستند'} — ${p.name ?? ''}`
+          : `ينتهي قريبًا: ${p.docType ?? 'مستند'} — ${p.name ?? ''}`,
+      text:
+        `${p.docType ?? 'المستند'}${p.docNumber ? ` رقم ${p.docNumber}` : ''} للموظف ${p.name ?? ''} ` +
+        ((p.daysLeft ?? 0) < 0
+          ? `انتهى بتاريخ ${p.expiryDate ?? ''} (منذ ${Math.abs(p.daysLeft ?? 0)} يومًا).`
+          : `ينتهي بتاريخ ${p.expiryDate ?? ''} (بعد ${p.daysLeft ?? '?'} يومًا).`) +
+        ` يرجى التجديد وتحديث التاريخ في النظام.`,
+    }),
+    en: (p) => ({
+      subject:
+        (p.daysLeft ?? 0) < 0
+          ? `Expired: ${p.docType ?? 'document'} — ${p.name ?? ''}`
+          : `Expiring soon: ${p.docType ?? 'document'} — ${p.name ?? ''}`,
+      text:
+        `${p.docType ?? 'The document'}${p.docNumber ? ` no. ${p.docNumber}` : ''} for ${p.name ?? ''} ` +
+        ((p.daysLeft ?? 0) < 0
+          ? `expired on ${p.expiryDate ?? ''} (${Math.abs(p.daysLeft ?? 0)} day(s) ago).`
+          : `expires on ${p.expiryDate ?? ''} (in ${p.daysLeft ?? '?'} day(s)).`) +
+        ` Please renew it and update the date in the system.`,
+    }),
+  },
+
+  /** Escalation — the expiring document was ignored. */
+  'staff.document_expiry_escalation': {
+    ar: (p) => ({
+      subject: `تصعيد: ${p.docType ?? 'مستند'} ${p.name ?? ''} — ${p.expiryDate ?? ''}`,
+      text: `تصعيد تلقائي: ${p.docType ?? 'المستند'} للموظف ${p.name ?? ''} ينتهي/انتهى بتاريخ ${p.expiryDate ?? ''} رغم التذكيرات السابقة. يتطلب تدخلًا.`,
+    }),
+    en: (p) => ({
+      subject: `Escalation: ${p.docType ?? 'document'} for ${p.name ?? ''} — ${p.expiryDate ?? ''}`,
+      text: `Automatic escalation: the ${p.docType ?? 'document'} for ${p.name ?? ''} expires/expired on ${p.expiryDate ?? ''} despite earlier reminders. Intervention required.`,
     }),
   },
 
@@ -76,36 +120,8 @@ const T: Record<string, Record<Locale, Template>> = {
     }),
   },
 
-  /** HR copy of a trainee reminder / stalled record. */
-  'hr.trainee_waiting': {
-    ar: (p) => ({
-      subject: `متابعة: طلب المتدرب ${p.name ?? ''} لا يزال معلقًا`,
-      text:
-        `طلب المتدرب ${p.name ?? ''} في انتظار الإجراء منذ ${p.daysWaiting ?? '?'} يومًا.\n` +
-        `يرجى المتابعة من لوحة النظام.`,
-    }),
-    en: (p) => ({
-      subject: `Follow-up: trainee ${p.name ?? ''} is still waiting`,
-      text:
-        `Trainee ${p.name ?? ''} has been waiting for action for ${p.daysWaiting ?? '?'} day(s).\n` +
-        `Please follow up from the system dashboard.`,
-    }),
-  },
-
-  /** HR reminder — contract has not been created yet (2 working days). */
-  'hr.contract_creation_due': {
-    ar: (p) => ({
-      subject: `تذكير: إنشاء عقد للمتدرب ${p.name ?? ''}`,
-      text: `اكتملت مستندات المتدرب ${p.name ?? ''} ولم يتم إنشاء العقد بعد. يرجى استكمال إنشاء العقد.`,
-    }),
-    en: (p) => ({
-      subject: `Reminder: create the contract for ${p.name ?? ''}`,
-      text: `Documents for trainee ${p.name ?? ''} are complete but no contract has been created yet. Please complete contract creation.`,
-    }),
-  },
-
-  /** Daily reminder — contract awaiting the trainee's approval. */
-  'trainee.contract_approval_reminder': {
+  /** Daily reminder — contract awaiting the new hire's approval. */
+  'employee.contract_approval_reminder': {
     ar: (p) => ({
       subject: 'تذكير: اعتماد عقد العمل',
       text:
@@ -206,29 +222,18 @@ const T: Record<string, Record<Locale, Template>> = {
     }),
   },
 
-  /** HR notice — trainee approved the contract; employee profile created. */
+  /** HR notice — the new hire approved the contract; employee activated. */
   'hr.contract_approved': {
     ar: (p) => ({
       subject: `تم اعتماد العقد: ${p.name ?? ''}`,
-      text: `اعتمد المتدرب ${p.name ?? ''} عقد العمل إلكترونيًا، وتم إنشاء ملف الموظف تلقائيًا ونقل جميع البيانات إليه.`,
+      text: `اعتمد ${p.name ?? ''} عقد العمل إلكترونيًا، وتم تفعيل ملف الموظف وتخصيص الرقم الوظيفي تلقائيًا.`,
     }),
     en: (p) => ({
       subject: `Contract approved: ${p.name ?? ''}`,
-      text: `Trainee ${p.name ?? ''} approved the employment contract electronically. The employee profile was created automatically with all data transferred.`,
+      text: `${p.name ?? ''} approved the employment contract electronically. The employee file was activated and an employee number was assigned automatically.`,
     }),
   },
 
-  /** HR notice — a request expired (BRD: notify HR on Expired). */
-  'hr.trainee_expired': {
-    ar: (p) => ({
-      subject: `انتهت مهلة طلب المتدرب ${p.name ?? ''}`,
-      text: `انتهت المهلة المحددة لطلب المتدرب ${p.name ?? ''} وتم تغيير الحالة إلى Expired تلقائيًا. يمكن إعادة فتح الطلب من النظام.`,
-    }),
-    en: (p) => ({
-      subject: `Trainee request expired: ${p.name ?? ''}`,
-      text: `The deadline for trainee ${p.name ?? ''} has passed and the request was automatically set to Expired. It can be reopened from the system.`,
-    }),
-  },
 };
 
 export function renderTemplate(

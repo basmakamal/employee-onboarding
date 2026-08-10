@@ -16,4 +16,10 @@ export class SlaFiringRepository {
   record(ruleId: string, entityId: string, firedAt: Date) {
     return this.db.slaFiring.create({ data: { ruleId, entityId, firedAt } });
   }
+
+  /** Reset the memory for one record — e.g. a renewed document must alert
+   *  again on its next expiry cycle. */
+  clearForEntity(entityId: string) {
+    return this.db.slaFiring.deleteMany({ where: { entityId } });
+  }
 }

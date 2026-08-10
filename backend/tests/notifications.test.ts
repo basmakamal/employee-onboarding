@@ -32,7 +32,7 @@ describe('NotificationService', () => {
   it('persists the email first, sends, then marks SENT', async () => {
     const { service, notifications, notifier } = makeService();
 
-    await service.notifyExternal('sara@example.com', 'trainee.form_reminder', { name: 'Sara' });
+    await service.notifyExternal('sara@example.com', 'employee.form_reminder', { name: 'Sara' });
 
     expect(notifications.create).toHaveBeenCalledWith(
       expect.objectContaining({ channel: 'EMAIL', recipientEmail: 'sara@example.com' }),
@@ -47,7 +47,7 @@ describe('NotificationService', () => {
     const { service, notifications } = makeService(() => Promise.reject(new Error('smtp down')));
 
     await expect(
-      service.notifyExternal('sara@example.com', 'trainee.form_reminder', {}),
+      service.notifyExternal('sara@example.com', 'employee.form_reminder', {}),
     ).resolves.toBeUndefined();
     expect(notifications.markFailed).toHaveBeenCalled();
   });
@@ -55,7 +55,7 @@ describe('NotificationService', () => {
   it('notifyHr creates an in-app row AND an email per active HR user', async () => {
     const { service, notifications } = makeService();
 
-    await service.notifyHr('hr.trainee_expired', { name: 'Sara' });
+    await service.notifyHr('hr.contract_approved', { name: 'Sara' });
 
     const channels = notifications.create.mock.calls.map(
       (c) => (c[0] as { channel: string }).channel,
@@ -66,8 +66,8 @@ describe('NotificationService', () => {
 
 describe('templates', () => {
   it('renders both locales with parameters', () => {
-    const ar = renderTemplate('trainee.form_reminder', 'ar', { name: 'سارة' });
-    const en = renderTemplate('trainee.form_reminder', 'en', { name: 'Sara' });
+    const ar = renderTemplate('employee.form_reminder', 'ar', { name: 'سارة' });
+    const en = renderTemplate('employee.form_reminder', 'en', { name: 'Sara' });
 
     expect(ar.subject).toContain('تذكير');
     expect(ar.text).toContain('سارة');

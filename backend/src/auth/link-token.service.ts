@@ -11,7 +11,7 @@ export interface IssuedLink {
 }
 
 /**
- * Signed single-purpose links for trainees/employees. Only the SHA-256
+ * Signed single-purpose links for employees and new hires. Only the SHA-256
  * hash is stored; possession of the raw token IS the authentication.
  * Re-issuing a link invalidates all previous ones of the same purpose.
  */
@@ -38,7 +38,7 @@ export class LinkTokenService {
 
   async issue(
     purpose: LinkPurpose,
-    anchors: { traineeId?: string; employeeId?: string; assetFormId?: string; offboardingId?: string },
+    anchors: { employeeId?: string; assetFormId?: string; offboardingId?: string },
     now: Date = new Date(),
   ): Promise<IssuedLink> {
     // One live link per purpose+target: kill the previous ones first.

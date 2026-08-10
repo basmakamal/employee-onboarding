@@ -7,12 +7,9 @@ export const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: HomePage },
     { path: '/login', name: 'login', component: () => import('../pages/LoginPage.vue'), meta: { public: true } },
-    { path: '/trainees', name: 'trainees', component: () => import('../pages/TraineesPage.vue') },
-    {
-      path: '/trainees/:id',
-      name: 'trainee-detail',
-      component: () => import('../pages/TraineeDetailPage.vue'),
-    },
+    // The trainee pipeline lives inside the employee lifecycle now.
+    { path: '/trainees', redirect: '/employees' },
+    { path: '/trainees/:id', redirect: (to) => `/employees/${to.params['id'] as string}` },
     { path: '/employees', name: 'employees', component: () => import('../pages/EmployeesPage.vue') },
     {
       path: '/employees/:id',
@@ -24,8 +21,48 @@ export const router = createRouter({
       name: 'offboarding',
       component: () => import('../pages/OffboardingPage.vue'),
     },
-    { path: '/settings', name: 'settings', component: () => import('../pages/SettingsPage.vue') },
-    { path: '/users', name: 'users', component: () => import('../pages/UsersPage.vue') },
+    {
+      path: '/reports',
+      name: 'reports',
+      component: () => import('../pages/ReportsPage.vue'),
+      meta: { roles: ['HR'] },
+    },
+    {
+      path: '/assistant',
+      name: 'assistant',
+      component: () => import('../pages/AssistantPage.vue'),
+      meta: { roles: ['HR'] },
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('../pages/SettingsPage.vue'),
+      meta: { roles: ['ADMIN'] },
+    },
+    {
+      path: '/automation',
+      name: 'automation',
+      component: () => import('../pages/AutomationPage.vue'),
+      meta: { roles: ['ADMIN'] },
+    },
+    {
+      path: '/calendar',
+      name: 'calendar',
+      component: () => import('../pages/CalendarPage.vue'),
+      meta: { roles: ['ADMIN'] },
+    },
+    {
+      path: '/ownership',
+      name: 'ownership',
+      component: () => import('../pages/OwnershipPage.vue'),
+      meta: { roles: ['ADMIN'] },
+    },
+    {
+      path: '/users',
+      name: 'users',
+      component: () => import('../pages/UsersPage.vue'),
+      meta: { roles: ['ADMIN'] },
+    },
     // Public signed-link pages (no staff chrome, token IS the auth).
     {
       path: '/form/:token',
@@ -57,6 +94,8 @@ export const router = createRouter({
 /**
  * Staff routes require a session. On first navigation we try a silent
  * restore (httpOnly refresh cookie) so a page reload keeps you signed in.
+ * Routes with meta.roles are additionally gated by role group (ADMIN
+ * always passes) — deep links to admin pages bounce home.
  */
 router.beforeEach(async (to) => {
   if (to.meta['public']) return true;
@@ -66,5 +105,8 @@ router.beforeEach(async (to) => {
   if (!auth.isAuthenticated) {
     return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} };
   }
+
+  const roles = to.meta['roles'] as string[] | undefined;
+  if (roles && !auth.hasRole(...roles)) return { name: 'home' };
   return true;
 });

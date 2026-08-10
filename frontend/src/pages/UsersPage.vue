@@ -80,8 +80,8 @@ async function resetPassword() {
 }
 
 const headers = [
-  { title: t('trainees.name'), key: 'name' },
-  { title: t('trainees.email'), key: 'email' },
+  { title: t('fields.name'), key: 'name' },
+  { title: t('fields.email'), key: 'email' },
   { title: t('users.role'), key: 'role' },
   { title: t('users.active'), key: 'active' },
   { title: '', key: 'actions', sortable: false },
@@ -106,24 +106,46 @@ onMounted(load);
     <v-card>
       <v-data-table :headers="headers" :items="users" :loading="loading">
         <template #item.role="{ item }">
+          <!-- Your own row: read-only — you cannot demote or deactivate yourself. -->
+          <template v-if="item.id === auth.user?.id">
+            <span>{{ $t(`roles.${item.role}`) }}</span>
+            <v-chip size="x-small" color="primary" variant="tonal" class="ms-2 font-weight-bold">
+              {{ $t('users.you') }}
+            </v-chip>
+          </template>
           <v-select
+            v-else
             :model-value="item.role"
             :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
             density="compact"
             hide-details
             variant="plain"
             style="max-width: 200px"
-            :disabled="item.id === auth.user?.id || busy === item.id"
+            :disabled="busy === item.id"
             @update:model-value="(role: string) => updateUser(item, { role })"
           />
         </template>
         <template #item.active="{ item }">
+          <v-tooltip v-if="item.id === auth.user?.id" location="top" :text="$t('users.selfHint')">
+            <template #activator="{ props }">
+              <v-chip
+                v-bind="props"
+                :color="item.active ? 'success' : 'error'"
+                size="small"
+                variant="tonal"
+                prepend-icon="mdi-lock"
+              >
+                {{ $t(`employees.statuses.${item.active ? 'ACTIVE' : 'INACTIVE'}`) }}
+              </v-chip>
+            </template>
+          </v-tooltip>
           <v-switch
+            v-else
             :model-value="item.active"
             color="success"
             density="compact"
             hide-details
-            :disabled="item.id === auth.user?.id || busy === item.id"
+            :disabled="busy === item.id"
             @update:model-value="(active: unknown) => updateUser(item, { active: Boolean(active) })"
           />
         </template>
@@ -144,8 +166,8 @@ onMounted(load);
     <v-dialog v-model="createDialog" max-width="520">
       <v-card :title="$t('users.new')" class="pa-2">
         <v-card-text>
-          <v-text-field v-model="createForm.name" :label="$t('trainees.name')" />
-          <v-text-field v-model="createForm.email" :label="$t('trainees.email')" type="email" />
+          <v-text-field v-model="createForm.name" :label="$t('fields.name')" />
+          <v-text-field v-model="createForm.email" :label="$t('fields.email')" type="email" />
           <v-select
             v-model="createForm.role"
             :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"

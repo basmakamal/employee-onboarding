@@ -15,20 +15,32 @@ export interface WatchedRecord {
   id: string;
   /** Display name for notification templates. */
   name: string;
-  /** Subject's email (trainee/employee) — omit when not applicable. */
+  /** Subject's email (the employee / new hire) — omit when not applicable. */
   email?: string;
   /** When the record entered this status — the SLA anchor. */
   anchorAt: Date;
-  traineeId?: string;
   employeeId?: string;
+  /** Extra template parameters (e.g. daysLeft/docType for expiry alerts). */
+  meta?: Record<string, string | number>;
 }
 
 /** One per state machine the SLA engine watches. */
 export interface SlaWatcher {
-  processKey: string; // TRAINEE | OFFBOARDING | GOSI | MEDICAL_INSURANCE | ...
+  processKey: string; // EMPLOYEE | OFFBOARDING | GOSI | MEDICAL_INSURANCE | ...
   listInStatusSince(status: string, threshold: Date): Promise<WatchedRecord[]>;
+  /**
+   * Deadline-style dueness (e.g. "N days BEFORE a document expires").
+   * When present it replaces the elapsed-time check entirely — the watcher
+   * decides what is due; the scheduler still applies the firing memory.
+   */
+  listDue?(
+    rule: { status: string; afterValue: number; afterUnit: string },
+    now: Date,
+  ): Promise<WatchedRecord[]>;
   /** Subject-facing template key per status (staff always get the generic one). */
   subjectTemplate?(status: string): string | undefined;
+  /** Override the generic staff templates (stalled/escalation wording). */
+  templates?: { stalled?: string; escalation?: string };
   /** EXPIRE support — transition through the machine (guarded + audited). */
   expire?(record: WatchedRecord, ruleId: string): Promise<void>;
 }
@@ -50,6 +62,8 @@ export class SlaScheduler {
       firings: SlaFiringRepository;
       audit: AuditLogRepository;
       notifications: NotificationService;
+      /** System calendar: which weekdays are the weekend (admin-configured). */
+      calendar?: { getCalendar(): Promise<{ weekendDays: number[] }> };
     },
     watchers: SlaWatcher[],
   ) {
@@ -71,13 +85,14 @@ export class SlaScheduler {
     const watcher = this.watchers.get(rule.processKey);
     if (!watcher) return;
 
-    const candidates = await watcher.listInStatusSince(
-      rule.status,
-      this.prefilterThreshold(rule, now),
-    );
+    const candidates = watcher.listDue
+      ? await watcher.listDue(rule, now)
+      : await watcher.listInStatusSince(rule.status, this.prefilterThreshold(rule, now));
 
     for (const record of candidates) {
-      if (!(await this.isDue(rule, record, now))) continue;
+      // Deadline watchers decide dueness themselves; only dedupe applies.
+      if (!watcher.listDue && !(await this.elapsedEnough(rule, record, now))) continue;
+      if (!(await this.firingAllowed(rule, record, now))) continue;
 
       if (rule.action === 'EXPIRE') {
         if (!watcher.expire) continue;
@@ -89,7 +104,7 @@ export class SlaScheduler {
           record,
           now,
           rule.escalateToRole ?? 'ADMIN',
-          'staff.escalation',
+          watcher.templates?.escalation ?? 'staff.escalation',
         );
         await this.audit(rule, record, 'SLA_ESCALATION');
       } else {
@@ -108,14 +123,16 @@ export class SlaScheduler {
     return t;
   }
 
-  private async isDue(rule: SlaRule, record: WatchedRecord, now: Date): Promise<boolean> {
-    if (rule.afterUnit === 'WORKING_DAYS') {
-      const holidays = (await this.deps.holidays.listBetween(record.anchorAt, now)).map(
-        (h) => h.date,
-      );
-      if (workingDaysBetween(record.anchorAt, now, holidays) < rule.afterValue) return false;
-    }
+  private async elapsedEnough(rule: SlaRule, record: WatchedRecord, now: Date): Promise<boolean> {
+    if (rule.afterUnit !== 'WORKING_DAYS') return true; // hours/calendar prefiltered in SQL
+    const holidays = (await this.deps.holidays.listBetween(record.anchorAt, now)).map(
+      (h) => h.date,
+    );
+    const weekend = (await this.deps.calendar?.getCalendar())?.weekendDays;
+    return workingDaysBetween(record.anchorAt, now, holidays, weekend) >= rule.afterValue;
+  }
 
+  private async firingAllowed(rule: SlaRule, record: WatchedRecord, now: Date): Promise<boolean> {
     const lastFiring = await this.deps.firings.lastFiring(rule.id, record.id);
     if (lastFiring === null) return true;
     if (rule.action !== 'REMIND_DAILY') return false; // one-shot already fired
@@ -133,7 +150,13 @@ export class SlaScheduler {
       );
     }
     if (rule.notifyHr) {
-      await this.notifyStaff(rule, record, now, rule.notifyRole, 'staff.record_stalled');
+      await this.notifyStaff(
+        rule,
+        record,
+        now,
+        rule.notifyRole,
+        watcher.templates?.stalled ?? 'staff.record_stalled',
+      );
     }
   }
 
@@ -151,6 +174,7 @@ export class SlaScheduler {
         name: record.name,
         status: rule.status,
         daysWaiting: Math.floor((now.getTime() - record.anchorAt.getTime()) / 86_400_000),
+        ...record.meta,
       },
       this.ref(rule, record),
     );
@@ -162,7 +186,6 @@ export class SlaScheduler {
       entityId: record.id,
       action,
       actorType: 'SYSTEM',
-      ...(record.traineeId ? { traineeId: record.traineeId } : {}),
       ...(record.employeeId ? { employeeId: record.employeeId } : {}),
       metadata: { rule: rule.id, status: rule.status },
     });

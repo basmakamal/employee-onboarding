@@ -30,6 +30,11 @@ export function setAccessToken(token: string) {
   accessToken = token;
 }
 
+/** For raw fetch use-cases (blob downloads) that bypass the api helpers. */
+export function getAccessToken(): string {
+  return accessToken;
+}
+
 /** The auth store registers here to hear about silent refreshes/expiry. */
 export function onSessionChange(handler: typeof onSession) {
   onSession = handler;
@@ -81,4 +86,5 @@ export const api = {
   get: <T>(url: string) => request<T>('GET', url),
   post: <T>(url: string, body?: unknown) => request<T>('POST', url, body),
   put: <T>(url: string, body?: unknown) => request<T>('PUT', url, body),
+  delete: <T>(url: string) => request<T>('DELETE', url),
 };

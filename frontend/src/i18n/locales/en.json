@@ -1,14 +1,18 @@
 {
   "app": {
     "title": "HR System",
-    "tagline": "Trainee onboarding, employee file, and offboarding — one auditable workflow."
+    "tagline": "Onboarding, employee file, and offboarding — one auditable workflow."
   },
   "nav": {
     "home": "Dashboard",
-    "trainees": "Trainees",
     "employees": "Employees",
+    "reports": "Reports",
     "users": "Staff & roles",
-    "settings": "Settings"
+    "ownership": "Status ownership",
+    "automation": "Automation",
+    "settings": "Settings",
+    "assistant": "AI Assistant",
+    "calendar": "Work calendar"
   },
   "users": {
     "title": "Staff & roles",
@@ -19,26 +23,31 @@
     "resetPassword": "Reset password",
     "newPassword": "New password",
     "passwordHint": "At least 8 characters",
-    "passwordReset": "Password updated."
+    "passwordReset": "Password updated.",
+    "you": "You",
+    "selfHint": "You cannot deactivate or demote your own account — ask another administrator."
   },
   "dashboard": {
     "title": "Dashboard",
-    "trainees": "Trainees in progress",
     "activeEmployees": "Active employees",
     "openOffboardings": "Open offboardings",
     "pendingApprovals": "Awaiting e-approval",
-    "traineesByStage": "Trainees by stage",
     "processes": "Employee file processes",
     "offboardings": "Offboarding",
     "noOffboardings": "No offboarding requests.",
-    "recent": "Recent activity"
+    "recent": "Recent activity",
+    "onboarding": "In onboarding",
+    "onboardingByStage": "Onboarding pipeline"
   },
   "settings": {
     "title": "Settings",
     "subtitle": "System configuration (administrators only)",
     "mail": "Outgoing email",
     "provider": "Provider",
-    "providers": { "console": "Development (log only)", "custom": "Custom SMTP" },
+    "providers": {
+      "console": "Development (log only)",
+      "custom": "Custom SMTP"
+    },
     "host": "SMTP host",
     "port": "Port",
     "user": "Username / email",
@@ -53,17 +62,26 @@
   },
   "employees": {
     "title": "Employees",
-    "subtitle": "Stage 2 — the employee file: GOSI, insurance, criminal record, assets",
+    "subtitle": "One record for the whole journey — onboarding, employment, offboarding",
     "no": "Employee no.",
-    "empty": "No employees yet — they are created automatically when a trainee's contract is approved.",
+    "empty": "No employees yet — start with a new hire or add existing staff directly.",
     "new": "New employee",
-    "directHint": "For existing staff joining the system directly. New hires normally arrive automatically when their trainee contract is approved.",
+    "directHint": "For existing staff joining the system directly — created active, with an employee number, skipping the onboarding pipeline.",
     "project": "Project",
     "hireDate": "Hire date",
     "hired": "Hired",
     "holdReason": "Hold reason",
     "holdNote": "Note (optional)",
-    "statuses": { "ACTIVE": "Active", "INACTIVE": "Inactive" }
+    "statuses": {
+      "ACTIVE": "Active",
+      "INACTIVE": "Inactive"
+    },
+    "filters": {
+      "all": "All",
+      "onboarding": "Onboarding",
+      "active": "Active",
+      "inactive": "Inactive"
+    }
   },
   "processes": {
     "gosi": "GOSI",
@@ -114,7 +132,11 @@
     "rejectReason": "Rejection reason",
     "linkSent": "Approval link sent",
     "linkHint": "The employee received this link by email (in development it is also shown here).",
-    "actions": { "send": "Send for approval", "cancel": "Cancel", "revise": "Revise" }
+    "actions": {
+      "send": "Send for approval",
+      "cancel": "Cancel",
+      "revise": "Revise"
+    }
   },
   "assetStatus": {
     "DRAFT": "Draft",
@@ -124,15 +146,18 @@
     "REJECTED": "Rejected",
     "CANCELLED": "Cancelled"
   },
-  "conditions": { "NEW": "New", "USED": "Used" },
+  "conditions": {
+    "NEW": "New",
+    "USED": "Used"
+  },
   "entities": {
-    "TRAINEE": "Trainee",
     "EMPLOYEE": "Employee",
     "GOSI": "GOSI",
     "MEDICAL_INSURANCE": "Medical insurance",
     "CRIMINAL_RECORD": "Criminal record",
     "ASSET_FORM": "Asset custody",
-    "OFFBOARDING": "Offboarding"
+    "OFFBOARDING": "Offboarding",
+    "EMPLOYEE_REQUEST": "Request"
   },
   "common": {
     "cancel": "Cancel",
@@ -143,53 +168,6 @@
     "done": "Done",
     "error": "Something went wrong",
     "submit": "Submit"
-  },
-  "home": {
-    "welcome": "Welcome",
-    "apiStatus": "API status",
-    "checking": "Checking…",
-    "up": "Connected",
-    "down": "Unavailable",
-    "stages": {
-      "trainee": {
-        "title": "Trainee Management",
-        "desc": "Data collection, contract creation and electronic approval — with automatic reminders and deadlines."
-      },
-      "profile": {
-        "title": "Employee File",
-        "desc": "GOSI, medical insurance, criminal record certificate, and asset custody — four independent tracks."
-      },
-      "offboarding": {
-        "title": "Offboarding",
-        "desc": "Exit interview, asset return, termination notice, and final settlement — down to file closure."
-      }
-    }
-  },
-  "trainees": {
-    "title": "Trainees",
-    "subtitle": "Stage 1 — from record creation to contract approval",
-    "new": "New trainee",
-    "empty": "No trainees yet — create the first one.",
-    "name": "Name",
-    "firstName": "First name",
-    "lastName": "Last name",
-    "email": "Email",
-    "phone": "Phone",
-    "nationalId": "National ID",
-    "birthDate": "Birth date",
-    "department": "Department",
-    "jobTitle": "Job title",
-    "status": "Status",
-    "docsHint": "The default document checklist (ID, qualification, photo, IBAN letter) is created automatically.",
-    "info": "Personal information",
-    "documents": "Document checklist",
-    "uploaded": "Uploaded",
-    "missing": "Not uploaded",
-    "optional": "optional",
-    "contract": "Contract",
-    "timeline": "Timeline",
-    "missingNotes": "What is missing? (sent to the trainee)",
-    "becameEmployee": "Contract approved — employee profile {no} was created automatically."
   },
   "contract": {
     "salary": "Salary",
@@ -208,8 +186,9 @@
     "FORM_RECEIVED": "Form received",
     "CONTRACT_CREATION": "Contract creation",
     "AWAITING_CONTRACT_APPROVAL": "Awaiting approval",
-    "EMPLOYEE_CREATED": "Employee created",
-    "EXPIRED": "Expired"
+    "EXPIRED": "Expired",
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive"
   },
   "actions": {
     "toggleTheme": "Toggle dark mode",
@@ -232,11 +211,23 @@
     "SEND_CONTRACT": "Contract sent",
     "APPROVE_CONTRACT": "Contract approved",
     "EXPIRE": "Deadline expired",
-    "REOPEN": "Reopened"
+    "REOPEN": "Reopened",
+    "UPDATE_PROFILE": "Profile updated",
+    "UPDATE_PHOTO": "Photo updated",
+    "SALARY_LETTER": "Salary letter",
+    "BANK_LETTER": "Bank (IBAN) letter",
+    "DEPARTMENT_CHANGE": "Department change",
+    "JOB_TITLE_CHANGE": "Job title change",
+    "PROMOTION": "Promotion",
+    "PROJECT_TRANSFER": "Project transfer",
+    "WARNING": "Warning",
+    "INVESTIGATION": "Investigation",
+    "ACTIVATED": "Employee activated",
+    "DELETE": "Employee deleted"
   },
   "actors": {
     "USER": "Staff",
-    "LINK": "Trainee (signed link)",
+    "LINK": "Signed link",
     "SYSTEM": "System"
   },
   "login": {
@@ -256,13 +247,14 @@
   },
   "publicForm": {
     "title": "Complete your onboarding data",
-    "greeting": "Hello {name}, welcome aboard!",
+    "greeting": "Hello {name}",
     "fileHint": "Accepted files: PDF, JPG, PNG, DOC — up to 10 MB each.",
     "requiredHint": "All documents marked * are required before submitting.",
     "invalidTitle": "This link is no longer valid",
     "invalidHint": "The link may have expired or already been used. Please contact HR for a new one.",
     "doneTitle": "Thank you! Your data was submitted.",
-    "doneHint": "HR will review your documents and contact you with the next step."
+    "doneHint": "HR will review your documents and contact you with the next step.",
+    "info": "Your information"
   },
   "approval": {
     "title": "Your employment contract",
@@ -340,6 +332,32 @@
     "atLeastOne": "At least one group must own a status.",
     "hint": "A user outside the owning group gets no action buttons and a 403 from the API. ADMIN always has access. New records and existing ones follow the change immediately."
   },
+  "calendar": {
+    "title": "Work calendar",
+    "subtitle": "Defines what a \"working day\" means for the automation deadlines",
+    "weekend": "Weekend days",
+    "weekendHint": "Selected days are excluded when counting working days. Changes apply on the next scheduler check.",
+    "holidays": "Public holidays",
+    "noHolidays": "No holidays added yet — they are also excluded from working-day counts.",
+    "date": "Date",
+    "name": "Holiday name",
+    "add": "Add holiday",
+    "year": "Year",
+    "generate": "Generate Saudi holidays",
+    "generateHint": "Adds Founding Day, National Day, Eid al-Fitr and Eid al-Adha (Umm al-Qura calendar). Eid dates follow the reference calendar — adjust after official announcements if needed.",
+    "generated": "{n} holiday(s) added.",
+    "showYear": "Show year calendar",
+    "hideYear": "Hide year calendar",
+    "days": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    }
+  },
   "sla": {
     "title": "Automation rules",
     "subtitle": "Reminders, escalations and deadlines — evaluated every few minutes",
@@ -359,6 +377,70 @@
       "HOURS": "hours",
       "CALENDAR_DAYS": "calendar days",
       "WORKING_DAYS": "working days"
+    },
+    "addRule": "New rule",
+    "processKey": "Watches",
+    "status": "Status / document type",
+    "notifySubject": "Also e-mail the employee",
+    "anyType": "Any document",
+    "expireHint": "EXPIRE closes the record automatically. It only takes effect on the onboarding waiting stages (awaiting form / awaiting approval)."
+  },
+  "reports": {
+    "title": "Reports",
+    "subtitle": "Live numbers across all stages — with Excel exports",
+    "headcount": "Headcount by department",
+    "funnel": "Onboarding funnel",
+    "completion": "Employee-file completion",
+    "expiry": "Document expiry",
+    "offReasons": "Offboarding by reason",
+    "buckets": {
+      "expired": "Expired",
+      "in30": "≤ 30 days",
+      "in60": "≤ 60 days",
+      "in90": "≤ 90 days"
+    },
+    "exports": {
+      "employees": "Employees",
+      "expiring-documents": "Expiring docs",
+      "audit": "Audit (30d)",
+      "onboarding": "Onboarding"
+    },
+    "people": "Employees by name",
+    "totals": {
+      "active": "Active employees",
+      "onboarding": "In onboarding",
+      "inactive": "Inactive",
+      "expiring": "Documents expiring ≤ 30 days"
+    },
+    "filters": {
+      "search": "Search name, number, email…",
+      "from": "From",
+      "to": "To",
+      "basis": "Period based on",
+      "basisHire": "Hire date",
+      "basisCreated": "Created date",
+      "clear": "Clear"
+    }
+  },
+  "expiryDocs": {
+    "title": "Documents & expiry",
+    "add": "Add document",
+    "edit": "Edit document",
+    "empty": "No tracked documents — add Iqama, passport, or the contract end date to get automatic expiry alerts.",
+    "number": "Document number",
+    "expiry": "Expiry date",
+    "customType": "Document name",
+    "daysLeft": "{n} day(s) left",
+    "expired": "expired {n} day(s) ago",
+    "renewHint": "Changing the expiry date (renewal) resets the alerts — the system will remind again before the new date.",
+    "types": {
+      "IQAMA": "Iqama",
+      "NATIONAL_ID": "National ID",
+      "PASSPORT": "Passport",
+      "CONTRACT": "Contract end date",
+      "WORK_PERMIT": "Work permit",
+      "DRIVING_LICENSE": "Driving license",
+      "CUSTOM": "Other…"
     }
   },
   "assetApproval": {
@@ -376,5 +458,106 @@
     "QUALIFICATION": "Qualification certificate",
     "PHOTO": "Personal photo",
     "IBAN_LETTER": "IBAN letter"
+  },
+  "profile": {
+    "edit": "Edit data",
+    "newAction": "New action",
+    "endContract": "End contract",
+    "uploadPhoto": "Update photo",
+    "statusTitle": "Employee status",
+    "dataComplete": "All data and documents are complete",
+    "dataMissing": "{n} item(s) still missing",
+    "employmentType": "Employment status",
+    "directManager": "Direct manager",
+    "types": {
+      "FULL_TIME": "Full time",
+      "PART_TIME": "Part time",
+      "TEMPORARY": "Temporary"
+    },
+    "overview": "Overview",
+    "timelineTab": "Timeline",
+    "processes": "Employee processes",
+    "onboardingDocs": "Documents",
+    "delete": "Delete employee",
+    "deleteWarning": "This permanently deletes the employee and everything attached: documents, contract, processes, custody forms, offboardings and requests. It cannot be undone. For real ex-employees use offboarding instead — delete is for wrongly created or test records.",
+    "deleteConfirm": "Delete permanently"
+  },
+  "requests": {
+    "title": "Requests & services",
+    "empty": "No requests yet — use the buttons above to log one.",
+    "new": "New request",
+    "recent": "Recent requests",
+    "notes": "Notes (optional)",
+    "by": "By {name}",
+    "types": {
+      "SALARY_LETTER": "Salary letter",
+      "BANK_LETTER": "Bank (IBAN) letter",
+      "DEPARTMENT_CHANGE": "Department change",
+      "JOB_TITLE_CHANGE": "Job title change",
+      "PROMOTION": "Promotion",
+      "PROJECT_TRANSFER": "Project transfer",
+      "WARNING": "Warning",
+      "INVESTIGATION": "Investigation"
+    }
+  },
+  "contractCard": {
+    "title": "Contract",
+    "type": "Contract type",
+    "fixedTerm": "Fixed term",
+    "start": "Start date",
+    "end": "End date",
+    "duration": "Duration",
+    "months": "{n} month(s)",
+    "remaining": "Remaining",
+    "status": "Contract status",
+    "active": "Active",
+    "expired": "Expired",
+    "awaiting": "Awaiting approval",
+    "salary": "Salary",
+    "none": "No contract on file yet — it is drafted during the contract-creation stage (direct-added staff have none).",
+    "view": "View terms"
+  },
+  "fields": {
+    "name": "Name",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email",
+    "phone": "Phone",
+    "nationalId": "National ID",
+    "birthDate": "Birth date",
+    "department": "Department",
+    "jobTitle": "Job title",
+    "status": "Status",
+    "comboHint": "Pick from the list or type a new value"
+  },
+  "onboarding": {
+    "title": "Onboarding",
+    "section": "Onboarding progress",
+    "newHire": "New hire (onboarding)",
+    "newHireHint": "Opens the onboarding pipeline: the new hire receives a signed link to complete their data and documents, then approves the contract electronically. The employee number is assigned on activation.",
+    "existing": "Existing employee (direct)",
+    "docsHint": "The default document checklist (ID, qualification, photo, IBAN letter) is created automatically.",
+    "documents": "Onboarding documents",
+    "uploaded": "Uploaded",
+    "missing": "Not uploaded",
+    "optional": "optional",
+    "missingNotes": "What is missing? (sent to the new hire)",
+    "activated": "Contract approved — the employee was activated with number {no}.",
+    "sendNow": "Send the data form by e-mail immediately after creation"
+  },
+  "ai": {
+    "letter": "Generate letter",
+    "letterTitle": "HR letter",
+    "generating": "Generating…",
+    "copy": "Copy",
+    "copied": "Copied to clipboard",
+    "print": "Print",
+    "assistantTitle": "AI Assistant",
+    "assistantSubtitle": "Ask about employees, onboarding, documents and offboarding — answers come from live system data",
+    "askPlaceholder": "Ask a question… e.g. whose Iqama expires this month?",
+    "emptyChat": "Start by asking a question — Arabic or English.",
+    "scan": "Read from document (AI)",
+    "scanHint": "Upload a photo or PDF of the document — the fields are filled automatically for your review.",
+    "scanned": "Fields filled from the document — review before saving."
   }
 }

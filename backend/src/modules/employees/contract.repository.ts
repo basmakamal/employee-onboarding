@@ -5,7 +5,7 @@ export class ContractRepository {
   constructor(private readonly db: Db) {}
 
   create(data: {
-    traineeId: string;
+    employeeId: string;
     createdById: string;
     storageKey?: string;
     details?: Prisma.InputJsonValue;
@@ -13,8 +13,8 @@ export class ContractRepository {
     return this.db.contract.create({ data });
   }
 
-  findByTrainee(traineeId: string) {
-    return this.db.contract.findUnique({ where: { traineeId } });
+  findByEmployee(employeeId: string) {
+    return this.db.contract.findUnique({ where: { employeeId } });
   }
 
   markSent(id: string, sentAt: Date) {
@@ -25,7 +25,7 @@ export class ContractRepository {
     return this.db.contract.update({ where: { id }, data: { details } });
   }
 
-  /** Guarded on unapproved so a duplicate approval click cannot re-stamp it. */
+  /** Guarded on approvedAt IS NULL — a duplicate approval cannot re-stamp. */
   async markApproved(id: string, approvedAt: Date): Promise<boolean> {
     const result = await this.db.contract.updateMany({
       where: { id, approvedAt: null },
