@@ -115,15 +115,41 @@ export class EmployeeRepository {
   }
 
   /** The public form writes exactly these three fields. */
-  updatePersonal(id: string, fields: { phone?: string; nationalId?: string; birthDate?: Date }) {
-    return this.db.employee.update({
-      where: { id },
-      data: {
-        ...(fields.phone !== undefined ? { phone: fields.phone } : {}),
-        ...(fields.nationalId !== undefined ? { nationalId: fields.nationalId } : {}),
-        ...(fields.birthDate !== undefined ? { birthDate: fields.birthDate } : {}),
-      },
-    });
+  /**
+   * Personal details captured by the employee data form.
+   *
+   * Every key is applied only when present, so this stays usable for the
+   * partial updates HR makes from the employee file as well as for the full
+   * form submission.
+   */
+  updatePersonal(
+    id: string,
+    fields: {
+      firstName?: string;
+      fatherName?: string;
+      grandfatherName?: string;
+      lastName?: string;
+      phone?: string;
+      email?: string;
+      nationalId?: string;
+      birthDate?: Date;
+      birthDateHijri?: string;
+      gender?: 'MALE' | 'FEMALE';
+      nationality?: string;
+      maritalStatus?: 'SINGLE' | 'MARRIED' | 'DIVORCED' | 'WIDOWED';
+      splAddress?: string;
+      iban?: string;
+      qualification?: 'HIGH_SCHOOL' | 'DIPLOMA' | 'BACHELOR' | 'MASTER' | 'PHD' | 'OTHER';
+      major?: string;
+      emergencyContactName?: string;
+      emergencyContactPhone?: string;
+    },
+  ) {
+    const data: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined) data[key] = value;
+    }
+    return this.db.employee.update({ where: { id }, data });
   }
 
   /** The employee-file page: profile, checklist, contract, processes, timeline. */
