@@ -7,6 +7,7 @@ import type { ContractRepository } from './contract.repository.js';
 import type { AuditLogRepository } from '../../workflow/audit-log.repository.js';
 import type { LinkTokenService } from '../../auth/link-token.service.js';
 import type { NotificationService } from '../../notifications/notification.service.js';
+import { REQUIRED_DOCUMENT_TYPES, type DataFormInput } from './data-form.schema.js';
 
 /** What a signed link may see of the record — no ids, no internals. */
 function publicEmployee(e: Employee) {
@@ -167,7 +168,7 @@ export class OnboardingService {
   /** The new hire submits the data form through the signed link. */
   async submitForm(
     rawToken: string,
-    fields: { phone?: string; nationalId?: string; birthDate?: Date },
+    fields: Partial<DataFormInput>,
     uploads: Array<{ documentId: string; storageKey: string; mimeType: string; sizeBytes: number }>,
   ) {
     const token = await this.links.verify(rawToken);
@@ -185,6 +186,27 @@ export class OnboardingService {
         row.id,
         { storageKey: upload.storageKey, mimeType: upload.mimeType, sizeBytes: upload.sizeBytes },
         now,
+      );
+    }
+
+    // HR requires both attachments for the contract, so refuse a submission
+    // that would move the record forward without them.
+    //
+    // A type counts as satisfied when it already had a file (a resubmission
+    // that only fixes a text field) or when this request just supplied one.
+    // Derived from what we have rather than re-reading the checklist: the
+    // second query would be a round trip purely to observe our own writes.
+    const uploadedIds = new Set(uploads.map((u) => u.documentId));
+    const missing = REQUIRED_DOCUMENT_TYPES.filter(
+      (type) =>
+        !checklist.some(
+          (d) => d.type === type && (d.storageKey !== null || uploadedIds.has(d.id)),
+        ),
+    );
+    if (missing.length > 0) {
+      throw new GuardFailedError(
+        'MISSING_DOCUMENTS',
+        `required attachments missing: ${missing.join(', ')}`,
       );
     }
 

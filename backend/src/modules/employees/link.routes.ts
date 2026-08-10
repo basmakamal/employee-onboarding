@@ -6,12 +6,10 @@ import type { OnboardingService } from './onboarding.service.js';
 import type { AssetService } from '../assets/asset.service.js';
 import type { OffboardingService } from '../offboarding/offboarding.service.js';
 import type { LinkTokenService } from '../../auth/link-token.service.js';
+// The full employee data form — every field required, Saudi formats checked
+// server-side because a public signed link is the only gate in front of it.
+import { dataFormSchema } from './data-form.schema.js';
 
-const formFieldsSchema = z.object({
-  phone: z.string().optional(),
-  nationalId: z.string().optional(),
-  birthDate: z.coerce.date().optional(),
-});
 
 const decisionSchema = z.object({
   decision: z.enum(['APPROVE', 'REJECT']),
@@ -75,7 +73,7 @@ export function linkRouter(
     '/:token/form',
     documentUpload.any(),
     asyncHandler(async (req, res) => {
-      const fields = compact(formFieldsSchema.parse(req.body ?? {}));
+      const fields = compact(dataFormSchema.parse(req.body ?? {}));
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
       const uploads = files.map((f) => ({
         documentId: f.fieldname,
