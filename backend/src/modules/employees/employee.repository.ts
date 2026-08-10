@@ -174,6 +174,27 @@ export class EmployeeRepository {
   }
 
   /**
+   * Hard delete with full child cleanup — for wrongly created or test
+   * records. Audit rows survive with their anchor nulled (ON DELETE SET
+   * NULL); the deletion itself is audited separately by the service.
+   */
+  deleteCascade(id: string) {
+    return this.db.$transaction([
+      this.db.employeeRequest.deleteMany({ where: { employeeId: id } }),
+      this.db.employeeDocument.deleteMany({ where: { employeeId: id } }),
+      this.db.offboarding.deleteMany({ where: { employeeId: id } }),
+      this.db.assetFormItem.deleteMany({ where: { form: { employeeId: id } } }),
+      this.db.assetForm.deleteMany({ where: { employeeId: id } }),
+      this.db.gosiProcess.deleteMany({ where: { employeeId: id } }),
+      this.db.medicalInsuranceProcess.deleteMany({ where: { employeeId: id } }),
+      this.db.criminalRecordProcess.deleteMany({ where: { employeeId: id } }),
+      this.db.onboardingDocument.deleteMany({ where: { employeeId: id } }),
+      this.db.contract.deleteMany({ where: { employeeId: id } }),
+      this.db.employee.delete({ where: { id } }),
+    ]);
+  }
+
+  /**
    * Guarded status move — the ONLY way the lifecycle advances. Every
    * transition resets the SLA anchor.
    */

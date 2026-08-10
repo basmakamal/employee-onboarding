@@ -124,6 +124,29 @@ export class EmployeeService {
     return updated;
   }
 
+  /**
+   * ADMIN-only hard delete. Everything attached to the file goes with it;
+   * the audit trail keeps a final DELETE entry naming who removed whom.
+   */
+  async remove(id: string, actor: Actor) {
+    const existing = await this.repos.employees.findById(id);
+    if (!existing) throw new NotFoundError('employee', id);
+
+    await this.repos.employees.deleteCascade(id);
+    await this.repos.audit.append({
+      entity: 'EMPLOYEE',
+      entityId: id,
+      action: 'DELETE',
+      actorType: actor.type,
+      ...(actor.id ? { actorId: actor.id } : {}),
+      metadata: {
+        employeeNo: existing.employeeNo,
+        name: `${existing.firstName} ${existing.lastName}`,
+        email: existing.email,
+      },
+    });
+  }
+
   async setPhoto(id: string, photoKey: string, actor: Actor) {
     const existing = await this.repos.employees.findById(id);
     if (!existing) throw new NotFoundError('employee', id);

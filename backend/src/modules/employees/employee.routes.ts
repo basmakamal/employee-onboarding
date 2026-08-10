@@ -198,6 +198,16 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     }),
   );
 
+  /** DELETE /:id — ADMIN-only hard delete with full child cleanup. */
+  router.delete(
+    '/:id',
+    requireRole('ADMIN'),
+    asyncHandler(async (req, res) => {
+      await service.remove(req.params['id'] as string, actor(req));
+      res.status(204).end();
+    }),
+  );
+
   /** PUT /:id — HR edits the profile (the reference's "edit data" button). */
   router.put(
     '/:id',

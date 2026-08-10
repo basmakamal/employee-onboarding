@@ -686,8 +686,23 @@ const custodySummary = computed(() => {
   };
 });
 
-// ------------------------------------------------------------- offboarding
+// ------------------------------------------------------------- hard delete
 const router = useRouter();
+const deleteDialog = ref(false);
+
+async function removeEmployee() {
+  busy.value = 'delete';
+  try {
+    await api.delete(`/api/employees/${id}`);
+    deleteDialog.value = false;
+    await router.push('/employees');
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    busy.value = '';
+  }
+}
+
+// ------------------------------------------------------------- offboarding
 const offboardingDialog = ref(false);
 const offboardingForm = ref({ reason: 'RESIGNATION', notes: '' });
 
@@ -921,6 +936,21 @@ onMounted(load);
           >
             {{ $t('profile.endContract') }}
           </v-btn>
+          <v-tooltip
+            v-if="auth.user?.role === 'ADMIN'"
+            location="top"
+            :text="$t('profile.delete')"
+          >
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon="mdi-delete-forever-outline"
+                variant="text"
+                color="error"
+                @click="deleteDialog = true"
+              />
+            </template>
+          </v-tooltip>
         </div>
       </v-card-text>
     </v-card>
@@ -1546,6 +1576,28 @@ onMounted(load);
             @click="saveDoc"
           >
             {{ $t('common.save') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Hard delete confirmation (ADMIN) -->
+    <v-dialog v-model="deleteDialog" max-width="480">
+      <v-card :title="$t('profile.delete')" class="pa-2">
+        <v-card-text>
+          <v-alert type="error" variant="tonal" class="mb-3">
+            {{ $t('profile.deleteWarning') }}
+          </v-alert>
+          <p class="text-body-2">
+            <strong>{{ employee.firstName }} {{ employee.lastName }}</strong>
+            <template v-if="employee.employeeNo"> · {{ employee.employeeNo }}</template>
+          </p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="deleteDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="error" variant="flat" :loading="busy === 'delete'" @click="removeEmployee">
+            {{ $t('profile.deleteConfirm') }}
           </v-btn>
         </v-card-actions>
       </v-card>
