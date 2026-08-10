@@ -3,12 +3,48 @@
  * English; the recipient's locale picks the variant (new hires get Arabic by
  * default, staff get their UI language later).
  */
+import { renderEmail, type EmailBlock } from './email-layout.js';
+
 export type Locale = 'ar' | 'en';
 
 export interface RenderedMessage {
   subject: string;
+  /** Plain-text body — always produced. */
   text: string;
+  /** Branded HTML alternative. Present on the messages a new hire receives
+   *  (the ones carrying an action link); internal staff notices stay plain. */
+  html?: string;
 }
+
+/**
+ * Build both bodies from one definition so the text and HTML versions can
+ * never drift apart — the plain text is derived from the same paragraphs the
+ * HTML renders.
+ */
+function branded(
+  locale: Locale,
+  subject: string,
+  block: EmailBlock,
+  signOff: string,
+): RenderedMessage {
+  const text =
+    block.paragraphs.join('\n\n') +
+    (block.cta ? `\n\n${block.cta.label}: ${block.cta.url}` : '') +
+    (block.note ? `\n\n${block.note}` : '') +
+    `\n\n${signOff}`;
+
+  return { subject, text, html: renderEmail(block, locale) };
+}
+
+const SIGN_OFF: Record<Locale, string> = {
+  ar: 'قسم الموارد البشرية — Riyada HR',
+  en: 'HR Department — Riyada HR',
+};
+
+const LINK_NOTE: Record<Locale, string> = {
+  ar: 'الرابط صالح لفترة محدودة ومخصص لك وحدك، يُرجى عدم مشاركته.',
+  en: 'This link is valid for a limited time and is personal to you — please do not share it.',
+};
 
 interface TemplateParams {
   name?: string;
@@ -24,24 +60,83 @@ interface TemplateParams {
 type Template = (p: TemplateParams) => RenderedMessage;
 
 const T: Record<string, Record<Locale, Template>> = {
-  /** 24h reminder — the new hire has not completed the data form. */
+  /**
+   * FIRST send of the data form link — the first thing a new hire receives
+   * from us, so it welcomes rather than chases.
+   *
+   * Kept separate from 'employee.form_reminder' on purpose: that one is fired
+   * by the SLA watcher every day the form stays incomplete, and an email that
+   * says "welcome" on the third chase reads as if nobody is paying attention.
+   */
+  'employee.form_invite': {
+    ar: (p) =>
+      branded(
+        'ar',
+        'نموذج استكمال بيانات الموظف — Riyada HR',
+        {
+          title: 'نموذج استكمال بيانات الموظف',
+          paragraphs: [
+            `مرحبًا ${p.name ?? ''},`,
+            'نرحّب بك في ريادة. لاستكمال إجراءات التعيين، يُرجى تعبئة نموذج بيانات الموظف وإرفاق المستندات المطلوبة (صورة الهوية أو الإقامة، وصورة الآيبان البنكي).',
+            'جميع الحقول إلزامية، ولن يستغرق النموذج سوى بضع دقائق.',
+          ],
+          ...(p.linkUrl ? { cta: { label: 'فتح النموذج', url: p.linkUrl } } : {}),
+          note: LINK_NOTE.ar,
+        },
+        SIGN_OFF.ar,
+      ),
+    en: (p) =>
+      branded(
+        'en',
+        'Employee Information Form — Riyada HR',
+        {
+          title: 'Employee Information Form',
+          paragraphs: [
+            `Hello ${p.name ?? ''},`,
+            'Welcome to Riyada. To complete your onboarding, please fill in the employee information form and attach the required documents (National ID / Iqama copy and your bank IBAN letter).',
+            'All fields are required, and the form takes only a few minutes.',
+          ],
+          ...(p.linkUrl ? { cta: { label: 'Open the form', url: p.linkUrl } } : {}),
+          note: LINK_NOTE.en,
+        },
+        SIGN_OFF.en,
+      ),
+  },
+
+  /** 24h chase — the new hire still has not completed the data form. */
   'employee.form_reminder': {
-    ar: (p) => ({
-      subject: 'تذكير: استكمال نموذج البيانات',
-      text:
-        `مرحبًا ${p.name ?? ''},\n\n` +
-        `نذكّرك باستكمال نموذج البيانات والمستندات المطلوبة لإتمام إجراءات التعيين.` +
-        (p.linkUrl ? `\n\nرابط النموذج: ${p.linkUrl}` : '') +
-        `\n\nقسم الموارد البشرية`,
-    }),
-    en: (p) => ({
-      subject: 'Reminder: complete your data form',
-      text:
-        `Hello ${p.name ?? ''},\n\n` +
-        `This is a reminder to complete your data form and required documents.` +
-        (p.linkUrl ? `\n\nForm link: ${p.linkUrl}` : '') +
-        `\n\nHR Department`,
-    }),
+    ar: (p) =>
+      branded(
+        'ar',
+        'تذكير: استكمال نموذج بيانات الموظف — Riyada HR',
+        {
+          title: 'تذكير باستكمال النموذج',
+          paragraphs: [
+            `مرحبًا ${p.name ?? ''},`,
+            'نذكّرك بأن نموذج بيانات الموظف لم يكتمل بعد. استكماله مطلوب لإتمام إجراءات التعيين وإعداد العقد.',
+            ...(p.daysWaiting ? [`مضى على إرسال النموذج ${p.daysWaiting} يومًا.`] : []),
+          ],
+          ...(p.linkUrl ? { cta: { label: 'استكمال النموذج', url: p.linkUrl } } : {}),
+          note: LINK_NOTE.ar,
+        },
+        SIGN_OFF.ar,
+      ),
+    en: (p) =>
+      branded(
+        'en',
+        'Reminder: complete your employee information form — Riyada HR',
+        {
+          title: 'Reminder to complete your form',
+          paragraphs: [
+            `Hello ${p.name ?? ''},`,
+            'Your employee information form is still incomplete. We need it to finish your onboarding and prepare your contract.',
+            ...(p.daysWaiting ? [`It has been ${p.daysWaiting} day(s) since the form was sent.`] : []),
+          ],
+          ...(p.linkUrl ? { cta: { label: 'Complete the form', url: p.linkUrl } } : {}),
+          note: LINK_NOTE.en,
+        },
+        SIGN_OFF.en,
+      ),
   },
 
   /** A tracked document is approaching (or past) its expiry date. */
@@ -122,42 +217,70 @@ const T: Record<string, Record<Locale, Template>> = {
 
   /** Daily reminder — contract awaiting the new hire's approval. */
   'employee.contract_approval_reminder': {
-    ar: (p) => ({
-      subject: 'تذكير: اعتماد عقد العمل',
-      text:
-        `مرحبًا ${p.name ?? ''},\n\n` +
-        `عقد العمل الخاص بك في انتظار اعتمادك.` +
-        (p.linkUrl ? `\n\nرابط الاعتماد: ${p.linkUrl}` : '') +
-        `\n\nقسم الموارد البشرية`,
-    }),
-    en: (p) => ({
-      subject: 'Reminder: approve your employment contract',
-      text:
-        `Hello ${p.name ?? ''},\n\n` +
-        `Your employment contract is awaiting your approval.` +
-        (p.linkUrl ? `\n\nApproval link: ${p.linkUrl}` : '') +
-        `\n\nHR Department`,
-    }),
+    ar: (p) =>
+      branded(
+        'ar',
+        'اعتماد عقد العمل — Riyada HR',
+        {
+          title: 'عقد العمل بانتظار اعتمادك',
+          paragraphs: [
+            `مرحبًا ${p.name ?? ''},`,
+            'تم إعداد عقد العمل الخاص بك، وهو الآن بانتظار اطّلاعك واعتماده إلكترونيًا.',
+          ],
+          ...(p.linkUrl ? { cta: { label: 'مراجعة العقد واعتماده', url: p.linkUrl } } : {}),
+          note: LINK_NOTE.ar,
+        },
+        SIGN_OFF.ar,
+      ),
+    en: (p) =>
+      branded(
+        'en',
+        'Approve your employment contract — Riyada HR',
+        {
+          title: 'Your contract is awaiting approval',
+          paragraphs: [
+            `Hello ${p.name ?? ''},`,
+            'Your employment contract has been prepared and is now awaiting your review and electronic approval.',
+          ],
+          ...(p.linkUrl ? { cta: { label: 'Review and approve', url: p.linkUrl } } : {}),
+          note: LINK_NOTE.en,
+        },
+        SIGN_OFF.en,
+      ),
   },
 
   /** Employee — exit interview form (auto-sent for resignations, BRD). */
   'employee.exit_interview': {
-    ar: (p) => ({
-      subject: 'نموذج مقابلة إنهاء الخدمة',
-      text:
-        `مرحبًا ${p.name ?? ''},\n\n` +
-        `نرجو استكمال نموذج مقابلة إنهاء الخدمة إلكترونيًا.` +
-        (p.linkUrl ? `\n\nرابط النموذج: ${p.linkUrl}` : '') +
-        `\n\nقسم الموارد البشرية`,
-    }),
-    en: (p) => ({
-      subject: 'Exit interview form',
-      text:
-        `Hello ${p.name ?? ''},\n\n` +
-        `Please complete your exit interview form electronically.` +
-        (p.linkUrl ? `\n\nForm link: ${p.linkUrl}` : '') +
-        `\n\nHR Department`,
-    }),
+    ar: (p) =>
+      branded(
+        'ar',
+        'نموذج مقابلة إنهاء الخدمة — Riyada HR',
+        {
+          title: 'نموذج مقابلة إنهاء الخدمة',
+          paragraphs: [
+            `مرحبًا ${p.name ?? ''},`,
+            'نشكرك على الفترة التي قضيتها معنا. نرجو تخصيص بضع دقائق لاستكمال نموذج مقابلة إنهاء الخدمة؛ ملاحظاتك تساعدنا على التحسين.',
+          ],
+          ...(p.linkUrl ? { cta: { label: 'فتح النموذج', url: p.linkUrl } } : {}),
+          note: LINK_NOTE.ar,
+        },
+        SIGN_OFF.ar,
+      ),
+    en: (p) =>
+      branded(
+        'en',
+        'Exit interview form — Riyada HR',
+        {
+          title: 'Exit interview form',
+          paragraphs: [
+            `Hello ${p.name ?? ''},`,
+            'Thank you for the time you spent with us. Please take a few minutes to complete the exit interview form — your feedback helps us improve.',
+          ],
+          ...(p.linkUrl ? { cta: { label: 'Open the form', url: p.linkUrl } } : {}),
+          note: LINK_NOTE.en,
+        },
+        SIGN_OFF.en,
+      ),
   },
 
   /** Employee — official termination notice (BRD step 3). */
@@ -192,22 +315,36 @@ const T: Record<string, Record<Locale, Template>> = {
 
   /** Employee — a custody form awaits their electronic approval. */
   'employee.asset_approval': {
-    ar: (p) => ({
-      subject: 'نموذج عهدة بانتظار اعتمادك',
-      text:
-        `مرحبًا ${p.name ?? ''},\n\n` +
-        `تم إسناد عهدة جديدة إليك، ويلزم اعتمادها إلكترونيًا.` +
-        (p.linkUrl ? `\n\nرابط الاعتماد: ${p.linkUrl}` : '') +
-        `\n\nقسم الموارد البشرية`,
-    }),
-    en: (p) => ({
-      subject: 'Asset custody form awaiting your approval',
-      text:
-        `Hello ${p.name ?? ''},\n\n` +
-        `New assets have been assigned to you and require your electronic approval.` +
-        (p.linkUrl ? `\n\nApproval link: ${p.linkUrl}` : '') +
-        `\n\nHR Department`,
-    }),
+    ar: (p) =>
+      branded(
+        'ar',
+        'نموذج عهدة بانتظار اعتمادك — Riyada HR',
+        {
+          title: 'نموذج عهدة بانتظار اعتمادك',
+          paragraphs: [
+            `مرحبًا ${p.name ?? ''},`,
+            'تم إسناد عهدة جديدة إليك. يُرجى مراجعة تفاصيل العهدة واعتمادها إلكترونيًا.',
+          ],
+          ...(p.linkUrl ? { cta: { label: 'مراجعة العهدة واعتمادها', url: p.linkUrl } } : {}),
+          note: LINK_NOTE.ar,
+        },
+        SIGN_OFF.ar,
+      ),
+    en: (p) =>
+      branded(
+        'en',
+        'Asset custody form awaiting your approval — Riyada HR',
+        {
+          title: 'Asset custody awaiting your approval',
+          paragraphs: [
+            `Hello ${p.name ?? ''},`,
+            'New assets have been assigned to you. Please review the custody details and approve them electronically.',
+          ],
+          ...(p.linkUrl ? { cta: { label: 'Review and approve', url: p.linkUrl } } : {}),
+          note: LINK_NOTE.en,
+        },
+        SIGN_OFF.en,
+      ),
   },
 
   /** HR notice — the employee decided on a custody form. */

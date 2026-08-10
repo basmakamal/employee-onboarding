@@ -251,7 +251,8 @@ export class OnboardingService {
     const link = await this.links.issue('DATA_FORM', { employeeId: employee.id });
     await this.notifications.notifyExternal(
       employee.email,
-      'employee.form_reminder',
+      // First send welcomes; the SLA watcher uses 'employee.form_reminder' to chase.
+      'employee.form_invite',
       { name: `${employee.firstName} ${employee.lastName}`, linkUrl: link.url },
       { entity: 'EMPLOYEE', entityId: employee.id },
     );
