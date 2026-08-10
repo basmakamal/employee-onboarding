@@ -10,7 +10,8 @@
     "users": "Staff & roles",
     "ownership": "Status ownership",
     "automation": "Automation",
-    "settings": "Settings"
+    "settings": "Settings",
+    "assistant": "AI Assistant"
   },
   "users": {
     "title": "Staff & roles",
@@ -532,5 +533,20 @@
     "missingNotes": "What is missing? (sent to the new hire)",
     "activated": "Contract approved — the employee was activated with number {no}.",
     "sendNow": "Send the data form by e-mail immediately after creation"
+  },
+  "ai": {
+    "letter": "Generate letter",
+    "letterTitle": "HR letter",
+    "generating": "Generating…",
+    "copy": "Copy",
+    "copied": "Copied to clipboard",
+    "print": "Print",
+    "assistantTitle": "AI Assistant",
+    "assistantSubtitle": "Ask about employees, onboarding, documents and offboarding — answers come from live system data",
+    "askPlaceholder": "Ask a question… e.g. whose Iqama expires this month?",
+    "emptyChat": "Start by asking a question — Arabic or English.",
+    "scan": "Read from document (AI)",
+    "scanHint": "Upload a photo or PDF of the document — the fields are filled automatically for your review.",
+    "scanned": "Fields filled from the document — review before saving."
   }
 }

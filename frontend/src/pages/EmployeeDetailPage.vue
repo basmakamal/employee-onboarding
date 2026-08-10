@@ -143,7 +143,7 @@ const ASSET_STATUS_COLORS: Record<string, string> = {
   CANCELLED: 'grey',
 };
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const route = useRoute();
 const auth = useAuthStore();
 const id = route.params['id'] as string;
@@ -572,6 +572,82 @@ async function submitRequest() {
     notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
+  }
+}
+
+// ------------------------------------------------------------- AI letter
+const letterDialog = ref({ show: false, type: '', text: '', loading: false });
+
+async function generateLetter(request: RequestRow) {
+  letterDialog.value = { show: true, type: request.type, text: '', loading: true };
+  try {
+    const { letter } = await api.post<{ letter: string }>('/api/ai/letters', {
+      employeeId: id,
+      type: request.type,
+      notes: request.notes ?? undefined,
+      locale: locale.value.startsWith('ar') ? 'ar' : 'en',
+    });
+    letterDialog.value.text = letter;
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    letterDialog.value.show = false;
+  } finally {
+    letterDialog.value.loading = false;
+  }
+}
+
+async function copyLetter() {
+  await navigator.clipboard.writeText(letterDialog.value.text);
+  notify(t('ai.copied'));
+}
+
+function printLetter() {
+  const w = window.open('', '_blank', 'width=800,height=900');
+  if (!w) return;
+  const dir = locale.value.startsWith('ar') ? 'rtl' : 'ltr';
+  const safe = letterDialog.value.text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  w.document.write(
+    `<pre style="font-family: 'Times New Roman', serif; font-size: 16px; line-height: 1.9; white-space: pre-wrap; direction: ${dir}; padding: 48px;">${safe}</pre>`,
+  );
+  w.document.close();
+  w.print();
+}
+
+// -------------------------------------------------- AI document extraction
+const scanInput = ref<HTMLInputElement | null>(null);
+
+async function onScanPicked(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  busy.value = 'scan';
+  try {
+    const body = new FormData();
+    body.append('document', file);
+    const extracted = await api.post<{
+      type: string;
+      number: string | null;
+      expiryDate: string | null;
+      notes: string | null;
+    }>('/api/ai/extract-document', body);
+
+    if (DOC_TYPES.includes(extracted.type)) {
+      docForm.value.type = extracted.type;
+    } else {
+      docForm.value.type = 'CUSTOM';
+      docForm.value.customType = extracted.type;
+    }
+    if (extracted.number) docForm.value.number = extracted.number;
+    if (extracted.expiryDate) docForm.value.expiryDate = extracted.expiryDate;
+    if (extracted.notes) docForm.value.notes = extracted.notes;
+    notify(t('ai.scanned'));
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+    if (scanInput.value) scanInput.value.value = '';
   }
 }
 
@@ -1261,6 +1337,20 @@ onMounted(load);
                     {{ $t('requests.by', { name: r.createdBy.name }) }}
                     <template v-if="r.notes"> · {{ r.notes }}</template>
                   </v-list-item-subtitle>
+                  <template #append>
+                    <v-tooltip location="top" :text="$t('ai.letter')">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon="mdi-creation"
+                          variant="text"
+                          size="small"
+                          color="primary"
+                          @click="generateLetter(r)"
+                        />
+                      </template>
+                    </v-tooltip>
+                  </template>
                 </v-list-item>
               </v-list>
             </template>
@@ -1407,6 +1497,25 @@ onMounted(load);
     <v-dialog v-model="docDialog" max-width="480">
       <v-card :title="docForm.id ? $t('expiryDocs.edit') : $t('expiryDocs.add')" class="pa-2">
         <v-card-text>
+          <v-btn
+            variant="tonal"
+            color="secondary"
+            prepend-icon="mdi-line-scan"
+            class="mb-1"
+            block
+            :loading="busy === 'scan'"
+            @click="scanInput?.click()"
+          >
+            {{ $t('ai.scan') }}
+          </v-btn>
+          <p class="text-caption text-medium-emphasis mb-4">{{ $t('ai.scanHint') }}</p>
+          <input
+            ref="scanInput"
+            type="file"
+            accept="image/jpeg,image/png,application/pdf"
+            class="d-none"
+            @change="onScanPicked"
+          />
           <v-select
             v-model="docForm.type"
             :items="[
@@ -1438,6 +1547,54 @@ onMounted(load);
           >
             {{ $t('common.save') }}
           </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- AI letter dialog -->
+    <v-dialog v-model="letterDialog.show" max-width="720">
+      <v-card class="pa-2">
+        <v-card-item>
+          <v-card-title class="text-subtitle-1 font-weight-bold">
+            <v-icon icon="mdi-creation" class="me-2" color="primary" />
+            {{ $t('ai.letterTitle') }} — {{ $t(`requests.types.${letterDialog.type}`, letterDialog.type) }}
+          </v-card-title>
+        </v-card-item>
+        <v-card-text>
+          <div v-if="letterDialog.loading" class="text-center py-10">
+            <v-progress-circular indeterminate color="primary" size="40" />
+            <p class="text-medium-emphasis mt-3">{{ $t('ai.generating') }}</p>
+          </div>
+          <v-textarea
+            v-else
+            v-model="letterDialog.text"
+            auto-grow
+            rows="14"
+            max-rows="24"
+            variant="outlined"
+            class="letter-text"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-btn
+            variant="tonal"
+            prepend-icon="mdi-content-copy"
+            :disabled="letterDialog.loading"
+            @click="copyLetter"
+          >
+            {{ $t('ai.copy') }}
+          </v-btn>
+          <v-btn
+            variant="tonal"
+            color="primary"
+            prepend-icon="mdi-printer"
+            :disabled="letterDialog.loading"
+            @click="printLetter"
+          >
+            {{ $t('ai.print') }}
+          </v-btn>
+          <v-spacer />
+          <v-btn variant="text" @click="letterDialog.show = false">{{ $t('common.done') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -1642,5 +1799,10 @@ onMounted(load);
 .service-btn {
   border-color: rgba(var(--v-border-color), var(--v-border-opacity));
   font-weight: 500;
+}
+
+.letter-text :deep(textarea) {
+  font-family: 'Times New Roman', serif;
+  line-height: 1.9;
 }
 </style>
