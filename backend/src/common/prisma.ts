@@ -17,3 +17,14 @@ export const prisma = new PrismaClient({
  * repository calls atomically by handing them the same `tx`.
  */
 export type Db = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * A service's unit-of-work seam: run `fn` against a scope whose repositories
+ * (and workflow, where relevant) are all bound to ONE database transaction —
+ * everything inside commits or rolls back together.
+ *
+ * The container implements this with `prisma.$transaction`, rebuilding the
+ * scope's repositories on the transaction client; tests implement it as
+ * `(fn) => fn(fakes)` so the same fake repositories serve both paths.
+ */
+export type UnitOfWork<Scope> = <T>(fn: (scope: Scope) => Promise<T>) => Promise<T>;

@@ -51,6 +51,8 @@ export class AiService {
     private readonly prisma: PrismaClient,
     private readonly apiKey: string | undefined,
     private readonly model: string,
+    /** PDPL guard: keep national identifiers out of API calls (default on). */
+    private readonly redactPii: boolean = true,
   ) {}
 
   /** AI endpoints stay mounted but fail with a clear message until configured. */
@@ -91,7 +93,9 @@ export class AiService {
       `Employee number: ${employee.employeeNo ?? '—'}`,
       `Job title: ${employee.jobTitle ?? '—'}`,
       `Department: ${employee.department ?? '—'}`,
-      `National ID / Iqama: ${employee.nationalId ?? '—'}`,
+      // With redaction on, the model writes a placeholder and HR fills the
+      // real number in after printing — the identifier never leaves us.
+      `National ID / Iqama: ${this.redactPii ? '[رقم الهوية / ID number]' : (employee.nationalId ?? '—')}`,
       `Hire date: ${employee.hireDate ? employee.hireDate.toISOString().slice(0, 10) : '—'}`,
       `Employment type: ${employee.employmentType}`,
       ...(salary != null ? [`Monthly salary: ${salary} SAR`] : []),

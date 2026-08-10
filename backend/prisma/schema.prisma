@@ -524,6 +524,17 @@ model Holiday {
   @@map("holidays")
 }
 
+/// Named atomic counters. EMPLOYEE_NO backs employee-number allocation:
+/// the value is incremented inside the activation transaction, so two
+/// concurrent approvals can never mint the same number (the old count()+1
+/// approach could).
+model Sequence {
+  key   String @id
+  value Int
+
+  @@map("sequences")
+}
+
 /// Admin-editable system settings (JSON values keyed by area, e.g. "mail").
 model Setting {
   key       String   @id

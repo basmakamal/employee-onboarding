@@ -6,6 +6,7 @@ import {
 } from '../../workflow/machines/employee-process.machine.js';
 import { NotFoundError } from '../../workflow/errors.js';
 import type { Employee } from '../../generated/prisma/client.js';
+import type { UnitOfWork } from '../../common/prisma.js';
 import type { EmployeeRepository, UpdateEmployeeData } from './employee.repository.js';
 import type { EmployeeRequestRepository } from './employee-request.repository.js';
 import type { GosiRepository } from '../processes/gosi.repository.js';
@@ -34,10 +35,21 @@ interface ProcessRow {
   status: string;
 }
 
+/** One employee-file unit of work — all repositories share one transaction. */
+export interface EmployeeTxScope {
+  employees: EmployeeRepository;
+  requests: EmployeeRequestRepository;
+  gosi: GosiRepository;
+  medical: MedicalInsuranceRepository;
+  criminal: CriminalRecordRepository;
+  audit: AuditLogRepository;
+}
+
 /**
  * The employee file. The three Stage-2 processes are independent by BRD
  * design: each has its own machine, and nothing here blocks anything else.
  * Hold reasons/certificates travel alongside the guarded status move.
+ * Every write pairs with its audit row inside one transaction.
  */
 export class EmployeeService {
   constructor(
@@ -49,6 +61,7 @@ export class EmployeeService {
       criminal: CriminalRecordRepository;
       audit: AuditLogRepository;
     },
+    private readonly transact: UnitOfWork<EmployeeTxScope>,
     private readonly ownership?: OwnershipLookup,
     /** The onboarding pipeline machine — drives the profile's action buttons. */
     private readonly onboarding?: Workflow<Employee>,
@@ -66,6 +79,7 @@ export class EmployeeService {
    * Direct creation for EXISTING staff (data migration / hires that never
    * went through onboarding). Born ACTIVE with a number and the three
    * Stage-2 process rows; new hires get theirs on contract approval.
+   * Number allocation, creation and audit are one transaction.
    */
   async createDirect(
     input: {
@@ -83,24 +97,26 @@ export class EmployeeService {
     },
     actor: Actor,
   ) {
-    const employeeNo = await this.repos.employees.nextEmployeeNo();
-    const employee = await this.repos.employees.createDirect({
-      ...input,
-      employeeNo,
-      hireDate: input.hireDate ?? new Date(),
-      ...(actor.id ? { createdById: actor.id } : {}),
+    return this.transact(async (s) => {
+      const employeeNo = await s.employees.allocateEmployeeNo();
+      const employee = await s.employees.createDirect({
+        ...input,
+        employeeNo,
+        hireDate: input.hireDate ?? new Date(),
+        ...(actor.id ? { createdById: actor.id } : {}),
+      });
+      await s.audit.append({
+        entity: 'EMPLOYEE',
+        entityId: employee.id,
+        action: 'CREATE',
+        toStatus: 'ACTIVE',
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        employeeId: employee.id,
+        metadata: { employeeNo, from: 'direct' },
+      });
+      return employee;
     });
-    await this.repos.audit.append({
-      entity: 'EMPLOYEE',
-      entityId: employee.id,
-      action: 'CREATE',
-      toStatus: 'ACTIVE',
-      actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
-      employeeId: employee.id,
-      metadata: { employeeNo, from: 'direct' },
-    });
-    return employee;
   }
 
   /**
@@ -111,56 +127,67 @@ export class EmployeeService {
     const existing = await this.repos.employees.findById(id);
     if (!existing) throw new NotFoundError('employee', id);
 
-    const updated = await this.repos.employees.update(id, input);
-    await this.repos.audit.append({
-      entity: 'EMPLOYEE',
-      entityId: id,
-      action: 'UPDATE_PROFILE',
-      actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
-      employeeId: id,
-      metadata: { fields: Object.keys(input) },
+    return this.transact(async (s) => {
+      const updated = await s.employees.update(id, input);
+      await s.audit.append({
+        entity: 'EMPLOYEE',
+        entityId: id,
+        action: 'UPDATE_PROFILE',
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        employeeId: id,
+        metadata: { fields: Object.keys(input) },
+      });
+      return updated;
     });
-    return updated;
   }
 
   /**
-   * ADMIN-only hard delete. Everything attached to the file goes with it;
-   * the audit trail keeps a final DELETE entry naming who removed whom.
+   * ADMIN-only hard delete. Everything attached to the file goes with it in
+   * one transaction; the audit trail keeps a final DELETE entry naming who
+   * removed whom. Returns the storage keys of the record's files so the
+   * caller can remove them from disk AFTER the commit.
    */
-  async remove(id: string, actor: Actor) {
+  async remove(id: string, actor: Actor): Promise<string[]> {
     const existing = await this.repos.employees.findById(id);
     if (!existing) throw new NotFoundError('employee', id);
 
-    await this.repos.employees.deleteCascade(id);
-    await this.repos.audit.append({
-      entity: 'EMPLOYEE',
-      entityId: id,
-      action: 'DELETE',
-      actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
-      metadata: {
-        employeeNo: existing.employeeNo,
-        name: `${existing.firstName} ${existing.lastName}`,
-        email: existing.email,
-      },
+    const storageKeys = await this.repos.employees.collectStorageKeys(id);
+    await this.transact(async (s) => {
+      await s.employees.deleteCascade(id);
+      await s.audit.append({
+        entity: 'EMPLOYEE',
+        entityId: id,
+        action: 'DELETE',
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        metadata: {
+          employeeNo: existing.employeeNo,
+          name: `${existing.firstName} ${existing.lastName}`,
+          email: existing.email,
+        },
+      });
     });
+    return storageKeys;
   }
 
+  /** Returns the replaced photo's key so the caller can delete the file. */
   async setPhoto(id: string, photoKey: string, actor: Actor) {
     const existing = await this.repos.employees.findById(id);
     if (!existing) throw new NotFoundError('employee', id);
 
-    await this.repos.employees.setPhoto(id, photoKey);
-    await this.repos.audit.append({
-      entity: 'EMPLOYEE',
-      entityId: id,
-      action: 'UPDATE_PHOTO',
-      actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
-      employeeId: id,
+    await this.transact(async (s) => {
+      await s.employees.setPhoto(id, photoKey);
+      await s.audit.append({
+        entity: 'EMPLOYEE',
+        entityId: id,
+        action: 'UPDATE_PHOTO',
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        employeeId: id,
+      });
     });
-    return { photoKey };
+    return { photoKey, previousKey: existing.photoKey };
   }
 
   async getPhotoKey(id: string): Promise<string> {
@@ -179,21 +206,23 @@ export class EmployeeService {
     const existing = await this.repos.employees.findById(employeeId);
     if (!existing) throw new NotFoundError('employee', employeeId);
 
-    const request = await this.repos.requests.create({
-      employeeId,
-      type,
-      ...(notes ? { notes } : {}),
-      createdById: actor.id as string,
+    return this.transact(async (s) => {
+      const request = await s.requests.create({
+        employeeId,
+        type,
+        ...(notes ? { notes } : {}),
+        createdById: actor.id as string,
+      });
+      await s.audit.append({
+        entity: 'EMPLOYEE_REQUEST',
+        entityId: request.id,
+        action: type,
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        employeeId,
+      });
+      return request;
     });
-    await this.repos.audit.append({
-      entity: 'EMPLOYEE_REQUEST',
-      entityId: request.id,
-      action: type,
-      actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
-      employeeId,
-    });
-    return request;
   }
 
   async getDetails(id: string, actor: Actor) {
@@ -266,8 +295,9 @@ export class EmployeeService {
     actor: Actor,
     input: ProcessActionInput,
   ) {
-    const repo = kind === 'gosi' ? this.repos.gosi : this.repos.medical;
-    const row = await repo.findByEmployee(employeeId);
+    const row = await (kind === 'gosi' ? this.repos.gosi : this.repos.medical).findByEmployee(
+      employeeId,
+    );
     if (!row) throw new NotFoundError(`${kind} process`, employeeId);
 
     const machineKey = kind === 'gosi' ? 'GOSI' : 'MEDICAL_INSURANCE';
@@ -279,22 +309,24 @@ export class EmployeeService {
           }
         : undefined;
 
-    const workflow = new Workflow<ProcessRow>(employeeProcessMachine(machineKey), {
-      getId: (r) => r.id,
-      getStatus: (r) => r.status,
-      ...(this.ownership ? { ownership: this.ownership } : {}),
-      move: (r, from, to) =>
-        (repo as GosiRepository).moveStatus(
-          r.id,
-          from as ProcessStatus,
-          to as ProcessStatus,
-          hold as never,
-        ),
-      audit: (entry) => this.repos.audit.append(entry),
-      anchors: () => ({ employeeId }),
+    return this.transact(async (s) => {
+      const repo = kind === 'gosi' ? s.gosi : s.medical;
+      const workflow = new Workflow<ProcessRow>(employeeProcessMachine(machineKey), {
+        getId: (r) => r.id,
+        getStatus: (r) => r.status,
+        ...(this.ownership ? { ownership: this.ownership } : {}),
+        move: (r, from, to) =>
+          (repo as GosiRepository).moveStatus(
+            r.id,
+            from as ProcessStatus,
+            to as ProcessStatus,
+            hold as never,
+          ),
+        audit: (entry) => s.audit.append(entry),
+        anchors: () => ({ employeeId }),
+      });
+      return workflow.transition(row, action, actor, hold ? { hold } : undefined);
     });
-
-    return workflow.transition(row, action, actor, hold ? { hold } : undefined);
   }
 
   private async actOnCriminal(
@@ -306,22 +338,23 @@ export class EmployeeService {
     const row = await this.repos.criminal.findByEmployee(employeeId);
     if (!row) throw new NotFoundError('criminal process', employeeId);
 
-    const workflow = new Workflow<ProcessRow>(criminalRecordMachine(), {
-      getId: (r) => r.id,
-      getStatus: (r) => r.status,
-      ...(this.ownership ? { ownership: this.ownership } : {}),
-      move: (r, from, to) =>
-        this.repos.criminal.moveStatus(
-          r.id,
-          from as CriminalRecordStatus,
-          to as CriminalRecordStatus,
-          input.certificateStorageKey,
-        ),
-      audit: (entry) => this.repos.audit.append(entry),
-      anchors: () => ({ employeeId }),
+    return this.transact(async (s) => {
+      const workflow = new Workflow<ProcessRow>(criminalRecordMachine(), {
+        getId: (r) => r.id,
+        getStatus: (r) => r.status,
+        ...(this.ownership ? { ownership: this.ownership } : {}),
+        move: (r, from, to) =>
+          s.criminal.moveStatus(
+            r.id,
+            from as CriminalRecordStatus,
+            to as CriminalRecordStatus,
+            input.certificateStorageKey,
+          ),
+        audit: (entry) => s.audit.append(entry),
+        anchors: () => ({ employeeId }),
+      });
+      return workflow.transition(row, action, actor);
     });
-
-    return workflow.transition(row, action, actor);
   }
 }
 

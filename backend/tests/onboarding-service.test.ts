@@ -28,7 +28,7 @@ function makeService(overrides: { employee?: Partial<Employee> } = {}) {
       findById: vi.fn().mockResolvedValue(employee),
       createOnboarding: vi.fn(),
       updatePersonal: vi.fn().mockResolvedValue({}),
-      nextEmployeeNo: vi.fn().mockResolvedValue('EMP-0042'),
+      allocateEmployeeNo: vi.fn().mockResolvedValue('EMP-0042'),
       completeActivation: vi.fn().mockResolvedValue({}),
     },
     documents: {
@@ -65,11 +65,16 @@ function makeService(overrides: { employee?: Partial<Employee> } = {}) {
     notifyExternal: vi.fn().mockResolvedValue(undefined),
     notifyHr: vi.fn().mockResolvedValue(undefined),
   };
+  // Unit of work under test = the same fakes; the consumed link's stamp
+  // delegates to the fake links service so assertions stay in one place.
+  const scope = { ...repos, workflow, markLinkUsed: links.markUsed };
+  const transact = (fn: (s: typeof scope) => Promise<unknown>) => fn(scope);
   const service = new OnboardingService(
     repos as never,
     workflow,
     links as never,
     notifications as never,
+    transact as never,
   );
   return { service, repos, workflow, links, notifications };
 }

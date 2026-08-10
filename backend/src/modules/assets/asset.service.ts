@@ -4,6 +4,7 @@ import { assetFormMachine } from '../../workflow/machines/asset-form.machine.js'
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
 import type { AssetForm } from '../../generated/prisma/client.js';
 import type { AssetFormStatus } from '../../generated/prisma/enums.js';
+import type { UnitOfWork } from '../../common/prisma.js';
 import type { AssetRepository } from './asset.repository.js';
 import type { AssetFormRepository, AssetFormItemInput } from './asset-form.repository.js';
 import type { EmployeeRepository } from '../employees/employee.repository.js';
@@ -18,13 +19,24 @@ interface AssetLinkRow {
   assetFormId: string | null;
 }
 
+/** One custody-form unit of work — everything shares one transaction. */
+export interface AssetTxScope {
+  forms: AssetFormRepository;
+  audit: AuditLogRepository;
+  /** Single-use stamp for the link consumed by this unit of work. */
+  markLinkUsed: (tokenId: string, at: Date) => Promise<unknown>;
+}
+
 /**
  * Stage 2 — asset custody (إدارة العهد). HR builds an electronic custody
  * form, the employee e-approves it through a signed link, and approved
  * items stay linked to the employee file for offboarding and inventory.
+ *
+ * Status transitions, their audit rows and their timestamp stamps run
+ * inside one transaction; link issuance and email stay outside.
  */
 export class AssetService {
-  private readonly workflow: Workflow<AssetForm>;
+  private readonly machine;
 
   constructor(
     private readonly repos: {
@@ -35,20 +47,34 @@ export class AssetService {
     },
     private readonly links: LinkTokenService,
     private readonly notifications: NotificationService,
-    ownership?: OwnershipLookup,
+    private readonly transact: UnitOfWork<AssetTxScope>,
+    private readonly ownership?: OwnershipLookup,
   ) {
-    this.workflow = new Workflow<AssetForm>(
-      assetFormMachine({ countItems: (formId) => repos.forms.countItems(formId) }),
-      {
-        getId: (f) => f.id,
-        getStatus: (f) => f.status,
-        ...(ownership ? { ownership } : {}),
-        move: (f, from, to) =>
-          repos.forms.moveStatus(f.id, from as AssetFormStatus, to as AssetFormStatus),
-        audit: (entry) => repos.audit.append(entry),
-        anchors: (f) => ({ employeeId: f.employeeId }),
-      },
-    );
+    // Guards read through the root client — they run before the guarded
+    // move, exactly as a pre-check, so they don't need the transaction.
+    this.machine = assetFormMachine({ countItems: (formId) => repos.forms.countItems(formId) });
+  }
+
+  /** The machine bound to one unit of work's repositories. */
+  private workflowFor(s: AssetTxScope): Workflow<AssetForm> {
+    return new Workflow<AssetForm>(this.machine, {
+      getId: (f) => f.id,
+      getStatus: (f) => f.status,
+      ...(this.ownership ? { ownership: this.ownership } : {}),
+      move: (f, from, to) =>
+        s.forms.moveStatus(f.id, from as AssetFormStatus, to as AssetFormStatus),
+      audit: (entry) => s.audit.append(entry),
+      anchors: (f) => ({ employeeId: f.employeeId }),
+    });
+  }
+
+  /** Read-only view of available actions (no persistence involved). */
+  availableActions(form: AssetForm, actor: Actor): string[] {
+    return this.workflowFor({
+      forms: this.repos.forms,
+      audit: this.repos.audit,
+      markLinkUsed: () => Promise.resolve({}),
+    }).availableActions(form.status, actor);
   }
 
   // ------------------------------------------------------------ registry
@@ -74,17 +100,19 @@ export class AssetService {
     const employee = await this.repos.employees.findById(input.employeeId);
     if (!employee) throw new NotFoundError('employee', input.employeeId);
 
-    const form = await this.repos.forms.create({ ...input, createdById: actor.id ?? '' });
-    await this.repos.audit.append({
-      entity: 'ASSET_FORM',
-      entityId: form.id,
-      action: 'CREATE',
-      toStatus: form.status,
-      actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
-      employeeId: input.employeeId,
+    return this.transact(async (s) => {
+      const form = await s.forms.create({ ...input, createdById: actor.id ?? '' });
+      await s.audit.append({
+        entity: 'ASSET_FORM',
+        entityId: form.id,
+        action: 'CREATE',
+        toStatus: form.status,
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        employeeId: input.employeeId,
+      });
+      return form;
     });
-    return form;
   }
 
   async replaceItems(formId: string, items: AssetFormItemInput[], _actor: Actor) {
@@ -92,14 +120,17 @@ export class AssetService {
     if (form.status !== 'DRAFT') {
       throw new GuardFailedError('NOT_DRAFT', 'items can only be edited while the form is a draft');
     }
-    return this.repos.forms.replaceItems(formId, items);
+    // delete-then-recreate is atomic inside the unit of work.
+    return this.transact((s) => s.forms.replaceItems(formId, items));
   }
 
   /** SEND: machine guards non-empty; then link + email to the employee. */
   async send(formId: string, actor: Actor) {
     const form = await this.mustFind(formId);
-    await this.workflow.transition(form, 'SEND', actor);
-    await this.repos.forms.moveStatus(formId, 'SENT', 'SENT', { sentAt: new Date() }).catch(() => false);
+    await this.transact(async (s) => {
+      await this.workflowFor(s).transition(form, 'SEND', actor);
+      await s.forms.moveStatus(formId, 'SENT', 'SENT', { sentAt: new Date() });
+    });
 
     const employee = form.employee;
     const link = await this.links.issue('ASSET_APPROVAL', {
@@ -126,12 +157,12 @@ export class AssetService {
 
   async cancel(formId: string, actor: Actor) {
     const form = await this.mustFind(formId);
-    return this.workflow.transition(form, 'CANCEL', actor);
+    return this.transact((s) => this.workflowFor(s).transition(form, 'CANCEL', actor));
   }
 
   async revise(formId: string, actor: Actor) {
     const form = await this.mustFind(formId);
-    return this.workflow.transition(form, 'REVISE', actor);
+    return this.transact((s) => this.workflowFor(s).transition(form, 'REVISE', actor));
   }
 
   // ------------------------------------------------------- signed-link side
@@ -142,7 +173,9 @@ export class AssetService {
     const form = await this.mustFind(row.assetFormId);
 
     if (form.status === 'SENT') {
-      await this.workflow.transition(form, 'OPEN', { type: 'LINK', id: row.id });
+      await this.transact((s) =>
+        this.workflowFor(s).transition(form, 'OPEN', { type: 'LINK', id: row.id }),
+      );
       form.status = 'PENDING_EMPLOYEE_APPROVAL';
     }
 
@@ -176,29 +209,32 @@ export class AssetService {
     if (token.purpose !== 'ASSET_APPROVAL' || !token.assetFormId) {
       throw new NotFoundError('link', 'not an asset-approval link');
     }
-    let form = await this.mustFind(token.assetFormId);
-
-    // A decision straight from the email (no prior GET) implies opening.
-    if (form.status === 'SENT') {
-      await this.workflow.transition(form, 'OPEN', { type: 'LINK', id: token.id });
-      form = await this.mustFind(token.assetFormId);
-    }
-
-    const result = await this.workflow.transition(
-      form,
-      decision,
-      { type: 'LINK', id: token.id },
-      rejectReason ? { rejectReason } : undefined,
-    );
-
+    const form = await this.mustFind(token.assetFormId);
     const now = new Date();
-    await this.repos.forms
-      .moveStatus(form.id, result.to as AssetFormStatus, result.to as AssetFormStatus, {
+
+    const result = await this.transact(async (s) => {
+      const workflow = this.workflowFor(s);
+
+      // A decision straight from the email (no prior GET) implies opening.
+      if (form.status === 'SENT') {
+        await workflow.transition(form, 'OPEN', { type: 'LINK', id: token.id });
+        form.status = 'PENDING_EMPLOYEE_APPROVAL';
+      }
+
+      const r = await workflow.transition(
+        form,
+        decision,
+        { type: 'LINK', id: token.id },
+        rejectReason ? { rejectReason } : undefined,
+      );
+
+      await s.forms.moveStatus(form.id, r.to as AssetFormStatus, r.to as AssetFormStatus, {
         decidedAt: now,
         ...(decision === 'REJECT' && rejectReason ? { rejectReason } : {}),
-      })
-      .catch(() => false);
-    await this.links.markUsed(token.id, now);
+      });
+      await s.markLinkUsed(token.id, now);
+      return r;
+    });
 
     await this.notifications.notifyHr(
       'hr.asset_decided',

@@ -237,8 +237,19 @@ async function seedOwnership() {
   }
 }
 
+/** Employee-number counter: start from the numbers already handed out. */
+async function seedSequences() {
+  const numbered = await prisma.employee.count({ where: { employeeNo: { not: null } } });
+  const existing = await prisma.sequence.findUnique({ where: { key: 'EMPLOYEE_NO' } });
+  if (!existing) {
+    await prisma.sequence.create({ data: { key: 'EMPLOYEE_NO', value: numbered } });
+    console.log(`seeded sequence   EMPLOYEE_NO = ${numbered}`);
+  }
+}
+
 main()
   .then(seedOwnership)
+  .then(seedSequences)
   .catch((e) => {
     console.error(e);
     process.exit(1);

@@ -1,5 +1,7 @@
 import type { Employee, Prisma } from '../../generated/prisma/client.js';
 import type { Actor, Workflow } from '../../workflow/engine.js';
+import type { UnitOfWork } from '../../common/prisma.js';
+import { compact } from '../../common/http.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
 import type { EmployeeRepository, CreateOnboardingData } from './employee.repository.js';
 import type { OnboardingDocumentRepository } from './onboarding-document.repository.js';
@@ -28,9 +30,28 @@ function publicEmployee(e: Employee) {
 }
 
 /**
+ * Everything a single onboarding unit of work may touch. All members are
+ * bound to ONE transaction — a crash mid-way rolls the whole step back
+ * (transition + audit + stamps + link consumption together).
+ */
+export interface OnboardingTxScope {
+  employees: EmployeeRepository;
+  documents: OnboardingDocumentRepository;
+  contracts: ContractRepository;
+  audit: AuditLogRepository;
+  workflow: Workflow<Employee>;
+  /** Single-use stamp for the link consumed by this unit of work. */
+  markLinkUsed: (tokenId: string, at: Date) => Promise<unknown>;
+}
+
+/**
  * The onboarding pipeline (BRD stage 1) on the unified employee record:
  * intake → data form → document review → contract → e-approval, which
  * activates the employee (number allocated, Stage-2 tracks opened).
+ *
+ * Transaction boundaries: state changes run inside `transact`; emails and
+ * link issuance stay OUTSIDE — an SMTP hiccup must never roll back (or hold
+ * open) a database transaction.
  */
 export class OnboardingService {
   constructor(
@@ -43,37 +64,42 @@ export class OnboardingService {
     private readonly workflow: Workflow<Employee>,
     private readonly links: LinkTokenService,
     private readonly notifications: NotificationService,
+    private readonly transact: UnitOfWork<OnboardingTxScope>,
   ) {}
 
   async create(input: CreateOnboardingData, actor: Actor) {
-    const employee = await this.repos.employees.createOnboarding(input);
-    await this.repos.audit.append({
-      entity: 'EMPLOYEE',
-      entityId: employee.id,
-      action: 'CREATE',
-      toStatus: employee.status,
-      actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
-      employeeId: employee.id,
+    return this.transact(async (s) => {
+      const employee = await s.employees.createOnboarding(input);
+      await s.audit.append({
+        entity: 'EMPLOYEE',
+        entityId: employee.id,
+        action: 'CREATE',
+        toStatus: employee.status,
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        employeeId: employee.id,
+      });
+      return employee;
     });
-    return employee;
   }
 
   async sendForm(id: string, actor: Actor) {
     const employee = await this.mustFind(id);
-    await this.workflow.transition(employee, 'SEND_FORM', actor);
+    await this.transact((s) => s.workflow.transition(employee, 'SEND_FORM', actor));
     return this.sendDataFormLink(employee, actor);
   }
 
   async requestMissing(id: string, actor: Actor, notes?: string) {
     const employee = await this.mustFind(id);
-    await this.workflow.transition(employee, 'REQUEST_MISSING', actor, notes ? { notes } : undefined);
+    await this.transact((s) =>
+      s.workflow.transition(employee, 'REQUEST_MISSING', actor, notes ? { notes } : undefined),
+    );
     return this.sendDataFormLink(employee, actor);
   }
 
   async acceptDocuments(id: string, actor: Actor) {
     const employee = await this.mustFind(id);
-    return this.workflow.transition(employee, 'ACCEPT_DOCUMENTS', actor);
+    return this.transact((s) => s.workflow.transition(employee, 'ACCEPT_DOCUMENTS', actor));
   }
 
   /** Contract details may only change while the record sits in CONTRACT_CREATION. */
@@ -92,10 +118,11 @@ export class OnboardingService {
 
   async sendContract(id: string, actor: Actor) {
     const employee = await this.mustFind(id);
-    await this.workflow.transition(employee, 'SEND_CONTRACT', actor);
-
-    const contract = await this.repos.contracts.findByEmployee(id);
-    if (contract) await this.repos.contracts.markSent(contract.id, new Date());
+    await this.transact(async (s) => {
+      await s.workflow.transition(employee, 'SEND_CONTRACT', actor);
+      const contract = await s.contracts.findByEmployee(id);
+      if (contract) await s.contracts.markSent(contract.id, new Date());
+    });
 
     const link = await this.links.issue('CONTRACT_APPROVAL', { employeeId: id });
     await this.notifications.notifyExternal(
@@ -111,7 +138,7 @@ export class OnboardingService {
   /** BRD: reopen resumes from the last completed stage. */
   async reopen(id: string, actor: Actor) {
     const employee = await this.mustFind(id);
-    const result = await this.workflow.transition(employee, 'REOPEN', actor);
+    const result = await this.transact((s) => s.workflow.transition(employee, 'REOPEN', actor));
 
     if (result.to === 'AWAITING_FORM') {
       await this.sendDataFormLink(employee, actor);
@@ -168,7 +195,14 @@ export class OnboardingService {
     throw new NotFoundError('link', 'unsupported purpose');
   }
 
-  /** The new hire submits the data form through the signed link. */
+  /**
+   * The new hire submits the data form through the signed link.
+   *
+   * Validation happens BEFORE any write: a submission missing a required
+   * attachment changes nothing. The caller receives `orphanedKeys` — files
+   * now unreferenced (replaced uploads + unknown field names) — to remove
+   * from disk; they are deliberately not part of the public response.
+   */
   async submitForm(
     rawToken: string,
     fields: Partial<DataFormInput>,
@@ -182,24 +216,16 @@ export class OnboardingService {
     const checklist = await this.repos.documents.listByEmployee(employee.id);
     const now = new Date();
 
-    for (const upload of uploads) {
-      const row = checklist.find((d) => d.id === upload.documentId);
-      if (!row) continue; // unknown field names are ignored, not fatal
-      await this.repos.documents.attachUpload(
-        row.id,
-        { storageKey: upload.storageKey, mimeType: upload.mimeType, sizeBytes: upload.sizeBytes },
-        now,
-      );
-    }
+    const known = uploads.filter((u) => checklist.some((d) => d.id === u.documentId));
+    const unknown = uploads.filter((u) => !checklist.some((d) => d.id === u.documentId));
 
     // HR requires both attachments for the contract, so refuse a submission
-    // that would move the record forward without them.
+    // that would move the record forward without them — before touching the
+    // database at all.
     //
     // A type counts as satisfied when it already had a file (a resubmission
     // that only fixes a text field) or when this request just supplied one.
-    // Derived from what we have rather than re-reading the checklist: the
-    // second query would be a round trip purely to observe our own writes.
-    const uploadedIds = new Set(uploads.map((u) => u.documentId));
+    const uploadedIds = new Set(known.map((u) => u.documentId));
     const missing = REQUIRED_DOCUMENT_TYPES.filter(
       (type) =>
         !checklist.some(
@@ -213,18 +239,35 @@ export class OnboardingService {
       );
     }
 
-    await this.repos.employees.updatePersonal(employee.id, fields);
-    const result = await this.workflow.transition(employee, 'SUBMIT_FORM', {
-      type: 'LINK',
-      id: token.id,
+    // Files being replaced by this submission — orphaned once the tx commits.
+    const replacedKeys = checklist
+      .filter((d) => d.storageKey !== null && uploadedIds.has(d.id))
+      .map((d) => d.storageKey as string);
+
+    const result = await this.transact(async (s) => {
+      for (const upload of known) {
+        await s.documents.attachUpload(
+          upload.documentId,
+          { storageKey: upload.storageKey, mimeType: upload.mimeType, sizeBytes: upload.sizeBytes },
+          now,
+        );
+      }
+      await s.employees.updatePersonal(employee.id, compact(fields));
+      const r = await s.workflow.transition(employee, 'SUBMIT_FORM', {
+        type: 'LINK',
+        id: token.id,
+      });
+      await s.markLinkUsed(token.id, now);
+      return r;
     });
-    await this.links.markUsed(token.id, now);
-    return result;
+
+    return { ...result, orphanedKeys: [...replacedKeys, ...unknown.map((u) => u.storageKey)] };
   }
 
   /**
-   * E-approval activates the employee: the guarded ACTIVE transition wins
-   * the race, then the number is allocated and the Stage-2 tracks open.
+   * E-approval activates the employee. The transition, contract approval
+   * stamp, number allocation, activation, audit entry and link consumption
+   * are ONE transaction — a crash anywhere leaves no half-activated record.
    */
   async approveContract(rawToken: string) {
     const token = await this.links.verify(rawToken);
@@ -232,29 +275,33 @@ export class OnboardingService {
       throw new NotFoundError('link', 'not a contract-approval link');
     }
     const employee = token.employee;
-
-    const result = await this.workflow.transition(employee, 'APPROVE_CONTRACT', {
-      type: 'LINK',
-      id: token.id,
-    });
-
     const now = new Date();
-    const contract = await this.repos.contracts.findByEmployee(employee.id);
-    if (contract) await this.repos.contracts.markApproved(contract.id, now);
 
-    const employeeNo = await this.repos.employees.nextEmployeeNo();
-    await this.repos.employees.completeActivation(employee.id, employeeNo, now);
+    const { result, employeeNo } = await this.transact(async (s) => {
+      const r = await s.workflow.transition(employee, 'APPROVE_CONTRACT', {
+        type: 'LINK',
+        id: token.id,
+      });
 
-    await this.repos.audit.append({
-      entity: 'EMPLOYEE',
-      entityId: employee.id,
-      action: 'ACTIVATED',
-      actorType: 'SYSTEM',
-      employeeId: employee.id,
-      metadata: { employeeNo, from: 'contract-approval' },
+      const contract = await s.contracts.findByEmployee(employee.id);
+      if (contract) await s.contracts.markApproved(contract.id, now);
+
+      const employeeNo = await s.employees.allocateEmployeeNo();
+      await s.employees.completeActivation(employee.id, employeeNo, now);
+
+      await s.audit.append({
+        entity: 'EMPLOYEE',
+        entityId: employee.id,
+        action: 'ACTIVATED',
+        actorType: 'SYSTEM',
+        employeeId: employee.id,
+        metadata: { employeeNo, from: 'contract-approval' },
+      });
+
+      await s.markLinkUsed(token.id, now);
+      return { result: r, employeeNo };
     });
 
-    await this.links.markUsed(token.id, now);
     await this.notifications.notifyHr(
       'hr.contract_approved',
       { name: `${employee.firstName} ${employee.lastName}` },
