@@ -46,8 +46,12 @@ function makeService(formOverrides: Partial<Record<string, unknown>> = {}, itemC
     notifyExternal: vi.fn().mockResolvedValue(undefined),
     notifyHr: vi.fn().mockResolvedValue(undefined),
   };
+  // Unit of work under test = the same fakes; the consumed link's stamp
+  // delegates to the fake links service so assertions stay in one place.
+  const scope = { forms: repos.forms, audit: repos.audit, markLinkUsed: links.markUsed };
+  const transact = (fn: (s: typeof scope) => Promise<unknown>) => fn(scope);
   return {
-    service: new AssetService(repos as never, links as never, notifications as never),
+    service: new AssetService(repos as never, links as never, notifications as never, transact as never),
     repos,
     links,
     notifications,

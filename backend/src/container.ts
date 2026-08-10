@@ -1,5 +1,5 @@
 import { config } from './common/config.js';
-import { prisma } from './common/prisma.js';
+import { prisma, type Db, type UnitOfWork } from './common/prisma.js';
 import { EventBus } from './events/event-bus.js';
 import { EmployeeRepository } from './modules/employees/employee.repository.js';
 import { OnboardingDocumentRepository } from './modules/employees/onboarding-document.repository.js';
@@ -27,13 +27,13 @@ import {
 } from './workflow/sla-watchers.js';
 import { EmployeeDocumentRepository } from './modules/employees/employee-document.repository.js';
 import { OwnershipService } from './workflow/ownership.service.js';
-import { OnboardingService } from './modules/employees/onboarding.service.js';
-import { EmployeeService } from './modules/employees/employee.service.js';
+import { OnboardingService, type OnboardingTxScope } from './modules/employees/onboarding.service.js';
+import { EmployeeService, type EmployeeTxScope } from './modules/employees/employee.service.js';
 import { AssetRepository } from './modules/assets/asset.repository.js';
 import { AssetFormRepository } from './modules/assets/asset-form.repository.js';
-import { AssetService } from './modules/assets/asset.service.js';
+import { AssetService, type AssetTxScope } from './modules/assets/asset.service.js';
 import { OffboardingRepository } from './modules/offboarding/offboarding.repository.js';
-import { OffboardingService } from './modules/offboarding/offboarding.service.js';
+import { OffboardingService, type OffboardingTxScope } from './modules/offboarding/offboarding.service.js';
 import { GosiRepository } from './modules/processes/gosi.repository.js';
 import { MedicalInsuranceRepository } from './modules/processes/medical-insurance.repository.js';
 import { CriminalRecordRepository } from './modules/processes/criminal-record.repository.js';
@@ -65,7 +65,12 @@ export function buildContainer() {
   const notifications = new NotificationService(notificationRepo, users, notifier);
   const dashboardService = new DashboardService(prisma);
   const reportsService = new ReportsService(prisma);
-  const aiService = new AiService(prisma, config.ANTHROPIC_API_KEY, config.AI_MODEL);
+  const aiService = new AiService(
+    prisma,
+    config.ANTHROPIC_API_KEY,
+    config.AI_MODEL,
+    config.AI_REDACT_PII,
+  );
 
   const eventBus = new EventBus();
   const ownershipService = new OwnershipService(prisma);
@@ -73,6 +78,56 @@ export function buildContainer() {
     { employees, documents, contracts, audit },
     ownershipService,
   );
+
+  // ---------------------------------------------------------------- units of work
+  // Each service's `transact` rebuilds its scope on the transaction client,
+  // so a transition, its audit row, its stamps and the consumed link all
+  // commit — or roll back — together. Repositories are stateless, so
+  // constructing them per transaction costs nothing.
+  const unitOfWork =
+    <S>(scope: (db: Db) => S): UnitOfWork<S> =>
+    (fn) =>
+      prisma.$transaction((tx) => fn(scope(tx)));
+
+  const markLinkUsedWith = (db: Db) => (tokenId: string, at: Date) =>
+    new LinkTokenRepository(db).markUsed(tokenId, at);
+
+  const onboardingScope = (db: Db): OnboardingTxScope => {
+    const scoped = {
+      employees: new EmployeeRepository(db),
+      documents: new OnboardingDocumentRepository(db),
+      contracts: new ContractRepository(db),
+      audit: new AuditLogRepository(db),
+    };
+    return {
+      ...scoped,
+      workflow: buildOnboardingWorkflow(scoped, ownershipService),
+      markLinkUsed: markLinkUsedWith(db),
+    };
+  };
+
+  const employeeScope = (db: Db): EmployeeTxScope => ({
+    employees: new EmployeeRepository(db),
+    requests: new EmployeeRequestRepository(db),
+    gosi: new GosiRepository(db),
+    medical: new MedicalInsuranceRepository(db),
+    criminal: new CriminalRecordRepository(db),
+    audit: new AuditLogRepository(db),
+  });
+
+  const assetScope = (db: Db): AssetTxScope => ({
+    forms: new AssetFormRepository(db),
+    audit: new AuditLogRepository(db),
+    markLinkUsed: markLinkUsedWith(db),
+  });
+
+  const offboardingScope = (db: Db): OffboardingTxScope => ({
+    offboardings: new OffboardingRepository(db),
+    employees: new EmployeeRepository(db),
+    assetForms: new AssetFormRepository(db),
+    audit: new AuditLogRepository(db),
+    markLinkUsed: markLinkUsedWith(db),
+  });
 
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
   const slaFirings = new SlaFiringRepository(prisma);
@@ -98,10 +153,12 @@ export function buildContainer() {
     onboardingWorkflow,
     linkTokenService,
     notifications,
+    unitOfWork(onboardingScope),
   );
 
   const employeeService = new EmployeeService(
     { employees, requests: employeeRequests, gosi, medical, criminal, audit },
+    unitOfWork(employeeScope),
     ownershipService,
     onboardingWorkflow,
   );
@@ -112,6 +169,7 @@ export function buildContainer() {
     { assets, forms: assetForms, employees, audit },
     linkTokenService,
     notifications,
+    unitOfWork(assetScope),
     ownershipService,
   );
 
@@ -120,6 +178,7 @@ export function buildContainer() {
     { offboardings, employees, assetForms, audit },
     linkTokenService,
     notifications,
+    unitOfWork(offboardingScope),
     ownershipService,
   );
 

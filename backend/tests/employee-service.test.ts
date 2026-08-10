@@ -37,7 +37,9 @@ function makeService(overrides: Partial<Record<string, unknown>> = {}) {
     },
     audit: { append: vi.fn().mockResolvedValue({}) },
   };
-  return { service: new EmployeeService(repos as never), repos };
+  // Unit of work under test = pass the same fakes straight through.
+  const transact = (fn: (s: typeof repos) => Promise<unknown>) => fn(repos);
+  return { service: new EmployeeService(repos as never, transact as never), repos };
 }
 
 describe('EmployeeService.actOnProcess', () => {

@@ -4,6 +4,7 @@ import { offboardingMachine } from '../../workflow/machines/offboarding.machine.
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
 import type { Offboarding, Prisma } from '../../generated/prisma/client.js';
 import type { OffboardingReason, OffboardingStatus } from '../../generated/prisma/enums.js';
+import type { UnitOfWork } from '../../common/prisma.js';
 import type { OffboardingRepository } from './offboarding.repository.js';
 import type { EmployeeRepository } from '../employees/employee.repository.js';
 import type { AssetFormRepository } from '../assets/asset-form.repository.js';
@@ -17,15 +18,30 @@ interface ExitLinkRow {
   offboardingId: string | null;
 }
 
+/** One offboarding unit of work — everything shares one transaction. */
+export interface OffboardingTxScope {
+  offboardings: OffboardingRepository;
+  employees: EmployeeRepository;
+  assetForms: AssetFormRepository;
+  audit: AuditLogRepository;
+  /** Single-use stamp for the link consumed by this unit of work. */
+  markLinkUsed: (tokenId: string, at: Date) => Promise<unknown>;
+}
+
 /**
  * Stage 3 — Offboarding (إنهاء العلاقة التعاقدية). One record walks:
  * REQUESTED → IN_PROGRESS (exit interview auto-sent for resignations) →
  * ASSETS_PENDING (hard gate: every approved custody item returned) →
  * NOTICE_SENT → SETTLEMENT (HR enters amounts) → CLOSED (FINANCE approves;
  * the employee flips to INACTIVE and the file is closed).
+ *
+ * Each step's transition, audit row and timestamp stamps commit together;
+ * emails and link issuance stay outside the transaction.
  */
 export class OffboardingService {
-  private readonly workflow: Workflow<Offboarding>;
+  private readonly machine;
+  /** Root-bound instance for read-only lookups (availableActions). */
+  private readonly readWorkflow: Workflow<Offboarding>;
 
   constructor(
     private readonly repos: {
@@ -36,22 +52,34 @@ export class OffboardingService {
     },
     private readonly links: LinkTokenService,
     private readonly notifications: NotificationService,
-    ownership?: OwnershipLookup,
+    private readonly transact: UnitOfWork<OffboardingTxScope>,
+    private readonly ownership?: OwnershipLookup,
   ) {
-    this.workflow = new Workflow<Offboarding>(
-      offboardingMachine({
-        countUnreturnedAssets: (employeeId) => repos.assetForms.countUnreturnedItems(employeeId),
-      }),
-      {
-        getId: (o) => o.id,
-        getStatus: (o) => o.status,
-        ...(ownership ? { ownership } : {}),
-        move: (o, from, to) =>
-          repos.offboardings.moveStatus(o.id, from as OffboardingStatus, to as OffboardingStatus),
-        audit: (entry) => repos.audit.append(entry),
-        anchors: (o) => ({ employeeId: o.employeeId }),
-      },
-    );
+    // The asset gate reads through the root client — a pre-check, like all
+    // machine guards, so it doesn't need the transaction.
+    this.machine = offboardingMachine({
+      countUnreturnedAssets: (employeeId) => repos.assetForms.countUnreturnedItems(employeeId),
+    });
+    this.readWorkflow = this.workflowFor({
+      offboardings: repos.offboardings,
+      employees: repos.employees,
+      assetForms: repos.assetForms,
+      audit: repos.audit,
+      markLinkUsed: () => Promise.resolve({}),
+    });
+  }
+
+  /** The machine bound to one unit of work's repositories. */
+  private workflowFor(s: OffboardingTxScope): Workflow<Offboarding> {
+    return new Workflow<Offboarding>(this.machine, {
+      getId: (o) => o.id,
+      getStatus: (o) => o.status,
+      ...(this.ownership ? { ownership: this.ownership } : {}),
+      move: (o, from, to) =>
+        s.offboardings.moveStatus(o.id, from as OffboardingStatus, to as OffboardingStatus),
+      audit: (entry) => s.audit.append(entry),
+      anchors: (o) => ({ employeeId: o.employeeId }),
+    });
   }
 
   // ------------------------------------------------------------- HR flow
@@ -71,23 +99,25 @@ export class OffboardingService {
       throw new GuardFailedError('ALREADY_OPEN', 'an offboarding is already in progress');
     }
 
-    const offboarding = await this.repos.offboardings.create({
-      employeeId,
-      reason,
-      requestedById: actor.id ?? '',
-      ...(notes ? { notes } : {}),
+    return this.transact(async (s) => {
+      const offboarding = await s.offboardings.create({
+        employeeId,
+        reason,
+        requestedById: actor.id ?? '',
+        ...(notes ? { notes } : {}),
+      });
+      await s.audit.append({
+        entity: 'OFFBOARDING',
+        entityId: offboarding.id,
+        action: 'CREATE',
+        toStatus: offboarding.status,
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        employeeId,
+        metadata: { reason },
+      });
+      return offboarding;
     });
-    await this.repos.audit.append({
-      entity: 'OFFBOARDING',
-      entityId: offboarding.id,
-      action: 'CREATE',
-      toStatus: offboarding.status,
-      actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
-      employeeId,
-      metadata: { reason },
-    });
-    return offboarding;
   }
 
   async get(id: string, actor: Actor) {
@@ -101,7 +131,7 @@ export class OffboardingService {
     return {
       ...offboarding,
       employee,
-      availableActions: this.workflow.availableActions(offboarding.status, actor),
+      availableActions: this.readWorkflow.availableActions(offboarding.status, actor),
       assets: {
         items: approvedItems,
         unreturned: approvedItems.filter((i) => i.returnedAt === null).length,
@@ -112,7 +142,9 @@ export class OffboardingService {
   /** START: procedures begin; resignations auto-receive the exit interview. */
   async start(id: string, actor: Actor) {
     const offboarding = await this.mustFind(id);
-    const result = await this.workflow.transition(offboarding, 'START', actor);
+    const result = await this.transact((s) =>
+      this.workflowFor(s).transition(offboarding, 'START', actor),
+    );
     let exitInterviewUrl: string | undefined;
 
     if (offboarding.reason === 'RESIGNATION') {
@@ -128,14 +160,16 @@ export class OffboardingService {
           { name: `${employee.firstName} ${employee.lastName}`, linkUrl: link.url },
           { entity: 'OFFBOARDING', entityId: id },
         );
-        await this.stamp(id, 'IN_PROGRESS', { exitInterviewSentAt: new Date() });
-        await this.repos.audit.append({
-          entity: 'OFFBOARDING',
-          entityId: id,
-          action: 'LINK_SENT',
-          actorType: 'SYSTEM',
-          employeeId: offboarding.employeeId,
-          metadata: { purpose: 'EXIT_INTERVIEW' },
+        await this.transact(async (s) => {
+          await this.stamp(s, id, 'IN_PROGRESS', { exitInterviewSentAt: new Date() });
+          await s.audit.append({
+            entity: 'OFFBOARDING',
+            entityId: id,
+            action: 'LINK_SENT',
+            actorType: 'SYSTEM',
+            employeeId: offboarding.employeeId,
+            metadata: { purpose: 'EXIT_INTERVIEW' },
+          });
         });
         exitInterviewUrl = link.url;
       }
@@ -145,35 +179,41 @@ export class OffboardingService {
 
   async toAssetReturn(id: string, actor: Actor) {
     const offboarding = await this.mustFind(id);
-    return this.workflow.transition(offboarding, 'TO_ASSET_RETURN', actor);
+    return this.transact((s) =>
+      this.workflowFor(s).transition(offboarding, 'TO_ASSET_RETURN', actor),
+    );
   }
 
   /** HR records each custody item as physically returned. */
   async markItemReturned(offboardingId: string, itemId: string, actor: Actor) {
     const offboarding = await this.mustFind(offboardingId);
-    const item = await this.repos.assetForms.markItemReturned(itemId, new Date());
-    await this.repos.audit.append({
-      entity: 'OFFBOARDING',
-      entityId: offboardingId,
-      action: 'ASSET_RETURNED',
-      actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
-      employeeId: offboarding.employeeId,
-      metadata: { itemId, type: item.type, name: item.name },
+    return this.transact(async (s) => {
+      const item = await s.assetForms.markItemReturned(itemId, new Date());
+      await s.audit.append({
+        entity: 'OFFBOARDING',
+        entityId: offboardingId,
+        action: 'ASSET_RETURNED',
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        employeeId: offboarding.employeeId,
+        metadata: { itemId, type: item.type, name: item.name },
+      });
+      return item;
     });
-    return item;
   }
 
   /** BRD hard gate + official notice in one confirmed step. */
   async confirmAssetsReturned(id: string, actor: Actor) {
     const offboarding = await this.mustFind(id);
-    const result = await this.workflow.transition(offboarding, 'CONFIRM_ASSETS_RETURNED', actor);
-
     const now = new Date();
-    await this.stamp(id, 'NOTICE_SENT', {
-      assetsConfirmedAt: now,
-      ...(actor.id ? { assetsConfirmedById: actor.id } : {}),
-      noticeSentAt: now,
+    const result = await this.transact(async (s) => {
+      const r = await this.workflowFor(s).transition(offboarding, 'CONFIRM_ASSETS_RETURNED', actor);
+      await this.stamp(s, id, 'NOTICE_SENT', {
+        assetsConfirmedAt: now,
+        ...(actor.id ? { assetsConfirmedById: actor.id } : {}),
+        noticeSentAt: now,
+      });
+      return r;
     });
 
     const employee = await this.repos.employees.findById(offboarding.employeeId);
@@ -190,7 +230,9 @@ export class OffboardingService {
 
   async toSettlement(id: string, actor: Actor) {
     const offboarding = await this.mustFind(id);
-    return this.workflow.transition(offboarding, 'TO_SETTLEMENT', actor);
+    return this.transact((s) =>
+      this.workflowFor(s).transition(offboarding, 'TO_SETTLEMENT', actor),
+    );
   }
 
   /** HR (or finance) enters the settlement amounts — closure stays FINANCE. */
@@ -209,60 +251,65 @@ export class OffboardingService {
     if (offboarding.status !== 'SETTLEMENT') {
       throw new GuardFailedError('WRONG_STATUS', 'the record is not in the settlement stage');
     }
-    await this.repos.offboardings.recordSettlement(id, {
-      settlementWorkingDays: amounts.workingDays,
-      settlementLeaveDays: amounts.leaveDays,
-      settlementDeductions: amounts.deductions,
-      settlementEntitlements: amounts.entitlements,
-      ...(amounts.notes ? { settlementNotes: amounts.notes } : {}),
-    });
-    await this.repos.audit.append({
-      entity: 'OFFBOARDING',
-      entityId: id,
-      action: 'SETTLEMENT_RECORDED',
-      actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
-      employeeId: offboarding.employeeId,
-      metadata: amounts,
+    await this.transact(async (s) => {
+      await s.offboardings.recordSettlement(id, {
+        settlementWorkingDays: amounts.workingDays,
+        settlementLeaveDays: amounts.leaveDays,
+        settlementDeductions: amounts.deductions,
+        settlementEntitlements: amounts.entitlements,
+        ...(amounts.notes ? { settlementNotes: amounts.notes } : {}),
+      });
+      await s.audit.append({
+        entity: 'OFFBOARDING',
+        entityId: id,
+        action: 'SETTLEMENT_RECORDED',
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        employeeId: offboarding.employeeId,
+        metadata: amounts,
+      });
     });
     return this.mustFind(id);
   }
 
-  /** FINANCE approves & pays → file closed, employee INACTIVE (BRD step 5). */
+  /**
+   * FINANCE approves & pays → file closed, employee INACTIVE (BRD step 5).
+   * The close transition, its stamps and the employee flip are ONE
+   * transaction — the file can never end up closed with the employee
+   * still marked active.
+   */
   async close(id: string, actor: Actor) {
     const offboarding = await this.mustFind(id);
-    const result = await this.workflow.transition(offboarding, 'CLOSE', actor);
-
     const now = new Date();
-    await this.stamp(id, 'CLOSED', {
-      closedAt: now,
-      settlementApprovedAt: now,
-      ...(actor.id ? { settlementApprovedById: actor.id } : {}),
-    });
+    return this.transact(async (s) => {
+      const result = await this.workflowFor(s).transition(offboarding, 'CLOSE', actor);
 
-    const flipped = await this.repos.employees.moveStatus(
-      offboarding.employeeId,
-      'ACTIVE',
-      'INACTIVE',
-    );
-    if (flipped) {
-      await this.repos.audit.append({
-        entity: 'EMPLOYEE',
-        entityId: offboarding.employeeId,
-        action: 'STATUS_TRANSITION',
-        fromStatus: 'ACTIVE',
-        toStatus: 'INACTIVE',
-        actorType: 'SYSTEM',
-        employeeId: offboarding.employeeId,
-        metadata: { offboardingId: id },
+      await this.stamp(s, id, 'CLOSED', {
+        closedAt: now,
+        settlementApprovedAt: now,
+        ...(actor.id ? { settlementApprovedById: actor.id } : {}),
       });
-    }
-    return result;
+
+      const flipped = await s.employees.moveStatus(offboarding.employeeId, 'ACTIVE', 'INACTIVE');
+      if (flipped) {
+        await s.audit.append({
+          entity: 'EMPLOYEE',
+          entityId: offboarding.employeeId,
+          action: 'STATUS_TRANSITION',
+          fromStatus: 'ACTIVE',
+          toStatus: 'INACTIVE',
+          actorType: 'SYSTEM',
+          employeeId: offboarding.employeeId,
+          metadata: { offboardingId: id },
+        });
+      }
+      return result;
+    });
   }
 
   async cancel(id: string, actor: Actor) {
     const offboarding = await this.mustFind(id);
-    return this.workflow.transition(offboarding, 'CANCEL', actor);
+    return this.transact((s) => this.workflowFor(s).transition(offboarding, 'CANCEL', actor));
   }
 
   // ------------------------------------------------------- signed-link side
@@ -288,14 +335,16 @@ export class OffboardingService {
     const offboarding = await this.mustFind(token.offboardingId);
 
     const now = new Date();
-    await this.repos.offboardings.recordExitInterview(offboarding.id, answers, now);
-    await this.links.markUsed(token.id, now);
-    await this.repos.audit.append({
-      entity: 'OFFBOARDING',
-      entityId: offboarding.id,
-      action: 'EXIT_INTERVIEW_SUBMITTED',
-      actorType: 'LINK',
-      employeeId: offboarding.employeeId,
+    await this.transact(async (s) => {
+      await s.offboardings.recordExitInterview(offboarding.id, answers, now);
+      await s.markLinkUsed(token.id, now);
+      await s.audit.append({
+        entity: 'OFFBOARDING',
+        entityId: offboarding.id,
+        action: 'EXIT_INTERVIEW_SUBMITTED',
+        actorType: 'LINK',
+        employeeId: offboarding.employeeId,
+      });
     });
 
     const employee = await this.repos.employees.findById(offboarding.employeeId);
@@ -319,10 +368,11 @@ export class OffboardingService {
 
   /** Post-transition field stamping (same-status guarded write). */
   private stamp(
+    s: OffboardingTxScope,
     id: string,
     status: OffboardingStatus,
     fields: Prisma.OffboardingUpdateManyMutationInput,
   ) {
-    return this.repos.offboardings.moveStatus(id, status, status, fields);
+    return s.offboardings.moveStatus(id, status, status, fields);
   }
 }

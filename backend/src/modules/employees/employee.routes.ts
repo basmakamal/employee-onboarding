@@ -1,7 +1,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
-import { photoUpload, storagePath } from '../../common/storage.js';
+import {
+  discardUploads,
+  employeeSubdir,
+  photoUpload,
+  removeStoredFile,
+  removeStoredFiles,
+  storageKeyFor,
+  storagePath,
+  verifyUploadedFiles,
+} from '../../common/storage.js';
 import { GuardFailedError } from '../../workflow/errors.js';
 import { requireRole } from '../../auth/require-auth.middleware.js';
 import type { EmployeeService } from './employee.service.js';
@@ -203,7 +212,10 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     '/:id',
     requireRole('ADMIN'),
     asyncHandler(async (req, res) => {
-      await service.remove(req.params['id'] as string, actor(req));
+      const storageKeys = await service.remove(req.params['id'] as string, actor(req));
+      // Disk cleanup only after the delete committed — files first would
+      // leave a live record pointing at nothing if the delete failed.
+      await removeStoredFiles(storageKeys);
       res.status(204).end();
     }),
   );
@@ -223,10 +235,29 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   router.post(
     '/:id/photo',
     requireRole('HR', 'ADMIN'),
+    (req, _res, next) => {
+      // Shard the photo into the employee's directory before multer runs.
+      req.uploadSubdir = employeeSubdir(req.params['id'] as string);
+      next();
+    },
     photoUpload.single('photo'),
     asyncHandler(async (req, res) => {
       if (!req.file) throw new GuardFailedError('PHOTO_MISSING', 'no photo uploaded');
-      res.json(await service.setPhoto(req.params['id'] as string, req.file.filename, actor(req)));
+      try {
+        await verifyUploadedFiles([req.file]);
+        const key = storageKeyFor(req.uploadSubdir as string, req.file.filename);
+        const { photoKey, previousKey } = await service.setPhoto(
+          req.params['id'] as string,
+          key,
+          actor(req),
+        );
+        // The replaced photo is unreferenced once the update committed.
+        if (previousKey && previousKey !== photoKey) await removeStoredFile(previousKey);
+        res.json({ photoKey });
+      } catch (err) {
+        await discardUploads([req.file]);
+        throw err;
+      }
     }),
   );
 
