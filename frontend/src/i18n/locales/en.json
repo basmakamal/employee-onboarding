@@ -393,6 +393,22 @@
       "expiring-documents": "Expiring docs",
       "audit": "Audit (30d)",
       "onboarding": "Onboarding"
+    },
+    "people": "Employees by name",
+    "totals": {
+      "active": "Active employees",
+      "onboarding": "In onboarding",
+      "inactive": "Inactive",
+      "expiring": "Documents expiring ≤ 30 days"
+    },
+    "filters": {
+      "search": "Search name, number, email…",
+      "from": "From",
+      "to": "To",
+      "basis": "Period based on",
+      "basisHire": "Hire date",
+      "basisCreated": "Created date",
+      "clear": "Clear"
     }
   },
   "expiryDocs": {
