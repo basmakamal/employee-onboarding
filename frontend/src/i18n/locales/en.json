@@ -511,6 +511,7 @@
     "missing": "Not uploaded",
     "optional": "optional",
     "missingNotes": "What is missing? (sent to the new hire)",
-    "activated": "Contract approved — the employee was activated with number {no}."
+    "activated": "Contract approved — the employee was activated with number {no}.",
+    "sendNow": "Send the data form by e-mail immediately after creation"
   }
 }

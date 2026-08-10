@@ -48,6 +48,7 @@ const form = ref({
   jobTitle: '',
   hireDate: '',
 });
+const sendFormNow = ref(true);
 
 async function load() {
   loading.value = true;
@@ -77,7 +78,10 @@ async function createEmployee() {
     for (const [k, v] of Object.entries(form.value)) {
       if (k !== 'mode' && v.trim()) body[k] = v.trim();
     }
-    if (form.value.mode === 'onboarding') delete body['hireDate']; // set on activation
+    if (form.value.mode === 'onboarding') {
+      delete body['hireDate']; // set on activation
+      body['sendForm'] = sendFormNow.value;
+    }
     const created = await api.post<EmployeeRow>('/api/employees', body);
     dialog.value = false;
     await router.push(`/employees/${created.id}`);
@@ -178,9 +182,18 @@ onMounted(load);
               <v-text-field v-model="form.hireDate" :label="$t('employees.hireDate')" type="date" />
             </v-col>
           </v-row>
-          <p v-if="form.mode === 'onboarding'" class="text-caption text-medium-emphasis mb-0">
-            {{ $t('onboarding.docsHint') }}
-          </p>
+          <template v-if="form.mode === 'onboarding'">
+            <v-checkbox
+              v-model="sendFormNow"
+              :label="$t('onboarding.sendNow')"
+              density="compact"
+              hide-details
+              class="mt-1"
+            />
+            <p class="text-caption text-medium-emphasis mb-0">
+              {{ $t('onboarding.docsHint') }}
+            </p>
+          </template>
         </v-card-text>
         <v-card-actions>
           <v-spacer />

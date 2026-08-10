@@ -35,6 +35,8 @@ const createEmployeeSchema = z.object({
   employmentType: z.enum(EMPLOYMENT_TYPES).optional(),
   hireDate: z.coerce.date().optional(),
   direct: z.boolean().default(false),
+  /** Onboarding mode: e-mail the signed data-form link right after creation. */
+  sendForm: z.boolean().default(true),
   documentTypes: z
     .array(z.string().min(1))
     .min(1)
@@ -115,18 +117,21 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     requireRole('HR', 'ADMIN'),
     validate(createEmployeeSchema),
     asyncHandler(async (req, res) => {
-      const { direct, documentTypes, ...rest } = req.body as z.infer<typeof createEmployeeSchema>;
+      const { direct, sendForm, documentTypes, ...rest } = req.body as z.infer<
+        typeof createEmployeeSchema
+      >;
       const input = compact(rest);
       if (direct) {
         res.status(201).json(await service.createDirect(input, actor(req)));
         return;
       }
-      res.status(201).json(
-        await onboarding.create(
-          { ...input, documentTypes, createdById: actor(req).id ?? '' },
-          actor(req),
-        ),
+      const employee = await onboarding.create(
+        { ...input, documentTypes, createdById: actor(req).id ?? '' },
+        actor(req),
       );
+      // Default UX: the data-form e-mail goes out immediately on creation.
+      const link = sendForm ? await onboarding.sendForm(employee.id, actor(req)) : null;
+      res.status(201).json({ ...employee, formLink: link });
     }),
   );
 
