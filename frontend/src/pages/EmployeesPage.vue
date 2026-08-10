@@ -50,9 +50,18 @@ const form = ref({
 });
 const sendFormNow = ref(true);
 
+/** Known departments / job titles — new typed values join the list on save. */
+const options = ref<{ departments: string[]; jobTitles: string[] }>({
+  departments: [],
+  jobTitles: [],
+});
+
 async function load() {
   loading.value = true;
-  employees.value = await api.get<EmployeeRow[]>('/api/employees');
+  [employees.value, options.value] = await Promise.all([
+    api.get<EmployeeRow[]>('/api/employees'),
+    api.get<{ departments: string[]; jobTitles: string[] }>('/api/employees/options'),
+  ]);
   loading.value = false;
 }
 
@@ -76,7 +85,8 @@ async function createEmployee() {
   try {
     const body: Record<string, unknown> = { direct: form.value.mode === 'direct' };
     for (const [k, v] of Object.entries(form.value)) {
-      if (k !== 'mode' && v.trim()) body[k] = v.trim();
+      // comboboxes emit null when cleared — only keep real text
+      if (k !== 'mode' && typeof v === 'string' && v.trim()) body[k] = v.trim();
     }
     if (form.value.mode === 'onboarding') {
       delete body['hireDate']; // set on activation
@@ -175,9 +185,25 @@ onMounted(load);
             <v-col cols="12"><v-text-field v-model="form.email" :label="$t('fields.email')" type="email" /></v-col>
             <v-col cols="6"><v-text-field v-model="form.phone" :label="$t('fields.phone')" /></v-col>
             <v-col cols="6"><v-text-field v-model="form.nationalId" :label="$t('fields.nationalId')" /></v-col>
-            <v-col cols="6"><v-text-field v-model="form.department" :label="$t('fields.department')" /></v-col>
+            <v-col cols="6">
+              <v-combobox
+                v-model="form.department"
+                :items="options.departments"
+                :label="$t('fields.department')"
+                :hint="$t('fields.comboHint')"
+                persistent-hint
+              />
+            </v-col>
             <v-col cols="6"><v-text-field v-model="form.project" :label="$t('employees.project')" /></v-col>
-            <v-col cols="6"><v-text-field v-model="form.jobTitle" :label="$t('fields.jobTitle')" /></v-col>
+            <v-col cols="6">
+              <v-combobox
+                v-model="form.jobTitle"
+                :items="options.jobTitles"
+                :label="$t('fields.jobTitle')"
+                :hint="$t('fields.comboHint')"
+                persistent-hint
+              />
+            </v-col>
             <v-col v-if="form.mode === 'direct'" cols="6">
               <v-text-field v-model="form.hireDate" :label="$t('employees.hireDate')" type="date" />
             </v-col>

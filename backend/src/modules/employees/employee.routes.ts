@@ -135,6 +135,15 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     }),
   );
 
+  /** Distinct departments / job titles for the form comboboxes.
+   *  Registered BEFORE /:id so "options" is never parsed as an id. */
+  router.get(
+    '/options',
+    asyncHandler(async (_req, res) => {
+      res.json(await service.fieldOptions());
+    }),
+  );
+
   router.get(
     '/:id',
     asyncHandler(async (req, res) => {

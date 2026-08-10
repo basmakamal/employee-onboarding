@@ -233,6 +233,12 @@ const missingCount = computed(() => {
 // ------------------------------------------------------------- edit profile
 const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'TEMPORARY'];
 const editDialog = ref(false);
+
+/** Known departments / job titles — new typed values join the list on save. */
+const fieldOptions = ref<{ departments: string[]; jobTitles: string[] }>({
+  departments: [],
+  jobTitles: [],
+});
 const editForm = ref({
   firstName: '',
   lastName: '',
@@ -251,6 +257,9 @@ const editForm = ref({
 function openEdit() {
   const e = employee.value;
   if (!e) return;
+  void api
+    .get<{ departments: string[]; jobTitles: string[] }>('/api/employees/options')
+    .then((opts) => (fieldOptions.value = opts));
   editForm.value = {
     firstName: e.firstName,
     lastName: e.lastName,
@@ -280,9 +289,9 @@ async function saveEdit() {
       phone: f.phone.trim() || null,
       nationalId: f.nationalId.trim() || null,
       birthDate: f.birthDate || null,
-      department: f.department.trim() || null,
+      department: (f.department ?? '').trim() || null,
       project: f.project.trim() || null,
-      jobTitle: f.jobTitle.trim() || null,
+      jobTitle: (f.jobTitle ?? '').trim() || null,
       directManager: f.directManager.trim() || null,
       employmentType: f.employmentType,
       ...(f.hireDate ? { hireDate: f.hireDate } : {}),
@@ -1528,13 +1537,25 @@ onMounted(load);
               <v-text-field v-model="editForm.birthDate" :label="$t('fields.birthDate')" type="date" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.department" :label="$t('fields.department')" />
+              <v-combobox
+                v-model="editForm.department"
+                :items="fieldOptions.departments"
+                :label="$t('fields.department')"
+                :hint="$t('fields.comboHint')"
+                persistent-hint
+              />
             </v-col>
             <v-col cols="12" sm="6">
               <v-text-field v-model="editForm.project" :label="$t('employees.project')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.jobTitle" :label="$t('fields.jobTitle')" />
+              <v-combobox
+                v-model="editForm.jobTitle"
+                :items="fieldOptions.jobTitles"
+                :label="$t('fields.jobTitle')"
+                :hint="$t('fields.comboHint')"
+                persistent-hint
+              />
             </v-col>
             <v-col cols="12" sm="6">
               <v-text-field v-model="editForm.directManager" :label="$t('profile.directManager')" />

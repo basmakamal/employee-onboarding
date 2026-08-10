@@ -151,6 +151,21 @@ export class EmployeeRepository {
     return this.db.employee.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
+  /** Distinct departments / job titles in use — feeds the form comboboxes. */
+  async fieldOptions(): Promise<{ departments: string[]; jobTitles: string[] }> {
+    const rows = await this.db.employee.findMany({
+      select: { department: true, jobTitle: true },
+    });
+    const distinct = (values: Array<string | null>) =>
+      [...new Set(values.filter((v): v is string => !!v?.trim()).map((v) => v.trim()))].sort(
+        (a, b) => a.localeCompare(b),
+      );
+    return {
+      departments: distinct(rows.map((r) => r.department)),
+      jobTitles: distinct(rows.map((r) => r.jobTitle)),
+    };
+  }
+
   /** SLA scan input — statusChangedAt is the elapsed-time anchor. */
   listInStatusSince(status: EmployeeStatus, threshold: Date) {
     return this.db.employee.findMany({

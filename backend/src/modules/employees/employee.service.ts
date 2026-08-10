@@ -58,6 +58,10 @@ export class EmployeeService {
     return this.repos.employees.list();
   }
 
+  fieldOptions() {
+    return this.repos.employees.fieldOptions();
+  }
+
   /**
    * Direct creation for EXISTING staff (data migration / hires that never
    * went through onboarding). Born ACTIVE with a number and the three

@@ -515,7 +515,8 @@
     "birthDate": "تاريخ الميلاد",
     "department": "القسم",
     "jobTitle": "المسمى الوظيفي",
-    "status": "الحالة"
+    "status": "الحالة",
+    "comboHint": "اختر من القائمة أو اكتب قيمة جديدة"
   },
   "onboarding": {
     "title": "التعيين",

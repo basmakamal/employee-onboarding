@@ -515,7 +515,8 @@
     "birthDate": "Birth date",
     "department": "Department",
     "jobTitle": "Job title",
-    "status": "Status"
+    "status": "Status",
+    "comboHint": "Pick from the list or type a new value"
   },
   "onboarding": {
     "title": "Onboarding",
