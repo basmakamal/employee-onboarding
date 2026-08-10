@@ -22,6 +22,10 @@ const envSchema = z
     UPLOAD_DIR: z.string().default('./storage'),
     /** Signed-link lifetime in hours. */
     LINK_TTL_HOURS: z.coerce.number().int().positive().default(240),
+    /** Anthropic API key — AI features are disabled until this is set. */
+    ANTHROPIC_API_KEY: z.string().optional(),
+    /** Claude model for AI features. */
+    AI_MODEL: z.string().default('claude-opus-5'),
   })
   .refine((env) => env.NOTIFIER !== 'smtp' || (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS), {
     message: 'NOTIFIER=smtp requires SMTP_HOST, SMTP_USER and SMTP_PASS',

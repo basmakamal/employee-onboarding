@@ -15,6 +15,7 @@ import { NotificationService } from './notifications/notification.service.js';
 import { SettingsService, DynamicNotifier } from './modules/settings/settings.service.js';
 import { DashboardService } from './modules/dashboard/dashboard.service.js';
 import { ReportsService } from './modules/reports/reports.service.js';
+import { AiService } from './ai/ai.service.js';
 import { buildOnboardingWorkflow } from './workflow/onboarding-workflow.js';
 import { SlaScheduler } from './workflow/sla-scheduler.js';
 import { SlaFiringRepository } from './workflow/sla-firing.repository.js';
@@ -64,6 +65,7 @@ export function buildContainer() {
   const notifications = new NotificationService(notificationRepo, users, notifier);
   const dashboardService = new DashboardService(prisma);
   const reportsService = new ReportsService(prisma);
+  const aiService = new AiService(prisma, config.ANTHROPIC_API_KEY, config.AI_MODEL);
 
   const eventBus = new EventBus();
   const ownershipService = new OwnershipService(prisma);
@@ -152,6 +154,7 @@ export function buildContainer() {
     settingsService,
     dashboardService,
     reportsService,
+    aiService,
     ownershipService,
   };
 }
