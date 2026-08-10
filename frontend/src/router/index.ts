@@ -46,6 +46,12 @@ export const router = createRouter({
       meta: { roles: ['ADMIN'] },
     },
     {
+      path: '/calendar',
+      name: 'calendar',
+      component: () => import('../pages/CalendarPage.vue'),
+      meta: { roles: ['ADMIN'] },
+    },
+    {
       path: '/ownership',
       name: 'ownership',
       component: () => import('../pages/OwnershipPage.vue'),

@@ -2,7 +2,6 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
-import YearCalendar from '../components/YearCalendar.vue';
 
 interface SlaRuleRow {
   id: string;
@@ -19,15 +18,16 @@ interface SlaRuleRow {
 
 const ROLES = ['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN'];
 const UNITS = ['HOURS', 'CALENDAR_DAYS', 'WORKING_DAYS'];
+const ACTIONS = ['REMIND', 'REMIND_DAILY', 'ESCALATE', 'EXPIRE'];
 
-interface HolidayRow {
-  id: string;
-  date: string;
-  name: string;
-}
-
-/** JS getUTCDay() numbering: 0=Sun … 5=Fri, 6=Sat. */
-const DAYS = [0, 1, 2, 3, 4, 5, 6];
+/** What each watcher can watch — statuses per registered state machine. */
+const WATCHABLE: Record<string, string[]> = {
+  EMPLOYEE: ['CREATED', 'AWAITING_FORM', 'FORM_RECEIVED', 'CONTRACT_CREATION', 'AWAITING_CONTRACT_APPROVAL'],
+  OFFBOARDING: ['REQUESTED', 'IN_PROGRESS', 'ASSETS_PENDING', 'NOTICE_SENT', 'SETTLEMENT'],
+  GOSI: ['PENDING', 'ON_HOLD'],
+  MEDICAL_INSURANCE: ['PENDING', 'ON_HOLD'],
+  DOCUMENT_EXPIRY: ['ANY', 'IQAMA', 'NATIONAL_ID', 'PASSPORT', 'CONTRACT', 'WORK_PERMIT', 'DRIVING_LICENSE'],
+};
 
 const { t } = useI18n();
 const rules = ref<SlaRuleRow[]>([]);
@@ -35,31 +35,33 @@ const loaded = ref(false);
 const busy = ref('');
 const snackbar = ref({ show: false, text: '', color: 'success' });
 
-const weekendDays = ref<number[]>([5, 6]);
-const holidays = ref<HolidayRow[]>([]);
-const newHoliday = ref({ date: '', name: '' });
-const calendarBusy = ref(false);
-const viewYear = ref(new Date().getFullYear());
-const showYearView = ref(false);
+const newDialog = ref(false);
+const saving = ref(false);
+const newRule = ref({
+  processKey: 'EMPLOYEE',
+  status: 'AWAITING_FORM',
+  afterValue: 3,
+  afterUnit: 'CALENDAR_DAYS' as SlaRuleRow['afterUnit'],
+  action: 'REMIND',
+  notifySubject: false,
+  notifyRole: 'HR',
+  escalateToRole: 'ADMIN',
+});
 
-const holidayMap = computed(() =>
-  Object.fromEntries(holidays.value.map((h) => [h.date.slice(0, 10), h.name])),
-);
+const statusOptions = computed(() => WATCHABLE[newRule.value.processKey] ?? []);
 
-async function generateYear() {
-  calendarBusy.value = true;
-  try {
-    const result = await api.post<{ created: number }>('/api/settings/holidays/generate', {
-      year: viewYear.value,
-    });
-    notify(t('calendar.generated', { n: result.created }));
-    showYearView.value = true;
-    await load();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    calendarBusy.value = false;
+function statusLabel(processKey: string, status: string): string {
+  if (processKey === 'DOCUMENT_EXPIRY') {
+    return status === 'ANY' ? t('sla.anyType') : t(`expiryDocs.types.${status}`, status);
   }
+  return t(
+    `status.${status}`,
+    t(`offboardingStatus.${status}`, t(`processStatus.${status}`, status)),
+  );
+}
+
+function onProcessChange() {
+  newRule.value.status = statusOptions.value[0] ?? '';
 }
 
 function notify(text: string, color = 'success') {
@@ -67,57 +69,25 @@ function notify(text: string, color = 'success') {
 }
 
 async function load() {
-  const [ruleRows, calendar] = await Promise.all([
-    api.get<SlaRuleRow[]>('/api/settings/sla'),
-    api.get<{ weekendDays: number[]; holidays: HolidayRow[] }>('/api/settings/calendar'),
-  ]);
-  rules.value = ruleRows;
-  weekendDays.value = calendar.weekendDays;
-  holidays.value = calendar.holidays;
+  rules.value = await api.get<SlaRuleRow[]>('/api/settings/sla');
   loaded.value = true;
 }
 
-async function saveWeekend(days: number[]) {
-  if (days.length > 6) return;
-  calendarBusy.value = true;
+async function createRule() {
+  saving.value = true;
   try {
-    await api.put('/api/settings/calendar', { weekendDays: days });
-    weekendDays.value = days;
-    notify(t('common.saved'));
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    calendarBusy.value = false;
-  }
-}
-
-async function addHoliday() {
-  calendarBusy.value = true;
-  try {
-    await api.post('/api/settings/holidays', {
-      date: newHoliday.value.date,
-      name: newHoliday.value.name.trim(),
-    });
-    newHoliday.value = { date: '', name: '' };
+    const body = {
+      ...newRule.value,
+      escalateToRole: newRule.value.action === 'ESCALATE' ? newRule.value.escalateToRole : null,
+    };
+    await api.post('/api/settings/sla', body);
+    newDialog.value = false;
     notify(t('common.saved'));
     await load();
   } catch (e) {
     notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
-    calendarBusy.value = false;
-  }
-}
-
-async function removeHoliday(id: string) {
-  calendarBusy.value = true;
-  try {
-    await api.delete(`/api/settings/holidays/${id}`);
-    notify(t('common.done'));
-    await load();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    calendarBusy.value = false;
+    saving.value = false;
   }
 }
 
@@ -139,121 +109,16 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 1100px">
-    <h1 class="text-h4 font-weight-bold mb-1">{{ $t('sla.title') }}</h1>
-    <p class="text-medium-emphasis mb-6">{{ $t('sla.subtitle') }}</p>
-
-    <!-- Work calendar: the system's definition of "working days" -->
-    <v-card v-if="loaded" class="mb-6" :title="$t('calendar.title')" :subtitle="$t('calendar.subtitle')">
-      <v-card-text>
-        <div class="text-subtitle-2 font-weight-bold mb-2">{{ $t('calendar.weekend') }}</div>
-        <v-chip-group
-          :model-value="weekendDays"
-          multiple
-          column
-          selected-class="text-primary"
-          :disabled="calendarBusy"
-          @update:model-value="(days: unknown) => saveWeekend(days as number[])"
-        >
-          <v-chip v-for="day in DAYS" :key="day" :value="day" filter variant="tonal">
-            {{ $t(`calendar.days.${day}`) }}
-          </v-chip>
-        </v-chip-group>
-        <p class="text-caption text-medium-emphasis mt-1">{{ $t('calendar.weekendHint') }}</p>
-
-        <v-divider class="my-4" />
-
-        <div class="text-subtitle-2 font-weight-bold mb-2">{{ $t('calendar.holidays') }}</div>
-        <v-list v-if="holidays.length" density="compact">
-          <v-list-item v-for="holiday in holidays" :key="holiday.id">
-            <template #prepend>
-              <v-icon icon="mdi-calendar-star" color="warning" />
-            </template>
-            <v-list-item-title>{{ holiday.name }}</v-list-item-title>
-            <v-list-item-subtitle>
-              {{ new Date(holiday.date).toLocaleDateString() }}
-            </v-list-item-subtitle>
-            <template #append>
-              <v-btn
-                icon="mdi-delete"
-                variant="text"
-                size="small"
-                color="error"
-                :disabled="calendarBusy"
-                @click="removeHoliday(holiday.id)"
-              />
-            </template>
-          </v-list-item>
-        </v-list>
-        <p v-else class="text-medium-emphasis mb-3">{{ $t('calendar.noHolidays') }}</p>
-
-        <div class="d-flex align-center flex-wrap mt-2" style="gap: 8px">
-          <v-text-field
-            v-model="newHoliday.date"
-            :label="$t('calendar.date')"
-            type="date"
-            density="compact"
-            hide-details
-            style="max-width: 200px"
-          />
-          <v-text-field
-            v-model="newHoliday.name"
-            :label="$t('calendar.name')"
-            density="compact"
-            hide-details
-            style="max-width: 280px"
-          />
-          <v-btn
-            color="primary"
-            variant="tonal"
-            prepend-icon="mdi-plus"
-            :loading="calendarBusy"
-            :disabled="!newHoliday.date || !newHoliday.name.trim()"
-            @click="addHoliday"
-          >
-            {{ $t('calendar.add') }}
-          </v-btn>
-        </div>
-
-        <v-divider class="my-4" />
-
-        <!-- Auto-generate + year view -->
-        <div class="d-flex align-center flex-wrap" style="gap: 8px">
-          <v-text-field
-            v-model.number="viewYear"
-            :label="$t('calendar.year')"
-            type="number"
-            density="compact"
-            hide-details
-            style="max-width: 130px"
-          />
-          <v-btn
-            color="secondary"
-            variant="tonal"
-            prepend-icon="mdi-calendar-import"
-            :loading="calendarBusy"
-            @click="generateYear"
-          >
-            {{ $t('calendar.generate') }}
-          </v-btn>
-          <v-btn
-            variant="text"
-            :prepend-icon="showYearView ? 'mdi-eye-off' : 'mdi-calendar-month'"
-            @click="showYearView = !showYearView"
-          >
-            {{ showYearView ? $t('calendar.hideYear') : $t('calendar.showYear') }}
-          </v-btn>
-        </div>
-        <p class="text-caption text-medium-emphasis mt-1">{{ $t('calendar.generateHint') }}</p>
-
-        <YearCalendar
-          v-if="showYearView"
-          class="mt-4"
-          :year="viewYear"
-          :weekend-days="weekendDays"
-          :holidays="holidayMap"
-        />
-      </v-card-text>
-    </v-card>
+    <div class="d-flex align-center flex-wrap mb-6" style="gap: 8px">
+      <div>
+        <h1 class="text-h4 font-weight-bold">{{ $t('sla.title') }}</h1>
+        <p class="text-medium-emphasis mt-1">{{ $t('sla.subtitle') }}</p>
+      </div>
+      <v-spacer />
+      <v-btn color="primary" prepend-icon="mdi-plus" @click="newDialog = true">
+        {{ $t('sla.addRule') }}
+      </v-btn>
+    </div>
 
     <v-card v-if="loaded">
       <v-table density="comfortable">
@@ -271,7 +136,7 @@ onMounted(load);
             <td>
               <div class="font-weight-medium">{{ $t(`entities.${rule.processKey}`, rule.processKey) }}</div>
               <div class="text-caption text-medium-emphasis">
-                {{ $t(`status.${rule.status}`, $t(`offboardingStatus.${rule.status}`, $t(`processStatus.${rule.status}`, rule.status))) }}
+                {{ statusLabel(rule.processKey, rule.status) }}
               </div>
             </td>
             <td>
@@ -351,6 +216,90 @@ onMounted(load);
     <v-container v-else class="py-16 text-center">
       <v-progress-circular indeterminate color="primary" size="48" />
     </v-container>
+
+    <!-- New rule (watcher) dialog -->
+    <v-dialog v-model="newDialog" max-width="560">
+      <v-card :title="$t('sla.addRule')" class="pa-2">
+        <v-card-text>
+          <v-row dense>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="newRule.processKey"
+                :items="Object.keys(WATCHABLE).map((k) => ({ title: $t(`entities.${k}`, k), value: k }))"
+                :label="$t('sla.processKey')"
+                @update:model-value="onProcessChange"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="newRule.status"
+                :items="statusOptions.map((s) => ({ title: statusLabel(newRule.processKey, s), value: s }))"
+                :label="$t('sla.status')"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="newRule.action"
+                :items="ACTIONS.map((a) => ({ title: $t(`sla.actions.${a}`), value: a }))"
+                :label="$t('sla.action')"
+              />
+            </v-col>
+            <v-col cols="6" sm="3">
+              <v-text-field v-model.number="newRule.afterValue" :label="$t('sla.after')" type="number" min="1" />
+            </v-col>
+            <v-col cols="6" sm="3">
+              <v-select
+                v-model="newRule.afterUnit"
+                :items="UNITS.map((u) => ({ title: $t(`sla.units.${u}`), value: u }))"
+                :label="$t('sla.units.WORKING_DAYS')"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-if="newRule.action !== 'ESCALATE'"
+                v-model="newRule.notifyRole"
+                :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
+                :label="$t('sla.notify')"
+              />
+              <v-select
+                v-else
+                v-model="newRule.escalateToRole"
+                :items="ROLES.map((r) => ({ title: `⬆ ${$t(`roles.${r}`)}`, value: r }))"
+                :label="$t('sla.notify')"
+              />
+            </v-col>
+            <v-col cols="12" sm="6" class="d-flex align-center">
+              <v-checkbox
+                v-model="newRule.notifySubject"
+                :label="$t('sla.notifySubject')"
+                density="compact"
+                hide-details
+              />
+            </v-col>
+          </v-row>
+          <v-alert
+            v-if="newRule.action === 'EXPIRE'"
+            type="warning"
+            variant="tonal"
+            density="compact"
+          >
+            {{ $t('sla.expireHint') }}
+          </v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="newDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn
+            color="primary"
+            :loading="saving"
+            :disabled="!newRule.status || newRule.afterValue < 1"
+            @click="createRule"
+          >
+            {{ $t('common.create') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3500">
       {{ snackbar.text }}

@@ -11,7 +11,8 @@
     "ownership": "Status ownership",
     "automation": "Automation",
     "settings": "Settings",
-    "assistant": "AI Assistant"
+    "assistant": "AI Assistant",
+    "calendar": "Work calendar"
   },
   "users": {
     "title": "Staff & roles",
@@ -221,7 +222,8 @@
     "PROJECT_TRANSFER": "Project transfer",
     "WARNING": "Warning",
     "INVESTIGATION": "Investigation",
-    "ACTIVATED": "Employee activated"
+    "ACTIVATED": "Employee activated",
+    "DELETE": "Employee deleted"
   },
   "actors": {
     "USER": "Staff",
@@ -375,7 +377,13 @@
       "HOURS": "hours",
       "CALENDAR_DAYS": "calendar days",
       "WORKING_DAYS": "working days"
-    }
+    },
+    "addRule": "New rule",
+    "processKey": "Watches",
+    "status": "Status / document type",
+    "notifySubject": "Also e-mail the employee",
+    "anyType": "Any document",
+    "expireHint": "EXPIRE closes the record automatically. It only takes effect on the onboarding waiting stages (awaiting form / awaiting approval)."
   },
   "reports": {
     "title": "Reports",
@@ -469,7 +477,10 @@
     "overview": "Overview",
     "timelineTab": "Timeline",
     "processes": "Employee processes",
-    "onboardingDocs": "Documents"
+    "onboardingDocs": "Documents",
+    "delete": "Delete employee",
+    "deleteWarning": "This permanently deletes the employee and everything attached: documents, contract, processes, custody forms, offboardings and requests. It cannot be undone. For real ex-employees use offboarding instead — delete is for wrongly created or test records.",
+    "deleteConfirm": "Delete permanently"
   },
   "requests": {
     "title": "Requests & services",

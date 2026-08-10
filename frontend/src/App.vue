@@ -29,6 +29,7 @@ const NAV = [
   { to: '/users', icon: 'mdi-account-cog', key: 'nav.users', roles: ['ADMIN'] },
   { to: '/ownership', icon: 'mdi-sitemap', key: 'nav.ownership', roles: ['ADMIN'] },
   { to: '/automation', icon: 'mdi-robot', key: 'nav.automation', roles: ['ADMIN'] },
+  { to: '/calendar', icon: 'mdi-calendar-star', key: 'nav.calendar', roles: ['ADMIN'] },
   { to: '/settings', icon: 'mdi-cog', key: 'nav.settings', roles: ['ADMIN'] },
 ];
 
