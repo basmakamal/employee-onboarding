@@ -167,7 +167,10 @@ export class DynamicNotifier implements Notifier {
       from: transport.from,
       to: message.to,
       subject: message.subject,
+      // Both parts: nodemailer sends multipart/alternative, so clients that
+      // block HTML still get a readable message.
       text: message.text,
+      ...(message.html ? { html: message.html } : {}),
     });
   }
 }
