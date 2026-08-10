@@ -24,7 +24,10 @@ export class UserRepository {
     });
   }
 
-  update(id: string, data: { role?: Role; active?: boolean; passwordHash?: string; name?: string }) {
+  update(
+    id: string,
+    data: { role?: Role; active?: boolean; passwordHash?: string; name?: string; email?: string },
+  ) {
     return this.db.user.update({ where: { id }, data });
   }
 

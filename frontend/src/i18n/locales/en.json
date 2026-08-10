@@ -162,6 +162,8 @@
   "common": {
     "cancel": "Cancel",
     "create": "Create",
+    "edit": "Edit",
+    "print": "Print",
     "save": "Save",
     "send": "Send",
     "saved": "Saved",
