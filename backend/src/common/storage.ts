@@ -22,7 +22,7 @@ export function storagePath(storageKey: string): string {
 }
 
 /**
- * Multer instance for trainee document uploads: whitelist by MIME,
+ * Multer instance for onboarding document uploads: whitelist by MIME,
  * 10 MB per file, random server-side filenames (never the client's).
  */
 export const documentUpload = multer({

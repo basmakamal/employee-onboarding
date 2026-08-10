@@ -11,10 +11,10 @@ export class ReportsService {
   // ----------------------------------------------------------- summary
 
   async summary(now: Date = new Date()) {
-    const [employees, trainees, gosi, medical, criminal, forms, unreturned, offboardings, docs] =
+    const [employees, byStatus, gosi, medical, criminal, forms, unreturned, offboardings, docs] =
       await Promise.all([
         this.prisma.employee.findMany({ select: { department: true, status: true } }),
-        this.prisma.trainee.groupBy({ by: ['status'], _count: { _all: true } }),
+        this.prisma.employee.groupBy({ by: ['status'], _count: { _all: true } }),
         this.prisma.gosiProcess.groupBy({ by: ['status'], _count: { _all: true } }),
         this.prisma.medicalInsuranceProcess.groupBy({ by: ['status'], _count: { _all: true } }),
         this.prisma.criminalRecordProcess.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -32,8 +32,10 @@ export class ReportsService {
     const toMap = (rows: Array<{ status?: string; reason?: string; _count: { _all: number } }>) =>
       Object.fromEntries(rows.map((r) => [r.status ?? r.reason ?? '?', r._count._all]));
 
+    // Headcount counts employment only — pipeline candidates are not staff.
     const headcount = new Map<string, { active: number; inactive: number }>();
     for (const e of employees) {
+      if (e.status !== 'ACTIVE' && e.status !== 'INACTIVE') continue;
       const key = e.department?.trim() || '—';
       const entry = headcount.get(key) ?? { active: 0, inactive: 0 };
       if (e.status === 'ACTIVE') entry.active += 1;
@@ -55,7 +57,7 @@ export class ReportsService {
       headcountByDepartment: [...headcount.entries()]
         .map(([department, counts]) => ({ department, ...counts }))
         .sort((a, b) => b.active - a.active),
-      traineeFunnel: toMap(trainees as never),
+      onboardingFunnel: toMap(byStatus as never),
       processes: {
         gosi: toMap(gosi as never),
         medical: toMap(medical as never),
@@ -70,36 +72,40 @@ export class ReportsService {
 
   // ------------------------------------------------------------ exports
 
+  /** Activated staff only — the pipeline has its own export. */
   async employeesWorkbook(): Promise<ExcelJS.Workbook> {
     const rows = await this.prisma.employee.findMany({
+      where: { status: { in: ['ACTIVE', 'INACTIVE'] } },
       include: { gosi: true, medical: true, criminalRecord: true },
       orderBy: { employeeNo: 'asc' },
     });
     return workbook('Employees', [
       ['Employee No', 'First name', 'Last name', 'Email', 'Phone', 'Department', 'Project', 'Job title', 'Hire date', 'Status', 'GOSI', 'Medical insurance', 'Criminal record'],
       ...rows.map((e) => [
-        e.employeeNo, e.firstName, e.lastName, e.email, e.phone ?? '', e.department ?? '',
-        e.project ?? '', e.jobTitle ?? '', e.hireDate.toISOString().slice(0, 10), e.status,
-        e.gosi?.status ?? '', e.medical?.status ?? '', e.criminalRecord?.status ?? '',
+        e.employeeNo ?? '', e.firstName, e.lastName, e.email, e.phone ?? '', e.department ?? '',
+        e.project ?? '', e.jobTitle ?? '', e.hireDate ? e.hireDate.toISOString().slice(0, 10) : '',
+        e.status, e.gosi?.status ?? '', e.medical?.status ?? '', e.criminalRecord?.status ?? '',
       ]),
     ]);
   }
 
-  async traineesWorkbook(): Promise<ExcelJS.Workbook> {
-    const rows = await this.prisma.trainee.findMany({
+  /** Employees still in the onboarding pipeline (pre-activation). */
+  async onboardingWorkbook(): Promise<ExcelJS.Workbook> {
+    const rows = await this.prisma.employee.findMany({
+      where: { status: { notIn: ['ACTIVE', 'INACTIVE'] } },
       include: { documents: true, contract: true },
       orderBy: { createdAt: 'asc' },
     });
-    return workbook('Trainees', [
+    return workbook('Onboarding', [
       ['First name', 'Last name', 'Email', 'Department', 'Job title', 'Status', 'Since', 'Docs uploaded', 'Docs required', 'Contract sent', 'Contract approved', 'Created'],
-      ...rows.map((t) => [
-        t.firstName, t.lastName, t.email, t.department ?? '', t.jobTitle ?? '', t.status,
-        t.statusChangedAt.toISOString().slice(0, 10),
-        t.documents.filter((d) => d.storageKey !== null).length,
-        t.documents.filter((d) => d.required).length,
-        t.contract?.sentAt ? t.contract.sentAt.toISOString().slice(0, 10) : '',
-        t.contract?.approvedAt ? t.contract.approvedAt.toISOString().slice(0, 10) : '',
-        t.createdAt.toISOString().slice(0, 10),
+      ...rows.map((e) => [
+        e.firstName, e.lastName, e.email, e.department ?? '', e.jobTitle ?? '', e.status,
+        e.statusChangedAt.toISOString().slice(0, 10),
+        e.documents.filter((d) => d.storageKey !== null).length,
+        e.documents.filter((d) => d.required).length,
+        e.contract?.sentAt ? e.contract.sentAt.toISOString().slice(0, 10) : '',
+        e.contract?.approvedAt ? e.contract.approvedAt.toISOString().slice(0, 10) : '',
+        e.createdAt.toISOString().slice(0, 10),
       ]),
     ]);
   }
@@ -113,7 +119,7 @@ export class ReportsService {
     return workbook('Expiring documents', [
       ['Employee No', 'Employee', 'Department', 'Document', 'Number', 'Expiry date', 'Days left'],
       ...rows.map((d) => [
-        d.employee.employeeNo,
+        d.employee.employeeNo ?? '',
         `${d.employee.firstName} ${d.employee.lastName}`,
         d.employee.department ?? '',
         d.type,
@@ -131,7 +137,6 @@ export class ReportsService {
       include: {
         actor: { select: { name: true } },
         employee: { select: { employeeNo: true, firstName: true, lastName: true } },
-        trainee: { select: { firstName: true, lastName: true } },
       },
       orderBy: { at: 'desc' },
       take: 10_000,
@@ -143,10 +148,8 @@ export class ReportsService {
         log.entity, log.action, log.fromStatus ?? '', log.toStatus ?? '', log.actorType,
         log.actor?.name ?? '',
         log.employee
-          ? `${log.employee.firstName} ${log.employee.lastName} (${log.employee.employeeNo})`
-          : log.trainee
-            ? `${log.trainee.firstName} ${log.trainee.lastName}`
-            : '',
+          ? `${log.employee.firstName} ${log.employee.lastName}${log.employee.employeeNo ? ` (${log.employee.employeeNo})` : ''}`
+          : '',
       ]),
     ]);
   }

@@ -1,10 +1,9 @@
 import { config } from './common/config.js';
 import { prisma } from './common/prisma.js';
 import { EventBus } from './events/event-bus.js';
-import { TraineeRepository } from './modules/trainees/trainee.repository.js';
-import { TraineeDocumentRepository } from './modules/trainees/trainee-document.repository.js';
-import { ContractRepository } from './modules/trainees/contract.repository.js';
 import { EmployeeRepository } from './modules/employees/employee.repository.js';
+import { OnboardingDocumentRepository } from './modules/employees/onboarding-document.repository.js';
+import { ContractRepository } from './modules/employees/contract.repository.js';
 import { EmployeeRequestRepository } from './modules/employees/employee-request.repository.js';
 import { UserRepository } from './auth/user.repository.js';
 import { LinkTokenRepository } from './auth/link-token.repository.js';
@@ -16,18 +15,18 @@ import { NotificationService } from './notifications/notification.service.js';
 import { SettingsService, DynamicNotifier } from './modules/settings/settings.service.js';
 import { DashboardService } from './modules/dashboard/dashboard.service.js';
 import { ReportsService } from './modules/reports/reports.service.js';
-import { buildTraineeWorkflow } from './workflow/trainee-workflow.js';
+import { buildOnboardingWorkflow } from './workflow/onboarding-workflow.js';
 import { SlaScheduler } from './workflow/sla-scheduler.js';
 import { SlaFiringRepository } from './workflow/sla-firing.repository.js';
 import {
-  traineeWatcher,
+  onboardingWatcher,
   offboardingWatcher,
   processWatcher,
   documentExpiryWatcher,
 } from './workflow/sla-watchers.js';
 import { EmployeeDocumentRepository } from './modules/employees/employee-document.repository.js';
 import { OwnershipService } from './workflow/ownership.service.js';
-import { TraineeService } from './modules/trainees/trainee.service.js';
+import { OnboardingService } from './modules/employees/onboarding.service.js';
 import { EmployeeService } from './modules/employees/employee.service.js';
 import { AssetRepository } from './modules/assets/asset.repository.js';
 import { AssetFormRepository } from './modules/assets/asset-form.repository.js';
@@ -44,10 +43,9 @@ import { AuthService } from './auth/auth.service.js';
  * chosen and wired. Everything else receives its dependencies.
  */
 export function buildContainer() {
-  const trainees = new TraineeRepository(prisma);
-  const documents = new TraineeDocumentRepository(prisma);
-  const contracts = new ContractRepository(prisma);
   const employees = new EmployeeRepository(prisma);
+  const documents = new OnboardingDocumentRepository(prisma);
+  const contracts = new ContractRepository(prisma);
   const employeeRequests = new EmployeeRequestRepository(prisma);
   const gosi = new GosiRepository(prisma);
   const medical = new MedicalInsuranceRepository(prisma);
@@ -69,14 +67,17 @@ export function buildContainer() {
 
   const eventBus = new EventBus();
   const ownershipService = new OwnershipService(prisma);
-  const traineeWorkflow = buildTraineeWorkflow({ trainees, documents, contracts, audit }, ownershipService);
+  const onboardingWorkflow = buildOnboardingWorkflow(
+    { employees, documents, contracts, audit },
+    ownershipService,
+  );
 
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
   const slaFirings = new SlaFiringRepository(prisma);
   const slaScheduler = new SlaScheduler(
     { rules: slaRules, holidays, firings: slaFirings, audit, notifications, calendar: settingsService },
     [
-      traineeWatcher(trainees, traineeWorkflow),
+      onboardingWatcher(employees, onboardingWorkflow),
       offboardingWatcher(new OffboardingRepository(prisma)),
       processWatcher('GOSI', gosi),
       processWatcher('MEDICAL_INSURANCE', medical),
@@ -90,9 +91,9 @@ export function buildContainer() {
   });
 
   const linkTokenService = new LinkTokenService(linkTokens, config.APP_URL, config.LINK_TTL_HOURS);
-  const traineeService = new TraineeService(
-    { trainees, documents, contracts, employees, audit },
-    traineeWorkflow,
+  const onboardingService = new OnboardingService(
+    { employees, documents, contracts, audit },
+    onboardingWorkflow,
     linkTokenService,
     notifications,
   );
@@ -100,6 +101,7 @@ export function buildContainer() {
   const employeeService = new EmployeeService(
     { employees, requests: employeeRequests, gosi, medical, criminal, audit },
     ownershipService,
+    onboardingWorkflow,
   );
 
   const assets = new AssetRepository(prisma);
@@ -123,10 +125,9 @@ export function buildContainer() {
     prisma,
     eventBus,
     repos: {
-      trainees,
+      employees,
       documents,
       contracts,
-      employees,
       gosi,
       medical,
       criminal,
@@ -140,10 +141,10 @@ export function buildContainer() {
       notificationRepo,
     },
     notifications,
-    traineeWorkflow,
+    onboardingWorkflow,
     slaScheduler,
     linkTokenService,
-    traineeService,
+    onboardingService,
     employeeService,
     assetService,
     offboardingService,

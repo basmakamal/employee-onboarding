@@ -8,9 +8,8 @@ export class DashboardService {
   constructor(private readonly prisma: PrismaClient) {}
 
   async summary() {
-    const [trainees, employees, gosi, medical, criminal, assetForms, offboardings, recent] =
+    const [byStatus, gosi, medical, criminal, assetForms, offboardings, recent] =
       await Promise.all([
-        this.prisma.trainee.groupBy({ by: ['status'], _count: { _all: true } }),
         this.prisma.employee.groupBy({ by: ['status'], _count: { _all: true } }),
         this.prisma.gosiProcess.groupBy({ by: ['status'], _count: { _all: true } }),
         this.prisma.medicalInsuranceProcess.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -21,7 +20,6 @@ export class DashboardService {
           orderBy: { at: 'desc' },
           take: 12,
           include: {
-            trainee: { select: { firstName: true, lastName: true } },
             employee: { select: { firstName: true, lastName: true, employeeNo: true } },
           },
         }),
@@ -30,9 +28,18 @@ export class DashboardService {
     const toMap = (rows: Array<{ status: string; _count: { _all: number } }>) =>
       Object.fromEntries(rows.map((r) => [r.status, r._count._all]));
 
+    // One lifecycle, two views: the onboarding pipeline vs. employment.
+    const all = toMap(byStatus as never);
+    const employees: Record<string, number> = {};
+    const onboarding: Record<string, number> = {};
+    for (const [status, count] of Object.entries(all)) {
+      if (status === 'ACTIVE' || status === 'INACTIVE') employees[status] = count;
+      else onboarding[status] = count;
+    }
+
     return {
-      trainees: toMap(trainees as never),
-      employees: toMap(employees as never),
+      onboarding,
+      employees,
       processes: {
         gosi: toMap(gosi as never),
         medical: toMap(medical as never),
@@ -48,10 +55,8 @@ export class DashboardService {
         actorType: log.actorType,
         at: log.at,
         subject: log.employee
-          ? `${log.employee.firstName} ${log.employee.lastName} (${log.employee.employeeNo})`
-          : log.trainee
-            ? `${log.trainee.firstName} ${log.trainee.lastName}`
-            : null,
+          ? `${log.employee.firstName} ${log.employee.lastName}${log.employee.employeeNo ? ` (${log.employee.employeeNo})` : ''}`
+          : null,
       })),
     };
   }

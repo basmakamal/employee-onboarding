@@ -4,9 +4,8 @@ import { logger } from './common/logger.js';
 import { createApp } from './app.js';
 import { buildContainer } from './container.js';
 import { startSlaScheduler } from './workflow/sla-scheduler.js';
-import { requireAuth, requireRole } from './auth/require-auth.middleware.js';
+import { requireAuth } from './auth/require-auth.middleware.js';
 import { authRouter } from './auth/auth.routes.js';
-import { traineeRouter } from './modules/trainees/trainee.routes.js';
 import { employeeRouter } from './modules/employees/employee.routes.js';
 import { assetRouter } from './modules/assets/asset.routes.js';
 import { offboardingRouter } from './modules/offboarding/offboarding.routes.js';
@@ -15,7 +14,7 @@ import { usersRouter } from './auth/users.routes.js';
 import { employeeDocumentRouter } from './modules/employees/employee-document.routes.js';
 import { reportsRouter } from './modules/reports/reports.routes.js';
 import { notificationRouter } from './notifications/notification.routes.js';
-import { linkRouter } from './modules/trainees/link.routes.js';
+import { linkRouter } from './modules/employees/link.routes.js';
 import { asyncHandler } from './common/http.js';
 
 const container = buildContainer();
@@ -24,7 +23,6 @@ const container = buildContainer();
 // the state machines (roles on transitions) and per-route gates below.
 const staffApi = Router();
 staffApi.use(requireAuth(container.authService));
-staffApi.use('/trainees', requireRole('HR', 'ADMIN'), traineeRouter(container.traineeService));
 const docRouters = employeeDocumentRouter({
   documents: container.repos.employeeDocuments,
   firings: container.repos.slaFirings,
@@ -32,7 +30,7 @@ const docRouters = employeeDocumentRouter({
 });
 staffApi.use('/employees/:id/documents', docRouters.nested);
 staffApi.use('/employee-documents', docRouters.flat);
-staffApi.use('/employees', employeeRouter(container.employeeService));
+staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
 staffApi.use('/reports', reportsRouter(container.reportsService));
 staffApi.use(
@@ -61,7 +59,7 @@ const app = createApp({
   authRouter: authRouter(container.authService),
   staffRouter: staffApi,
   linkRouter: linkRouter(
-    container.traineeService,
+    container.onboardingService,
     container.assetService,
     container.offboardingService,
     container.linkTokenService,

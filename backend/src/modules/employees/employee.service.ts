@@ -5,6 +5,7 @@ import {
   criminalRecordMachine,
 } from '../../workflow/machines/employee-process.machine.js';
 import { NotFoundError } from '../../workflow/errors.js';
+import type { Employee } from '../../generated/prisma/client.js';
 import type { EmployeeRepository, UpdateEmployeeData } from './employee.repository.js';
 import type { EmployeeRequestRepository } from './employee-request.repository.js';
 import type { GosiRepository } from '../processes/gosi.repository.js';
@@ -34,7 +35,7 @@ interface ProcessRow {
 }
 
 /**
- * Stage 2 — the employee file. The three processes are independent by BRD
+ * The employee file. The three Stage-2 processes are independent by BRD
  * design: each has its own machine, and nothing here blocks anything else.
  * Hold reasons/certificates travel alongside the guarded status move.
  */
@@ -49,6 +50,8 @@ export class EmployeeService {
       audit: AuditLogRepository;
     },
     private readonly ownership?: OwnershipLookup,
+    /** The onboarding pipeline machine — drives the profile's action buttons. */
+    private readonly onboarding?: Workflow<Employee>,
   ) {}
 
   list() {
@@ -57,9 +60,8 @@ export class EmployeeService {
 
   /**
    * Direct creation for EXISTING staff (data migration / hires that never
-   * went through the trainee flow). Trainee-originated employees are still
-   * created automatically on contract approval — same repo call, so both
-   * paths open the three Stage-2 process rows.
+   * went through onboarding). Born ACTIVE with a number and the three
+   * Stage-2 process rows; new hires get theirs on contract approval.
    */
   async createDirect(
     input: {
@@ -72,15 +74,17 @@ export class EmployeeService {
       department?: string;
       project?: string;
       jobTitle?: string;
+      directManager?: string;
       hireDate?: Date;
     },
     actor: Actor,
   ) {
-    const employeeNo = `EMP-${String((await this.repos.employees.count()) + 1).padStart(4, '0')}`;
-    const employee = await this.repos.employees.create({
+    const employeeNo = await this.repos.employees.nextEmployeeNo();
+    const employee = await this.repos.employees.createDirect({
       ...input,
       employeeNo,
       hireDate: input.hireDate ?? new Date(),
+      ...(actor.id ? { createdById: actor.id } : {}),
     });
     await this.repos.audit.append({
       entity: 'EMPLOYEE',
@@ -172,33 +176,35 @@ export class EmployeeService {
     const processMachine = new Workflow(employeeProcessMachine('GOSI'), noopDeps(this.ownership));
     const criminalMachine = new Workflow(criminalRecordMachine(), noopDeps(this.ownership));
 
-    // Slim the trainee relation down to what the profile shows: the contract
-    // summary (salary only for the groups that should see money) and the
-    // onboarding document checklist.
-    const { trainee, ...rest } = employee;
+    // Contract summary — salary only for the groups that should see money.
+    const { documents, contract: contractRow, ...rest } = employee;
     const seesSalary = actor.role === 'HR' || actor.role === 'FINANCE' || actor.role === 'ADMIN';
-    const details = (trainee?.contract?.details ?? null) as Record<string, unknown> | null;
-    const contract = trainee?.contract
+    const details = (contractRow?.details ?? null) as Record<string, unknown> | null;
+    const contract = contractRow
       ? {
           startDate: details?.['startDate'] ?? null,
           durationMonths: details?.['durationMonths'] ?? null,
           terms: details?.['terms'] ?? null,
           ...(seesSalary ? { salary: details?.['salary'] ?? null } : {}),
-          sentAt: trainee.contract.sentAt,
-          approvedAt: trainee.contract.approvedAt,
+          sentAt: contractRow.sentAt,
+          approvedAt: contractRow.approvedAt,
         }
       : null;
 
     return {
       ...rest,
       contract,
-      onboardingDocuments:
-        trainee?.documents.map((d) => ({
-          id: d.id,
-          type: d.type,
-          required: d.required,
-          uploaded: d.storageKey !== null,
-        })) ?? [],
+      onboardingDocuments: documents.map((d) => ({
+        id: d.id,
+        type: d.type,
+        label: d.label,
+        required: d.required,
+        uploaded: d.storageKey !== null,
+      })),
+      /** Pipeline actions for the profile's onboarding section. */
+      availableActions: this.onboarding
+        ? this.onboarding.availableActions(employee.status, actor)
+        : [],
       processActions: {
         gosi: employee.gosi ? processMachine.availableActions(employee.gosi.status, actor) : [],
         medical: employee.medical

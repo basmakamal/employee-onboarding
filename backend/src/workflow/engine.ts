@@ -37,7 +37,7 @@ export interface TransitionDef<TRecord> {
 }
 
 export interface MachineDef<TRecord> {
-  /** Audit entity name, e.g. TRAINEE, ASSET_FORM. */
+  /** Audit entity name, e.g. EMPLOYEE, ASSET_FORM. */
   key: string;
   transitions: TransitionDef<TRecord>[];
 }
@@ -62,8 +62,8 @@ export interface EngineDeps<TRecord> {
   move: (record: TRecord, from: string, to: string) => Promise<boolean>;
   /** Append-only audit write — same transaction as `move` when composed. */
   audit: (entry: AuditEntry) => Promise<unknown>;
-  /** Optional timeline anchors stamped onto every audit row. */
-  anchors?: (record: TRecord) => { traineeId?: string; employeeId?: string };
+  /** Optional timeline anchor stamped onto every audit row. */
+  anchors?: (record: TRecord) => { employeeId?: string };
 }
 
 export interface TransitionResult {

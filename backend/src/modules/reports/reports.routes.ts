@@ -34,9 +34,9 @@ export function reportsRouter(service: ReportsService): Router {
   );
 
   router.get(
-    '/export/trainees',
+    '/export/onboarding',
     asyncHandler(async (_req, res) => {
-      await sendWorkbook(res, await service.traineesWorkbook(), 'trainees');
+      await sendWorkbook(res, await service.onboardingWorkbook(), 'onboarding');
     }),
   );
 
