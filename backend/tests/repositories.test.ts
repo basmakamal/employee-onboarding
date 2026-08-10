@@ -5,42 +5,51 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { Db } from '../src/common/prisma.js';
-import { TraineeRepository } from '../src/modules/trainees/trainee.repository.js';
-import { TraineeDocumentRepository } from '../src/modules/trainees/trainee-document.repository.js';
+import { EmployeeRepository } from '../src/modules/employees/employee.repository.js';
+import { OnboardingDocumentRepository } from '../src/modules/employees/onboarding-document.repository.js';
 import { AssetFormRepository } from '../src/modules/assets/asset-form.repository.js';
 import { AuditLogRepository } from '../src/workflow/audit-log.repository.js';
 
-describe('TraineeRepository.moveStatus', () => {
+describe('EmployeeRepository.moveStatus', () => {
   it('transitions only from the expected status and resets the SLA anchor', async () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
-    const repo = new TraineeRepository({ trainee: { updateMany } } as unknown as Db);
+    const repo = new EmployeeRepository({ employee: { updateMany } } as unknown as Db);
 
-    const moved = await repo.moveStatus('t1', 'AWAITING_FORM', 'FORM_RECEIVED');
+    const moved = await repo.moveStatus('e1', 'AWAITING_FORM', 'FORM_RECEIVED');
 
     expect(moved).toBe(true);
     const args = updateMany.mock.calls[0]![0];
-    expect(args.where).toEqual({ id: 't1', status: 'AWAITING_FORM' });
+    expect(args.where).toEqual({ id: 'e1', status: 'AWAITING_FORM' });
     expect(args.data.status).toBe('FORM_RECEIVED');
     expect(args.data.statusChangedAt).toBeInstanceOf(Date); // SLA anchor reset
-    expect(args.data.lastReminderAt).toBeNull(); // reminder counter cleared
   });
 
   it('returns false for a stale transition (record moved on already)', async () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 0 });
-    const repo = new TraineeRepository({ trainee: { updateMany } } as unknown as Db);
+    const repo = new EmployeeRepository({ employee: { updateMany } } as unknown as Db);
 
-    expect(await repo.moveStatus('t1', 'CREATED', 'AWAITING_FORM')).toBe(false);
+    expect(await repo.moveStatus('e1', 'CREATED', 'AWAITING_FORM')).toBe(false);
+  });
+
+  it('allocates the next number from employees that ever got one', async () => {
+    const count = vi.fn().mockResolvedValue(7);
+    const repo = new EmployeeRepository({ employee: { count } } as unknown as Db);
+
+    expect(await repo.nextEmployeeNo()).toBe('EMP-0008');
+    expect(count).toHaveBeenCalledWith({ where: { employeeNo: { not: null } } });
   });
 });
 
-describe('TraineeDocumentRepository.countMissingRequired', () => {
+describe('OnboardingDocumentRepository.countMissingRequired', () => {
   it('counts required checklist rows without an upload — the contract gate', async () => {
     const count = vi.fn().mockResolvedValue(2);
-    const repo = new TraineeDocumentRepository({ traineeDocument: { count } } as unknown as Db);
+    const repo = new OnboardingDocumentRepository({
+      onboardingDocument: { count },
+    } as unknown as Db);
 
-    expect(await repo.countMissingRequired('t1')).toBe(2);
+    expect(await repo.countMissingRequired('e1')).toBe(2);
     expect(count).toHaveBeenCalledWith({
-      where: { traineeId: 't1', required: true, storageKey: null },
+      where: { employeeId: 'e1', required: true, storageKey: null },
     });
   });
 });
@@ -74,30 +83,30 @@ describe('AssetFormRepository', () => {
 });
 
 describe('AuditLogRepository', () => {
-  it('appends the full transition record with anchors', async () => {
+  it('appends the full transition record with the employee anchor', async () => {
     const create = vi.fn().mockResolvedValue({ id: 'log1' });
     const repo = new AuditLogRepository({ auditLog: { create } } as unknown as Db);
 
     await repo.append({
-      entity: 'TRAINEE',
-      entityId: 't1',
-      action: 'STATUS_TRANSITION',
+      entity: 'EMPLOYEE',
+      entityId: 'e1',
+      action: 'EXPIRE',
       fromStatus: 'AWAITING_FORM',
       toStatus: 'EXPIRED',
       actorType: 'SYSTEM',
-      traineeId: 't1',
+      employeeId: 'e1',
       metadata: { rule: 'form-10d-expire' },
     });
 
     expect(create).toHaveBeenCalledWith({
       data: {
-        entity: 'TRAINEE',
-        entityId: 't1',
-        action: 'STATUS_TRANSITION',
+        entity: 'EMPLOYEE',
+        entityId: 'e1',
+        action: 'EXPIRE',
         fromStatus: 'AWAITING_FORM',
         toStatus: 'EXPIRED',
         actorType: 'SYSTEM',
-        traineeId: 't1',
+        employeeId: 'e1',
         metadata: { rule: 'form-10d-expire' },
       },
     });

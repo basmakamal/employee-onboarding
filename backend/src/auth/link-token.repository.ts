@@ -8,7 +8,6 @@ export class LinkTokenRepository {
     purpose: LinkPurpose;
     tokenHash: string;
     expiresAt: Date;
-    traineeId?: string;
     employeeId?: string;
     assetFormId?: string;
     offboardingId?: string;
@@ -20,7 +19,7 @@ export class LinkTokenRepository {
   findValid(tokenHash: string, now: Date) {
     return this.db.linkToken.findFirst({
       where: { tokenHash, usedAt: null, expiresAt: { gt: now } },
-      include: { trainee: true, employee: true, assetForm: true, offboarding: true },
+      include: { employee: true, assetForm: true, offboarding: true },
     });
   }
 
@@ -29,7 +28,11 @@ export class LinkTokenRepository {
   }
 
   /** Invalidate previous links of the same purpose when re-sending. */
-  invalidateFor(purpose: LinkPurpose, where: { traineeId?: string; assetFormId?: string }, at: Date) {
+  invalidateFor(
+    purpose: LinkPurpose,
+    where: { employeeId?: string; assetFormId?: string; offboardingId?: string },
+    at: Date,
+  ) {
     return this.db.linkToken.updateMany({
       where: { purpose, usedAt: null, ...where },
       data: { usedAt: at },

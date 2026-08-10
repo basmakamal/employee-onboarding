@@ -7,7 +7,7 @@ import { usePreferencesStore } from '../../stores/preferences';
 
 interface ApprovalContext {
   purpose: string;
-  trainee: { firstName: string; lastName: string };
+  employee: { firstName: string; lastName: string };
   contract: { details: Record<string, unknown> | null; sentAt: string | null } | null;
 }
 
@@ -74,7 +74,7 @@ async function approve() {
       <v-card-item>
         <v-card-title class="text-h5 font-weight-bold">{{ $t('approval.title') }}</v-card-title>
         <v-card-subtitle>
-          {{ $t('publicForm.greeting', { name: `${ctx.trainee.firstName} ${ctx.trainee.lastName}` }) }}
+          {{ $t('publicForm.greeting', { name: `${ctx.employee.firstName} ${ctx.employee.lastName}` }) }}
         </v-card-subtitle>
       </v-card-item>
 

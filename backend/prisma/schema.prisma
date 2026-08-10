@@ -25,20 +25,39 @@ enum Role {
   ADMIN
 }
 
-/// Stage 1 state machine (see README §1). Transitions enforced in src/workflow.
-enum TraineeStatus {
+/// One lifecycle for the whole journey (BRD stages 1–3): the onboarding
+/// pipeline (CREATED → … → AWAITING_CONTRACT_APPROVAL, with EXPIRED/reopen),
+/// then employment (ACTIVE → INACTIVE). The employee number is allocated
+/// only on activation, so expired candidates never get one.
+enum EmployeeStatus {
   CREATED
   AWAITING_FORM
   FORM_RECEIVED
   CONTRACT_CREATION
   AWAITING_CONTRACT_APPROVAL
-  EMPLOYEE_CREATED
   EXPIRED
-}
-
-enum EmployeeStatus {
   ACTIVE
   INACTIVE
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  TEMPORARY
+}
+
+/// HR services requested from the employee profile (BRD "الطلبات والخدمات").
+/// A simple log for now — each request records who asked for what and when;
+/// dedicated approval workflows can grow out of individual types later.
+enum EmployeeRequestType {
+  SALARY_LETTER
+  BANK_LETTER
+  DEPARTMENT_CHANGE
+  JOB_TITLE_CHANGE
+  PROMOTION
+  PROJECT_TRANSFER
+  WARNING
+  INVESTIGATION
 }
 
 /// GOSI + Medical Insurance share this lifecycle.
@@ -150,60 +169,73 @@ model User {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
 
-  traineesCreated     Trainee[]     @relation("TraineeCreatedBy")
+  employeesCreated    Employee[]    @relation("EmployeeCreatedBy")
   contractsCreated    Contract[]
   assetFormsCreated   AssetForm[]
   offboardingRequests Offboarding[] @relation("OffboardingRequestedBy")
   auditEntries        AuditLog[]
   notifications       Notification[]
+  employeeRequests    EmployeeRequest[]
 
   @@map("users")
 }
 
 // ---------------------------------------------------------------------------
-// Stage 1 — Trainee Management
+// The Employee — one record for the whole journey (BRD stages 1–3)
 // ---------------------------------------------------------------------------
 
-model Trainee {
-  id         String        @id @default(cuid())
-  firstName  String
-  lastName   String
-  email      String        @unique
-  phone      String?
-  nationalId String?
-  birthDate  DateTime?
-  department String?
-  jobTitle   String?
-  status     TraineeStatus @default(CREATED)
+model Employee {
+  id             String         @id @default(cuid())
+  /// e.g. EMP-0001 — allocated when the employee becomes ACTIVE, never before.
+  employeeNo     String?        @unique
+  firstName      String
+  lastName       String
+  email          String         @unique
+  phone          String?
+  nationalId     String?
+  birthDate      DateTime?
+  department     String?
+  project        String?
+  jobTitle       String?
+  directManager  String?
+  employmentType EmploymentType @default(FULL_TIME)
+  photoKey       String? // storage key of the profile photo (UPLOAD_DIR)
+  /// Set on activation (contract approval or direct add of existing staff).
+  hireDate       DateTime?
+  status         EmployeeStatus @default(CREATED)
 
   /// SLA anchor: every transition updates this; the scheduler measures from it.
-  statusChangedAt DateTime  @default(now())
-  /// Last automatic reminder, so daily nags fire at most once per day.
-  lastReminderAt  DateTime?
+  statusChangedAt DateTime @default(now())
 
-  createdBy   User   @relation("TraineeCreatedBy", fields: [createdById], references: [id])
-  createdById String
+  createdBy   User?   @relation("EmployeeCreatedBy", fields: [createdById], references: [id])
+  createdById String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  documents  TraineeDocument[]
-  contract   Contract?
-  employee   Employee?
-  linkTokens LinkToken[]
-  auditLogs  AuditLog[]        @relation("TraineeAudit")
+  documents       OnboardingDocument[]
+  contract        Contract?
+  gosi            GosiProcess?
+  medical         MedicalInsuranceProcess?
+  criminalRecord  CriminalRecordProcess?
+  assetForms      AssetForm[]
+  offboardings    Offboarding[]
+  linkTokens      LinkToken[]
+  expiryDocuments EmployeeDocument[]
+  requests        EmployeeRequest[]
+  auditLogs       AuditLog[]               @relation("EmployeeAudit")
 
   @@index([status])
-  @@map("trainees")
+  @@map("employees")
 }
 
-/// One row per checklist item. HR configures the checklist per trainee;
-/// the trainee's signed-link upload fills the row. A row without storageKey
-/// is a missing document.
-model TraineeDocument {
+/// One row per onboarding checklist item. HR configures the checklist;
+/// the new hire's signed-link upload fills the row. A row without
+/// storageKey is a missing document.
+model OnboardingDocument {
   id         String    @id @default(cuid())
-  trainee    Trainee   @relation(fields: [traineeId], references: [id])
-  traineeId  String
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  employeeId String
   type       String // e.g. NATIONAL_ID, QUALIFICATION, IBAN_LETTER — HR-configurable
   label      String? // display label if type is custom
   required   Boolean   @default(true)
@@ -213,18 +245,18 @@ model TraineeDocument {
   uploadedAt DateTime?
   notes      String?
 
-  @@unique([traineeId, type])
-  @@map("trainee_documents")
+  @@unique([employeeId, type])
+  @@map("onboarding_documents")
 }
 
 model Contract {
   id          String    @id @default(cuid())
-  trainee     Trainee   @relation(fields: [traineeId], references: [id])
-  traineeId   String    @unique
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  employeeId  String    @unique
   createdBy   User      @relation(fields: [createdById], references: [id])
   createdById String
   storageKey  String? // generated/uploaded contract document
-  details     Json? // salary, duration, terms — structured in Phase E
+  details     Json? // salary, duration, terms
   sentAt      DateTime?
   approvedAt  DateTime?
   createdAt   DateTime  @default(now())
@@ -233,42 +265,20 @@ model Contract {
   @@map("contracts")
 }
 
-// ---------------------------------------------------------------------------
-// Stage 2 — Employee File
-// ---------------------------------------------------------------------------
+/// One HR service requested from the profile (salary letter, promotion,
+/// warning…). Plain log entries — see EmployeeRequestType.
+model EmployeeRequest {
+  id          String              @id @default(cuid())
+  employee    Employee            @relation(fields: [employeeId], references: [id])
+  employeeId  String
+  type        EmployeeRequestType
+  notes       String?             @db.Text
+  createdBy   User                @relation(fields: [createdById], references: [id])
+  createdById String
+  createdAt   DateTime            @default(now())
 
-model Employee {
-  id         String         @id @default(cuid())
-  employeeNo String         @unique // e.g. EMP-0001, assigned on creation
-  firstName  String
-  lastName   String
-  email      String         @unique
-  phone      String?
-  nationalId String?
-  birthDate  DateTime?
-  department String?
-  project    String?
-  jobTitle   String?
-  hireDate   DateTime
-  status     EmployeeStatus @default(ACTIVE)
-
-  trainee   Trainee? @relation(fields: [traineeId], references: [id])
-  traineeId String?  @unique
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  gosi            GosiProcess?
-  medical         MedicalInsuranceProcess?
-  criminalRecord  CriminalRecordProcess?
-  assetForms      AssetForm[]
-  offboardings    Offboarding[]
-  linkTokens      LinkToken[]
-  expiryDocuments EmployeeDocument[]
-  auditLogs       AuditLog[]               @relation("EmployeeAudit")
-
-  @@index([status])
-  @@map("employees")
+  @@index([employeeId])
+  @@map("employee_requests")
 }
 
 model GosiProcess {
@@ -426,12 +436,12 @@ model Offboarding {
 /// than `afterValue afterUnit` (measured from statusChangedAt).
 model SlaRule {
   id            String    @id @default(cuid())
-  processKey    String    @default("TRAINEE") // which state machine this targets
+  processKey    String    @default("EMPLOYEE") // which state machine this targets
   status        String // the status the record must be in
   afterValue    Int
   afterUnit     SlaUnit
   action        SlaAction
-  notifySubject Boolean   @default(true) // the trainee/employee
+  notifySubject Boolean   @default(true) // the employee / new hire
   notifyHr      Boolean   @default(true) // legacy flag; notifyRole is the target
   /** Staff group that receives the reminder. */
   notifyRole    String    @default("HR")
@@ -544,8 +554,6 @@ model LinkToken {
   id      String      @id @default(cuid())
   purpose LinkPurpose
 
-  trainee       Trainee?     @relation(fields: [traineeId], references: [id])
-  traineeId     String?
   employee      Employee?    @relation(fields: [employeeId], references: [id])
   employeeId    String?
   assetForm     AssetForm?   @relation(fields: [assetFormId], references: [id])
@@ -558,7 +566,6 @@ model LinkToken {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 
-  @@index([traineeId])
   @@index([employeeId])
   @@map("link_tokens")
 }
@@ -567,7 +574,7 @@ model LinkToken {
 /// e-approval across all state machines. Never updated, never deleted.
 model AuditLog {
   id       String @id @default(cuid())
-  entity   String // TRAINEE | EMPLOYEE | GOSI | MEDICAL_INSURANCE | CRIMINAL_RECORD | ASSET_FORM | OFFBOARDING
+  entity   String // EMPLOYEE | GOSI | MEDICAL_INSURANCE | CRIMINAL_RECORD | ASSET_FORM | OFFBOARDING | EMPLOYEE_REQUEST
   entityId String
   action   String // STATUS_TRANSITION | SLA_REMINDER | SLA_EXPIRE | LINK_SENT | E_APPROVAL | REOPEN | ...
 
@@ -578,9 +585,7 @@ model AuditLog {
   actor     User?   @relation(fields: [actorId], references: [id])
   actorId   String?
 
-  /// Optional anchors so a record's full timeline is one indexed query.
-  trainee    Trainee?  @relation("TraineeAudit", fields: [traineeId], references: [id])
-  traineeId  String?
+  /// Optional anchor so a record's full timeline is one indexed query.
   employee   Employee? @relation("EmployeeAudit", fields: [employeeId], references: [id])
   employeeId String?
 
@@ -588,7 +593,6 @@ model AuditLog {
   at       DateTime @default(now())
 
   @@index([entity, entityId])
-  @@index([traineeId, at])
   @@index([employeeId, at])
   @@map("audit_logs")
 }

@@ -5,7 +5,9 @@ import {
   criminalRecordMachine,
 } from '../../workflow/machines/employee-process.machine.js';
 import { NotFoundError } from '../../workflow/errors.js';
-import type { EmployeeRepository } from './employee.repository.js';
+import type { Employee } from '../../generated/prisma/client.js';
+import type { EmployeeRepository, UpdateEmployeeData } from './employee.repository.js';
+import type { EmployeeRequestRepository } from './employee-request.repository.js';
 import type { GosiRepository } from '../processes/gosi.repository.js';
 import type { MedicalInsuranceRepository } from '../processes/medical-insurance.repository.js';
 import type { CriminalRecordRepository } from '../processes/criminal-record.repository.js';
@@ -15,6 +17,7 @@ import type {
   GosiHoldReason,
   MedicalHoldReason,
   CriminalRecordStatus,
+  EmployeeRequestType,
 } from '../../generated/prisma/enums.js';
 
 export type ProcessKind = 'gosi' | 'medical' | 'criminal';
@@ -32,7 +35,7 @@ interface ProcessRow {
 }
 
 /**
- * Stage 2 — the employee file. The three processes are independent by BRD
+ * The employee file. The three Stage-2 processes are independent by BRD
  * design: each has its own machine, and nothing here blocks anything else.
  * Hold reasons/certificates travel alongside the guarded status move.
  */
@@ -40,23 +43,29 @@ export class EmployeeService {
   constructor(
     private readonly repos: {
       employees: EmployeeRepository;
+      requests: EmployeeRequestRepository;
       gosi: GosiRepository;
       medical: MedicalInsuranceRepository;
       criminal: CriminalRecordRepository;
       audit: AuditLogRepository;
     },
     private readonly ownership?: OwnershipLookup,
+    /** The onboarding pipeline machine — drives the profile's action buttons. */
+    private readonly onboarding?: Workflow<Employee>,
   ) {}
 
   list() {
     return this.repos.employees.list();
   }
 
+  fieldOptions() {
+    return this.repos.employees.fieldOptions();
+  }
+
   /**
    * Direct creation for EXISTING staff (data migration / hires that never
-   * went through the trainee flow). Trainee-originated employees are still
-   * created automatically on contract approval — same repo call, so both
-   * paths open the three Stage-2 process rows.
+   * went through onboarding). Born ACTIVE with a number and the three
+   * Stage-2 process rows; new hires get theirs on contract approval.
    */
   async createDirect(
     input: {
@@ -69,15 +78,17 @@ export class EmployeeService {
       department?: string;
       project?: string;
       jobTitle?: string;
+      directManager?: string;
       hireDate?: Date;
     },
     actor: Actor,
   ) {
-    const employeeNo = `EMP-${String((await this.repos.employees.count()) + 1).padStart(4, '0')}`;
-    const employee = await this.repos.employees.create({
+    const employeeNo = await this.repos.employees.nextEmployeeNo();
+    const employee = await this.repos.employees.createDirect({
       ...input,
       employeeNo,
       hireDate: input.hireDate ?? new Date(),
+      ...(actor.id ? { createdById: actor.id } : {}),
     });
     await this.repos.audit.append({
       entity: 'EMPLOYEE',
@@ -92,6 +103,99 @@ export class EmployeeService {
     return employee;
   }
 
+  /**
+   * HR edits the profile in place. Audited with the list of touched fields
+   * so the timeline shows WHAT changed, not just that something did.
+   */
+  async update(id: string, input: UpdateEmployeeData, actor: Actor) {
+    const existing = await this.repos.employees.findById(id);
+    if (!existing) throw new NotFoundError('employee', id);
+
+    const updated = await this.repos.employees.update(id, input);
+    await this.repos.audit.append({
+      entity: 'EMPLOYEE',
+      entityId: id,
+      action: 'UPDATE_PROFILE',
+      actorType: actor.type,
+      ...(actor.id ? { actorId: actor.id } : {}),
+      employeeId: id,
+      metadata: { fields: Object.keys(input) },
+    });
+    return updated;
+  }
+
+  /**
+   * ADMIN-only hard delete. Everything attached to the file goes with it;
+   * the audit trail keeps a final DELETE entry naming who removed whom.
+   */
+  async remove(id: string, actor: Actor) {
+    const existing = await this.repos.employees.findById(id);
+    if (!existing) throw new NotFoundError('employee', id);
+
+    await this.repos.employees.deleteCascade(id);
+    await this.repos.audit.append({
+      entity: 'EMPLOYEE',
+      entityId: id,
+      action: 'DELETE',
+      actorType: actor.type,
+      ...(actor.id ? { actorId: actor.id } : {}),
+      metadata: {
+        employeeNo: existing.employeeNo,
+        name: `${existing.firstName} ${existing.lastName}`,
+        email: existing.email,
+      },
+    });
+  }
+
+  async setPhoto(id: string, photoKey: string, actor: Actor) {
+    const existing = await this.repos.employees.findById(id);
+    if (!existing) throw new NotFoundError('employee', id);
+
+    await this.repos.employees.setPhoto(id, photoKey);
+    await this.repos.audit.append({
+      entity: 'EMPLOYEE',
+      entityId: id,
+      action: 'UPDATE_PHOTO',
+      actorType: actor.type,
+      ...(actor.id ? { actorId: actor.id } : {}),
+      employeeId: id,
+    });
+    return { photoKey };
+  }
+
+  async getPhotoKey(id: string): Promise<string> {
+    const employee = await this.repos.employees.findById(id);
+    if (!employee?.photoKey) throw new NotFoundError('photo', id);
+    return employee.photoKey;
+  }
+
+  /** Log an HR service request (salary letter, promotion, warning…). */
+  async createRequest(
+    employeeId: string,
+    type: EmployeeRequestType,
+    actor: Actor,
+    notes?: string,
+  ) {
+    const existing = await this.repos.employees.findById(employeeId);
+    if (!existing) throw new NotFoundError('employee', employeeId);
+
+    const request = await this.repos.requests.create({
+      employeeId,
+      type,
+      ...(notes ? { notes } : {}),
+      createdById: actor.id as string,
+    });
+    await this.repos.audit.append({
+      entity: 'EMPLOYEE_REQUEST',
+      entityId: request.id,
+      action: type,
+      actorType: actor.type,
+      ...(actor.id ? { actorId: actor.id } : {}),
+      employeeId,
+    });
+    return request;
+  }
+
   async getDetails(id: string, actor: Actor) {
     const employee = await this.repos.employees.findWithDetails(id);
     if (!employee) throw new NotFoundError('employee', id);
@@ -99,8 +203,35 @@ export class EmployeeService {
     const processMachine = new Workflow(employeeProcessMachine('GOSI'), noopDeps(this.ownership));
     const criminalMachine = new Workflow(criminalRecordMachine(), noopDeps(this.ownership));
 
+    // Contract summary — salary only for the groups that should see money.
+    const { documents, contract: contractRow, ...rest } = employee;
+    const seesSalary = actor.role === 'HR' || actor.role === 'FINANCE' || actor.role === 'ADMIN';
+    const details = (contractRow?.details ?? null) as Record<string, unknown> | null;
+    const contract = contractRow
+      ? {
+          startDate: details?.['startDate'] ?? null,
+          durationMonths: details?.['durationMonths'] ?? null,
+          terms: details?.['terms'] ?? null,
+          ...(seesSalary ? { salary: details?.['salary'] ?? null } : {}),
+          sentAt: contractRow.sentAt,
+          approvedAt: contractRow.approvedAt,
+        }
+      : null;
+
     return {
-      ...employee,
+      ...rest,
+      contract,
+      onboardingDocuments: documents.map((d) => ({
+        id: d.id,
+        type: d.type,
+        label: d.label,
+        required: d.required,
+        uploaded: d.storageKey !== null,
+      })),
+      /** Pipeline actions for the profile's onboarding section. */
+      availableActions: this.onboarding
+        ? this.onboarding.availableActions(employee.status, actor)
+        : [],
       processActions: {
         gosi: employee.gosi ? processMachine.availableActions(employee.gosi.status, actor) : [],
         medical: employee.medical

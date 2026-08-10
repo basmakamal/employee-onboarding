@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import { api } from '../api/client';
+import StatusChip from '../components/StatusChip.vue';
 
 type CountMap = Record<string, number>;
 
 interface Summary {
   headcountByDepartment: Array<{ department: string; active: number; inactive: number }>;
-  traineeFunnel: CountMap;
+  onboardingFunnel: CountMap;
   processes: { gosi: CountMap; medical: CountMap; criminal: CountMap };
   assetForms: CountMap;
   unreturnedAssetItems: number;
@@ -15,25 +16,101 @@ interface Summary {
   expiringDocuments: { expired: number; in30: number; in60: number; in90: number };
 }
 
-const TRAINEE_STAGES = [
+interface EmployeeRow {
+  id: string;
+  employeeNo: string | null;
+  firstName: string;
+  lastName: string;
+  email: string;
+  department: string | null;
+  jobTitle: string | null;
+  status: string;
+  hireDate: string | null;
+  createdAt: string;
+}
+
+const PIPELINE = [
   'CREATED',
   'AWAITING_FORM',
   'FORM_RECEIVED',
   'CONTRACT_CREATION',
   'AWAITING_CONTRACT_APPROVAL',
-  'EMPLOYEE_CREATED',
   'EXPIRED',
 ];
 
-const { t } = useI18n();
+const FUNNEL_STAGES = [...PIPELINE.slice(0, 5), 'ACTIVE', 'EXPIRED'];
+
+const router = useRouter();
 const data = ref<Summary | null>(null);
+const employees = ref<EmployeeRow[]>([]);
 const downloading = ref('');
+
+// ------------------------------------------------------------------ filters
+const search = ref('');
+const from = ref('');
+const to = ref('');
+const basis = ref<'hireDate' | 'createdAt'>('hireDate');
+const statusFilter = ref<string | null>(null);
+
+const hasFilters = computed(
+  () => !!(search.value || from.value || to.value || statusFilter.value),
+);
+
+function clearFilters() {
+  search.value = '';
+  from.value = '';
+  to.value = '';
+  statusFilter.value = null;
+}
+
+/** Stat cards / funnel rows toggle the table's status filter. */
+function toggleStatus(value: string) {
+  statusFilter.value = statusFilter.value === value ? null : value;
+}
+
+const filtered = computed(() => {
+  const q = search.value.trim().toLowerCase();
+  const fromMs = from.value ? new Date(from.value).getTime() : null;
+  // The "to" day is inclusive — push it to the end of that day.
+  const toMs = to.value ? new Date(to.value).getTime() + 86_399_999 : null;
+
+  return employees.value.filter((e) => {
+    if (statusFilter.value === 'ONBOARDING') {
+      if (!PIPELINE.includes(e.status)) return false;
+    } else if (statusFilter.value && e.status !== statusFilter.value) {
+      return false;
+    }
+
+    if (q) {
+      const haystack =
+        `${e.firstName} ${e.lastName} ${e.email} ${e.employeeNo ?? ''} ${e.department ?? ''} ${e.jobTitle ?? ''}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+
+    if (fromMs !== null || toMs !== null) {
+      const raw = basis.value === 'hireDate' ? e.hireDate : e.createdAt;
+      if (!raw) return false; // no hire date yet → outside any hire-date range
+      const ts = new Date(raw).getTime();
+      if (fromMs !== null && ts < fromMs) return false;
+      if (toMs !== null && ts > toMs) return false;
+    }
+    return true;
+  });
+});
+
+// ------------------------------------------------------------------ totals
+const totals = computed(() => ({
+  active: employees.value.filter((e) => e.status === 'ACTIVE').length,
+  onboarding: employees.value.filter((e) => PIPELINE.includes(e.status)).length,
+  inactive: employees.value.filter((e) => e.status === 'INACTIVE').length,
+  expiring: (data.value?.expiringDocuments.expired ?? 0) + (data.value?.expiringDocuments.in30 ?? 0),
+}));
 
 const maxDept = computed(() =>
   Math.max(1, ...(data.value?.headcountByDepartment.map((d) => d.active + d.inactive) ?? [1])),
 );
 const funnelTotal = computed(() =>
-  Math.max(1, Object.values(data.value?.traineeFunnel ?? {}).reduce((a, b) => a + b, 0)),
+  Math.max(1, Object.values(data.value?.onboardingFunnel ?? {}).reduce((a, b) => a + b, 0)),
 );
 
 function pct(map: CountMap | undefined, key: string): number {
@@ -41,6 +118,15 @@ function pct(map: CountMap | undefined, key: string): number {
   return total === 0 ? 0 : Math.round(((map?.[key] ?? 0) / total) * 100);
 }
 
+function fmt(date: string | null): string {
+  return date ? new Date(date).toLocaleDateString() : '—';
+}
+
+function openEmployee(_e: unknown, row: { item: EmployeeRow }) {
+  void router.push(`/employees/${row.item.id}`);
+}
+
+// ------------------------------------------------------------------ exports
 async function download(kind: string, extra = '') {
   downloading.value = kind;
   try {
@@ -70,7 +156,10 @@ function authHeader(): Record<string, string> {
 }
 
 onMounted(async () => {
-  data.value = await api.get<Summary>('/api/reports/summary');
+  [data.value, employees.value] = await Promise.all([
+    api.get<Summary>('/api/reports/summary'),
+    api.get<EmployeeRow[]>('/api/employees'),
+  ]);
 });
 </script>
 
@@ -83,7 +172,7 @@ onMounted(async () => {
       </div>
       <v-spacer />
       <v-btn
-        v-for="exp in ['employees', 'trainees', 'expiring-documents', 'audit']"
+        v-for="exp in ['employees', 'onboarding', 'expiring-documents', 'audit']"
         :key="exp"
         variant="tonal"
         color="primary"
@@ -97,6 +186,135 @@ onMounted(async () => {
     </div>
 
     <template v-if="data">
+      <!-- Clickable totals -->
+      <v-row class="mb-1">
+        <v-col
+          v-for="card in [
+            { key: 'active', value: totals.active, icon: 'mdi-badge-account', color: 'success', filter: 'ACTIVE' },
+            { key: 'onboarding', value: totals.onboarding, icon: 'mdi-school', color: 'primary', filter: 'ONBOARDING' },
+            { key: 'inactive', value: totals.inactive, icon: 'mdi-account-off', color: 'grey', filter: 'INACTIVE' },
+            { key: 'expiring', value: totals.expiring, icon: 'mdi-file-clock', color: 'warning', filter: null },
+          ]"
+          :key="card.key"
+          cols="6"
+          md="3"
+        >
+          <v-card
+            class="pa-1"
+            :variant="card.filter && statusFilter === card.filter ? 'tonal' : 'elevated'"
+            :color="card.filter && statusFilter === card.filter ? card.color : undefined"
+            hover
+            @click="card.filter ? toggleStatus(card.filter) : undefined"
+          >
+            <v-card-text class="d-flex align-center" style="gap: 14px">
+              <v-avatar :color="card.color" variant="tonal" size="48">
+                <v-icon :icon="card.icon" size="26" />
+              </v-avatar>
+              <div>
+                <div class="text-h4 font-weight-bold">{{ card.value }}</div>
+                <div class="text-caption text-medium-emphasis">
+                  {{ $t(`reports.totals.${card.key}`) }}
+                </div>
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- Employees by name: search + duration filter, rows open the profile -->
+      <v-card class="mb-6">
+        <v-card-item>
+          <v-card-title class="text-subtitle-1 font-weight-bold">
+            <v-icon icon="mdi-account-search" class="me-2" color="primary" />
+            {{ $t('reports.people') }}
+            <v-chip size="small" variant="tonal" class="ms-2">{{ filtered.length }}</v-chip>
+          </v-card-title>
+        </v-card-item>
+        <v-card-text class="pb-0">
+          <v-row dense>
+            <v-col cols="12" md="4">
+              <v-text-field
+                v-model="search"
+                :label="$t('reports.filters.search')"
+                prepend-inner-icon="mdi-magnify"
+                density="compact"
+                clearable
+                hide-details
+              />
+            </v-col>
+            <v-col cols="6" md="2">
+              <v-text-field
+                v-model="from"
+                :label="$t('reports.filters.from')"
+                type="date"
+                density="compact"
+                hide-details
+              />
+            </v-col>
+            <v-col cols="6" md="2">
+              <v-text-field
+                v-model="to"
+                :label="$t('reports.filters.to')"
+                type="date"
+                density="compact"
+                hide-details
+              />
+            </v-col>
+            <v-col cols="8" md="3">
+              <v-select
+                v-model="basis"
+                :items="[
+                  { title: $t('reports.filters.basisHire'), value: 'hireDate' },
+                  { title: $t('reports.filters.basisCreated'), value: 'createdAt' },
+                ]"
+                :label="$t('reports.filters.basis')"
+                density="compact"
+                hide-details
+              />
+            </v-col>
+            <v-col cols="4" md="1" class="d-flex align-center">
+              <v-btn
+                v-if="hasFilters"
+                variant="text"
+                size="small"
+                color="error"
+                @click="clearFilters"
+              >
+                {{ $t('reports.filters.clear') }}
+              </v-btn>
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-data-table
+          :headers="[
+            { title: $t('employees.no'), key: 'employeeNo' },
+            { title: $t('fields.name'), key: 'name', sortable: false },
+            { title: $t('fields.department'), key: 'department' },
+            { title: $t('fields.jobTitle'), key: 'jobTitle' },
+            { title: $t('fields.status'), key: 'status' },
+            { title: $t('employees.hireDate'), key: 'hireDate' },
+          ]"
+          :items="filtered"
+          items-per-page="10"
+          hover
+          @click:row="openEmployee"
+        >
+          <template #item.employeeNo="{ item }">
+            <span class="font-weight-bold">{{ item.employeeNo ?? '—' }}</span>
+          </template>
+          <template #item.name="{ item }">{{ item.firstName }} {{ item.lastName }}</template>
+          <template #item.department="{ item }">{{ item.department ?? '—' }}</template>
+          <template #item.jobTitle="{ item }">{{ item.jobTitle ?? '—' }}</template>
+          <template #item.status="{ item }">
+            <StatusChip :status="item.status" />
+          </template>
+          <template #item.hireDate="{ item }">{{ fmt(item.hireDate) }}</template>
+          <template #no-data>
+            <div class="pa-8 text-medium-emphasis">{{ $t('employees.empty') }}</div>
+          </template>
+        </v-data-table>
+      </v-card>
+
       <v-row>
         <!-- Headcount -->
         <v-col cols="12" md="6">
@@ -123,22 +341,26 @@ onMounted(async () => {
           </v-card>
         </v-col>
 
-        <!-- Trainee funnel -->
+        <!-- Onboarding funnel — rows filter the table above -->
         <v-col cols="12" md="6">
           <v-card :title="$t('reports.funnel')" class="h-100">
             <v-card-text>
               <div
-                v-for="stage in TRAINEE_STAGES.filter((s) => (data!.traineeFunnel[s] ?? 0) > 0)"
+                v-for="stage in FUNNEL_STAGES.filter((s) => (data!.onboardingFunnel[s] ?? 0) > 0)"
                 :key="stage"
-                class="mb-3"
+                class="mb-3 funnel-row"
+                role="button"
+                @click="toggleStatus(stage)"
               >
                 <div class="d-flex justify-space-between text-body-2 mb-1">
-                  <span>{{ $t(`status.${stage}`) }}</span>
-                  <span class="font-weight-medium">{{ data!.traineeFunnel[stage] }}</span>
+                  <span :class="statusFilter === stage ? 'font-weight-bold text-primary' : ''">
+                    {{ $t(`status.${stage}`) }}
+                  </span>
+                  <span class="font-weight-medium">{{ data!.onboardingFunnel[stage] }}</span>
                 </div>
                 <v-progress-linear
-                  :model-value="((data!.traineeFunnel[stage] ?? 0) / funnelTotal) * 100"
-                  :color="stage === 'EXPIRED' ? 'error' : stage === 'EMPLOYEE_CREATED' ? 'success' : 'indigo'"
+                  :model-value="((data!.onboardingFunnel[stage] ?? 0) / funnelTotal) * 100"
+                  :color="stage === 'EXPIRED' ? 'error' : stage === 'ACTIVE' ? 'success' : 'indigo'"
                   height="8"
                   rounded
                 />
@@ -218,3 +440,9 @@ onMounted(async () => {
     </v-container>
   </v-container>
 </template>
+
+<style scoped>
+.funnel-row {
+  cursor: pointer;
+}
+</style>

@@ -5,7 +5,7 @@ import { api } from '../api/client';
 type CountMap = Record<string, number>;
 
 interface DashboardData {
-  trainees: CountMap;
+  onboarding: CountMap;
   employees: CountMap;
   processes: { gosi: CountMap; medical: CountMap; criminal: CountMap };
   assetForms: CountMap;
@@ -21,13 +21,12 @@ interface DashboardData {
   }>;
 }
 
-const TRAINEE_STAGES = [
+const PIPELINE_STAGES = [
   'CREATED',
   'AWAITING_FORM',
   'FORM_RECEIVED',
   'CONTRACT_CREATION',
   'AWAITING_CONTRACT_APPROVAL',
-  'EMPLOYEE_CREATED',
   'EXPIRED',
 ];
 const OFFBOARDING_STAGES = ['REQUESTED', 'IN_PROGRESS', 'ASSETS_PENDING', 'NOTICE_SENT', 'SETTLEMENT'];
@@ -38,7 +37,6 @@ const STAGE_COLORS: Record<string, string> = {
   FORM_RECEIVED: 'blue',
   CONTRACT_CREATION: 'indigo',
   AWAITING_CONTRACT_APPROVAL: 'amber',
-  EMPLOYEE_CREATED: 'success',
   EXPIRED: 'error',
 };
 
@@ -48,10 +46,10 @@ const sum = (map: CountMap | undefined) =>
   Object.values(map ?? {}).reduce((a, b) => a + b, 0);
 
 const stats = computed(() => [
-  { key: 'trainees', icon: 'mdi-school', color: 'primary', value: sum(data.value?.trainees), to: '/trainees' },
+  { key: 'onboarding', icon: 'mdi-school', color: 'primary', value: sum(data.value?.onboarding), to: '/employees' },
   { key: 'activeEmployees', icon: 'mdi-badge-account', color: 'success', value: data.value?.employees['ACTIVE'] ?? 0, to: '/employees' },
   { key: 'openOffboardings', icon: 'mdi-exit-run', color: 'warning', value: OFFBOARDING_STAGES.reduce((a, s) => a + (data.value?.offboardings[s] ?? 0), 0), to: '/employees' },
-  { key: 'pendingApprovals', icon: 'mdi-file-clock', color: 'indigo', value: (data.value?.trainees['AWAITING_CONTRACT_APPROVAL'] ?? 0) + (data.value?.assetForms['PENDING_EMPLOYEE_APPROVAL'] ?? 0), to: '/trainees' },
+  { key: 'pendingApprovals', icon: 'mdi-file-clock', color: 'indigo', value: (data.value?.onboarding['AWAITING_CONTRACT_APPROVAL'] ?? 0) + (data.value?.assetForms['PENDING_EMPLOYEE_APPROVAL'] ?? 0), to: '/employees' },
 ]);
 
 function processSummary(map: CountMap | undefined) {
@@ -92,22 +90,22 @@ onMounted(async () => {
 
       <v-row>
         <v-col cols="12" md="7">
-          <!-- Stage 1: trainees by stage -->
-          <v-card class="mb-4" :title="$t('dashboard.traineesByStage')">
+          <!-- Onboarding pipeline by stage -->
+          <v-card class="mb-4" :title="$t('dashboard.onboardingByStage')">
             <v-card-text>
               <v-list density="compact">
                 <v-list-item
-                  v-for="stage in TRAINEE_STAGES.filter((s) => (data!.trainees[s] ?? 0) > 0)"
+                  v-for="stage in PIPELINE_STAGES.filter((s) => (data!.onboarding[s] ?? 0) > 0)"
                   :key="stage"
-                  to="/trainees"
+                  to="/employees"
                 >
                   <template #prepend>
-                    <v-badge :content="data!.trainees[stage]" :color="STAGE_COLORS[stage]" inline />
+                    <v-badge :content="data!.onboarding[stage]" :color="STAGE_COLORS[stage]" inline />
                   </template>
                   <v-list-item-title class="ms-2">{{ $t(`status.${stage}`) }}</v-list-item-title>
                 </v-list-item>
-                <div v-if="sum(data.trainees) === 0" class="text-medium-emphasis pa-4">
-                  {{ $t('trainees.empty') }}
+                <div v-if="sum(data.onboarding) === 0" class="text-medium-emphasis pa-4">
+                  {{ $t('employees.empty') }}
                 </div>
               </v-list>
             </v-card-text>
