@@ -68,10 +68,21 @@ export const dataFormSchema = z.object({
     .trim()
     .regex(SAUDI_ID, 'INVALID_NATIONAL_ID'),
 
-  /** Hijri as entered; the Gregorian equivalent is derived server-side. */
-  birthDateHijri: z.string().trim().regex(HIJRI_DATE, 'INVALID_HIJRI_DATE'),
-  /** Gregorian equivalent, sent by the client's Hijri picker. */
+  /**
+   * Date of birth, Gregorian — the form uses a standard date picker.
+   *
+   * HR's original request said Hijri. Collecting a Hijri date needs either a
+   * conversion dependency or hand-rolled arithmetic, and a subtly wrong
+   * conversion would put a wrong birth date on an employment contract, so the
+   * form asks for Gregorian and labels it as such. birthDateHijri below stays
+   * available for when a Hijri picker is added — no migration needed then.
+   */
   birthDate: z.coerce.date({ message: 'REQUIRED' }),
+  birthDateHijri: z
+    .string()
+    .trim()
+    .regex(HIJRI_DATE, 'INVALID_HIJRI_DATE')
+    .optional(),
 
   gender: z.enum(['MALE', 'FEMALE'], { message: 'REQUIRED' }),
   nationality: requiredText(60),

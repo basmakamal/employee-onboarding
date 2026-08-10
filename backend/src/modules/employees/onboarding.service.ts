@@ -19,6 +19,9 @@ function publicEmployee(e: Employee) {
     nationalId: e.nationalId,
     birthDate: e.birthDate,
     department: e.department,
+    // Shown read-only on the data form: HR sets it when creating the record,
+    // so asking the employee to retype it would only invite a mismatch.
+    project: e.project,
     jobTitle: e.jobTitle,
     status: e.status,
   };

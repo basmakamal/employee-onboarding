@@ -254,7 +254,19 @@
     "invalidHint": "The link may have expired or already been used. Please contact HR for a new one.",
     "doneTitle": "Thank you! Your data was submitted.",
     "doneHint": "HR will review your documents and contact you with the next step.",
-    "info": "Your information"
+    "info": "Your information",
+    "formTitle": "Employee Information Form",
+    "formTitleAlt": "نموذج استكمال بيانات الموظف",
+    "allRequired": "All fields are required (*). The form takes only a few minutes.",
+    "secPersonal": "Personal Information",
+    "secQualifications": "Qualifications",
+    "secBank": "Bank Details",
+    "secEmergency": "Emergency Contact",
+    "secProject": "Project Details",
+    "secAttachments": "Attachments",
+    "projectPending": "To be confirmed by HR",
+    "fixErrors": "Please correct the highlighted fields before submitting.",
+    "remaining": "{n} item(s) still need attention"
   },
   "approval": {
     "title": "Your employment contract",
@@ -528,7 +540,19 @@
     "department": "Department",
     "jobTitle": "Job title",
     "status": "Status",
-    "comboHint": "Pick from the list or type a new value"
+    "comboHint": "Pick from the list or type a new value",
+    "fatherName": "Father's Name",
+    "grandfatherName": "Grandfather's Name",
+    "gender": "Gender",
+    "nationality": "Nationality",
+    "maritalStatus": "Marital Status",
+    "splAddress": "Short National Address (SPL)",
+    "qualification": "Educational Qualification",
+    "major": "Major / Field of Study",
+    "iban": "Bank IBAN",
+    "emergencyContactName": "Emergency Contact Name",
+    "emergencyContactPhone": "Emergency Contact Number",
+    "project": "Project / Company"
   },
   "onboarding": {
     "title": "Onboarding",
@@ -559,5 +583,76 @@
     "scan": "Read from document (AI)",
     "scanHint": "Upload a photo or PDF of the document — the fields are filled automatically for your review.",
     "scanned": "Fields filled from the document — review before saving."
+  },
+  "validation": {
+    "required": "This field is required",
+    "nationalId": "10 digits, starting with 1 or 2",
+    "phone": "Enter a Saudi mobile, e.g. 0551234567",
+    "email": "Enter a valid email address",
+    "spl": "4 letters followed by 4 digits, e.g. RRRD2929",
+    "iban": "Enter a valid Saudi IBAN (SA + 22 digits)"
+  },
+  "hints": {
+    "nationalId": "National ID or Iqama number",
+    "birthDate": "Gregorian calendar",
+    "phone": "e.g. 0551234567",
+    "spl": "e.g. RRRD2929",
+    "iban": "e.g. SA0380000000608010167519",
+    "project": "Set by HR — contact them if this looks wrong"
+  },
+  "enums": {
+    "gender": {
+      "MALE": "Male",
+      "FEMALE": "Female"
+    },
+    "marital": {
+      "SINGLE_M": "Single",
+      "MARRIED_M": "Married",
+      "DIVORCED_M": "Divorced",
+      "WIDOWED_M": "Widowed",
+      "SINGLE_F": "Single",
+      "MARRIED_F": "Married",
+      "DIVORCED_F": "Divorced",
+      "WIDOWED_F": "Widowed"
+    },
+    "qualification": {
+      "HIGH_SCHOOL": "High School",
+      "DIPLOMA": "Diploma",
+      "BACHELOR": "Bachelor's",
+      "MASTER": "Master's",
+      "PHD": "PhD",
+      "OTHER": "Other"
+    }
+  },
+  "nationalities": {
+    "SA": "Saudi",
+    "YE": "Yemeni",
+    "EG": "Egyptian",
+    "SD": "Sudanese",
+    "SY": "Syrian",
+    "JO": "Jordanian",
+    "PS": "Palestinian",
+    "LB": "Lebanese",
+    "IQ": "Iraqi",
+    "KW": "Kuwaiti",
+    "BH": "Bahraini",
+    "QA": "Qatari",
+    "AE": "Emirati",
+    "OM": "Omani",
+    "PK": "Pakistani",
+    "IN": "Indian",
+    "BD": "Bangladeshi",
+    "PH": "Filipino",
+    "LK": "Sri Lankan",
+    "NP": "Nepali",
+    "ID": "Indonesian",
+    "MA": "Moroccan",
+    "TN": "Tunisian",
+    "DZ": "Algerian",
+    "SO": "Somali",
+    "ET": "Ethiopian",
+    "ER": "Eritrean",
+    "TR": "Turkish",
+    "OTHER": "Other"
   }
 }
