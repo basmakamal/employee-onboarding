@@ -484,7 +484,7 @@
     "expired": "Expired",
     "awaiting": "Awaiting approval",
     "salary": "Salary",
-    "none": "No contract on file — this employee was added directly.",
+    "none": "No contract on file yet — it is drafted during the contract-creation stage (direct-added staff have none).",
     "view": "View terms"
   },
   "fields": {
