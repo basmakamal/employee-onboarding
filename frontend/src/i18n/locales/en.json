@@ -21,7 +21,9 @@
     "resetPassword": "Reset password",
     "newPassword": "New password",
     "passwordHint": "At least 8 characters",
-    "passwordReset": "Password updated."
+    "passwordReset": "Password updated.",
+    "you": "You",
+    "selfHint": "You cannot deactivate or demote your own account — ask another administrator."
   },
   "dashboard": {
     "title": "Dashboard",
