@@ -4,14 +4,13 @@ import type { Prisma } from '../generated/prisma/client.js';
 export type ActorType = 'USER' | 'LINK' | 'SYSTEM';
 
 export interface AuditEntry {
-  entity: string; // TRAINEE | EMPLOYEE | GOSI | MEDICAL_INSURANCE | CRIMINAL_RECORD | ASSET_FORM | OFFBOARDING
+  entity: string; // EMPLOYEE | GOSI | MEDICAL_INSURANCE | CRIMINAL_RECORD | ASSET_FORM | OFFBOARDING | EMPLOYEE_REQUEST
   entityId: string;
-  action: string; // STATUS_TRANSITION | SLA_REMINDER | SLA_EXPIRE | LINK_SENT | E_APPROVAL | REOPEN | ...
+  action: string; // transition action | SLA_REMINDER | SLA_ESCALATION | LINK_SENT | ...
   fromStatus?: string;
   toStatus?: string;
   actorType: ActorType;
   actorId?: string;
-  traineeId?: string;
   employeeId?: string;
   metadata?: Prisma.InputJsonValue;
 }
@@ -39,13 +38,6 @@ export class AuditLogRepository {
   listByEmployee(employeeId: string) {
     return this.db.auditLog.findMany({
       where: { employeeId },
-      orderBy: { at: 'asc' },
-    });
-  }
-
-  listByTrainee(traineeId: string) {
-    return this.db.auditLog.findMany({
-      where: { traineeId },
       orderBy: { at: 'asc' },
     });
   }

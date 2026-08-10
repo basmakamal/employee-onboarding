@@ -15,11 +15,10 @@ export interface WatchedRecord {
   id: string;
   /** Display name for notification templates. */
   name: string;
-  /** Subject's email (trainee/employee) — omit when not applicable. */
+  /** Subject's email (the employee / new hire) — omit when not applicable. */
   email?: string;
   /** When the record entered this status — the SLA anchor. */
   anchorAt: Date;
-  traineeId?: string;
   employeeId?: string;
   /** Extra template parameters (e.g. daysLeft/docType for expiry alerts). */
   meta?: Record<string, string | number>;
@@ -27,7 +26,7 @@ export interface WatchedRecord {
 
 /** One per state machine the SLA engine watches. */
 export interface SlaWatcher {
-  processKey: string; // TRAINEE | OFFBOARDING | GOSI | MEDICAL_INSURANCE | ...
+  processKey: string; // EMPLOYEE | OFFBOARDING | GOSI | MEDICAL_INSURANCE | ...
   listInStatusSince(status: string, threshold: Date): Promise<WatchedRecord[]>;
   /**
    * Deadline-style dueness (e.g. "N days BEFORE a document expires").
@@ -187,7 +186,6 @@ export class SlaScheduler {
       entityId: record.id,
       action,
       actorType: 'SYSTEM',
-      ...(record.traineeId ? { traineeId: record.traineeId } : {}),
       ...(record.employeeId ? { employeeId: record.employeeId } : {}),
       metadata: { rule: rule.id, status: rule.status },
     });

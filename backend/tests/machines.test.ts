@@ -5,14 +5,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Workflow, type EngineDeps } from '../src/workflow/engine.js';
 import { GuardFailedError, IllegalTransitionError } from '../src/workflow/errors.js';
-import { traineeMachine, type TraineeGates } from '../src/workflow/machines/trainee.machine.js';
+import { onboardingMachine, type OnboardingGates } from '../src/workflow/machines/onboarding.machine.js';
 import {
   employeeProcessMachine,
   criminalRecordMachine,
 } from '../src/workflow/machines/employee-process.machine.js';
 import { assetFormMachine } from '../src/workflow/machines/asset-form.machine.js';
 import { offboardingMachine } from '../src/workflow/machines/offboarding.machine.js';
-import type { Trainee, AssetForm, Offboarding } from '../src/generated/prisma/client.js';
+import type { Employee, AssetForm, Offboarding } from '../src/generated/prisma/client.js';
 
 function deps<T extends { id: string; status: string }>(): EngineDeps<T> {
   return {
@@ -30,11 +30,11 @@ const FINANCE = { type: 'USER' as const, id: 'fin1', role: 'FINANCE' };
 const LINK = { type: 'LINK' as const, id: 'tok1' };
 const SYSTEM = { type: 'SYSTEM' as const };
 
-function trainee(status: string): Trainee {
-  return { id: 't1', status } as Trainee;
+function employee(status: string): Employee {
+  return { id: 'e1', status } as Employee;
 }
 
-function gates(overrides: Partial<TraineeGates> = {}): TraineeGates {
+function gates(overrides: Partial<OnboardingGates> = {}): OnboardingGates {
   return {
     countMissingRequiredDocs: vi.fn().mockResolvedValue(0),
     hasContract: vi.fn().mockResolvedValue(true),
@@ -43,74 +43,74 @@ function gates(overrides: Partial<TraineeGates> = {}): TraineeGates {
   };
 }
 
-describe('trainee machine (Stage 1)', () => {
+describe('onboarding machine (the pipeline half of the employee lifecycle)', () => {
   it('walks the BRD happy path end to end', async () => {
-    const wf = new Workflow(traineeMachine(gates()), deps<Trainee>());
+    const wf = new Workflow(onboardingMachine(gates()), deps<Employee>());
 
-    expect((await wf.transition(trainee('CREATED'), 'SEND_FORM', HR)).to).toBe('AWAITING_FORM');
-    expect((await wf.transition(trainee('AWAITING_FORM'), 'SUBMIT_FORM', LINK)).to).toBe(
+    expect((await wf.transition(employee('CREATED'), 'SEND_FORM', HR)).to).toBe('AWAITING_FORM');
+    expect((await wf.transition(employee('AWAITING_FORM'), 'SUBMIT_FORM', LINK)).to).toBe(
       'FORM_RECEIVED',
     );
-    expect((await wf.transition(trainee('FORM_RECEIVED'), 'ACCEPT_DOCUMENTS', HR)).to).toBe(
+    expect((await wf.transition(employee('FORM_RECEIVED'), 'ACCEPT_DOCUMENTS', HR)).to).toBe(
       'CONTRACT_CREATION',
     );
-    expect((await wf.transition(trainee('CONTRACT_CREATION'), 'SEND_CONTRACT', HR)).to).toBe(
+    expect((await wf.transition(employee('CONTRACT_CREATION'), 'SEND_CONTRACT', HR)).to).toBe(
       'AWAITING_CONTRACT_APPROVAL',
     );
     expect(
-      (await wf.transition(trainee('AWAITING_CONTRACT_APPROVAL'), 'APPROVE_CONTRACT', LINK)).to,
-    ).toBe('EMPLOYEE_CREATED');
+      (await wf.transition(employee('AWAITING_CONTRACT_APPROVAL'), 'APPROVE_CONTRACT', LINK)).to,
+    ).toBe('ACTIVE');
   });
 
   it('BRD rule: documents incomplete blocks contract work with the count', async () => {
     const wf = new Workflow(
-      traineeMachine(gates({ countMissingRequiredDocs: vi.fn().mockResolvedValue(2) })),
-      deps<Trainee>(),
+      onboardingMachine(gates({ countMissingRequiredDocs: vi.fn().mockResolvedValue(2) })),
+      deps<Employee>(),
     );
 
     await expect(
-      wf.transition(trainee('FORM_RECEIVED'), 'ACCEPT_DOCUMENTS', HR),
+      wf.transition(employee('FORM_RECEIVED'), 'ACCEPT_DOCUMENTS', HR),
     ).rejects.toThrow('2 required document(s)');
   });
 
   it('BRD rule: a contract must exist before it can be sent', async () => {
     const wf = new Workflow(
-      traineeMachine(gates({ hasContract: vi.fn().mockResolvedValue(false) })),
-      deps<Trainee>(),
+      onboardingMachine(gates({ hasContract: vi.fn().mockResolvedValue(false) })),
+      deps<Employee>(),
     );
 
     await expect(
-      wf.transition(trainee('CONTRACT_CREATION'), 'SEND_CONTRACT', HR),
+      wf.transition(employee('CONTRACT_CREATION'), 'SEND_CONTRACT', HR),
     ).rejects.toBeInstanceOf(GuardFailedError);
   });
 
   it('only the SYSTEM (SLA engine) may expire, and only waiting states', async () => {
-    const wf = new Workflow(traineeMachine(gates()), deps<Trainee>());
+    const wf = new Workflow(onboardingMachine(gates()), deps<Employee>());
 
-    expect((await wf.transition(trainee('AWAITING_FORM'), 'EXPIRE', SYSTEM)).to).toBe('EXPIRED');
-    await expect(wf.transition(trainee('CONTRACT_CREATION'), 'EXPIRE', SYSTEM)).rejects.toBeInstanceOf(
+    expect((await wf.transition(employee('AWAITING_FORM'), 'EXPIRE', SYSTEM)).to).toBe('EXPIRED');
+    await expect(wf.transition(employee('CONTRACT_CREATION'), 'EXPIRE', SYSTEM)).rejects.toBeInstanceOf(
       IllegalTransitionError,
     );
   });
 
   it('BRD reopen resumes from the last completed stage', async () => {
     // Expired before the contract was ever sent → back to the form stage.
-    const early = new Workflow(traineeMachine(gates()), deps<Trainee>());
-    expect((await early.transition(trainee('EXPIRED'), 'REOPEN', HR)).to).toBe('AWAITING_FORM');
+    const early = new Workflow(onboardingMachine(gates()), deps<Employee>());
+    expect((await early.transition(employee('EXPIRED'), 'REOPEN', HR)).to).toBe('AWAITING_FORM');
 
     // Expired while awaiting contract approval → back to approval.
     const late = new Workflow(
-      traineeMachine(gates({ contractWasSent: vi.fn().mockResolvedValue(true) })),
-      deps<Trainee>(),
+      onboardingMachine(gates({ contractWasSent: vi.fn().mockResolvedValue(true) })),
+      deps<Employee>(),
     );
-    expect((await late.transition(trainee('EXPIRED'), 'REOPEN', HR)).to).toBe(
+    expect((await late.transition(employee('EXPIRED'), 'REOPEN', HR)).to).toBe(
       'AWAITING_CONTRACT_APPROVAL',
     );
   });
 
-  it('the trainee link cannot perform HR actions', async () => {
-    const wf = new Workflow(traineeMachine(gates()), deps<Trainee>());
-    await expect(wf.transition(trainee('FORM_RECEIVED'), 'ACCEPT_DOCUMENTS', LINK)).rejects.toThrow(
+  it('the signed link cannot perform HR actions', async () => {
+    const wf = new Workflow(onboardingMachine(gates()), deps<Employee>());
+    await expect(wf.transition(employee('FORM_RECEIVED'), 'ACCEPT_DOCUMENTS', LINK)).rejects.toThrow(
       /LINK/,
     );
   });

@@ -1,40 +1,40 @@
-import type { Trainee } from '../generated/prisma/client.js';
-import type { TraineeStatus } from '../generated/prisma/enums.js';
+import type { Employee } from '../generated/prisma/client.js';
+import type { EmployeeStatus } from '../generated/prisma/enums.js';
 import type { Workflow } from './engine.js';
 import type { SlaWatcher, WatchedRecord } from './sla-scheduler.js';
-import type { TraineeRepository } from '../modules/trainees/trainee.repository.js';
+import type { EmployeeRepository } from '../modules/employees/employee.repository.js';
 import type { OffboardingRepository } from '../modules/offboarding/offboarding.repository.js';
 import type { GosiRepository } from '../modules/processes/gosi.repository.js';
 import type { MedicalInsuranceRepository } from '../modules/processes/medical-insurance.repository.js';
 import type { EmployeeDocumentRepository } from '../modules/employees/employee-document.repository.js';
 
-const TRAINEE_SUBJECT_TEMPLATES: Record<string, string> = {
-  AWAITING_FORM: 'trainee.form_reminder',
-  AWAITING_CONTRACT_APPROVAL: 'trainee.contract_approval_reminder',
+const ONBOARDING_SUBJECT_TEMPLATES: Record<string, string> = {
+  AWAITING_FORM: 'employee.form_reminder',
+  AWAITING_CONTRACT_APPROVAL: 'employee.contract_approval_reminder',
 };
 
-/** Stage 1 — trainees, with subject emails and EXPIRE support. */
-export function traineeWatcher(
-  trainees: TraineeRepository,
-  workflow: Workflow<Trainee>,
+/** The onboarding pipeline — subject emails and EXPIRE support. */
+export function onboardingWatcher(
+  employees: EmployeeRepository,
+  workflow: Workflow<Employee>,
 ): SlaWatcher {
   return {
-    processKey: 'TRAINEE',
+    processKey: 'EMPLOYEE',
     async listInStatusSince(status, threshold): Promise<WatchedRecord[]> {
-      const rows = await trainees.listInStatusSince(status as TraineeStatus, threshold);
-      return rows.map((t) => ({
-        id: t.id,
-        name: `${t.firstName} ${t.lastName}`,
-        email: t.email,
-        anchorAt: t.statusChangedAt,
-        traineeId: t.id,
+      const rows = await employees.listInStatusSince(status as EmployeeStatus, threshold);
+      return rows.map((e) => ({
+        id: e.id,
+        name: `${e.firstName} ${e.lastName}`,
+        email: e.email,
+        anchorAt: e.statusChangedAt,
+        employeeId: e.id,
       }));
     },
-    subjectTemplate: (status) => TRAINEE_SUBJECT_TEMPLATES[status],
+    subjectTemplate: (status) => ONBOARDING_SUBJECT_TEMPLATES[status],
     async expire(record, ruleId) {
-      const trainee = await trainees.findById(record.id);
-      if (!trainee) return;
-      await workflow.transition(trainee, 'EXPIRE', { type: 'SYSTEM' }, { rule: ruleId });
+      const employee = await employees.findById(record.id);
+      if (!employee) return;
+      await workflow.transition(employee, 'EXPIRE', { type: 'SYSTEM' }, { rule: ruleId });
     },
   };
 }

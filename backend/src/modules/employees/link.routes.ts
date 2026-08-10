@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
 import { documentUpload } from '../../common/storage.js';
-import type { TraineeService } from './trainee.service.js';
+import type { OnboardingService } from './onboarding.service.js';
 import type { AssetService } from '../assets/asset.service.js';
 import type { OffboardingService } from '../offboarding/offboarding.service.js';
 import type { LinkTokenService } from '../../auth/link-token.service.js';
@@ -23,7 +23,7 @@ const decisionSchema = z.object({
  * the authentication (verified on every call).
  */
 export function linkRouter(
-  service: TraineeService,
+  service: OnboardingService,
   assets: AssetService,
   offboarding: OffboardingService,
   links: LinkTokenService,
@@ -87,7 +87,7 @@ export function linkRouter(
     }),
   );
 
-  /** Contract e-approval: one click, one transition, one employee. */
+  /** Contract e-approval: one click, one transition, one activated employee. */
   router.post(
     '/:token/approve-contract',
     asyncHandler(async (req, res) => {

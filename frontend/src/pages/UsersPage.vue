@@ -80,8 +80,8 @@ async function resetPassword() {
 }
 
 const headers = [
-  { title: t('trainees.name'), key: 'name' },
-  { title: t('trainees.email'), key: 'email' },
+  { title: t('fields.name'), key: 'name' },
+  { title: t('fields.email'), key: 'email' },
   { title: t('users.role'), key: 'role' },
   { title: t('users.active'), key: 'active' },
   { title: '', key: 'actions', sortable: false },
@@ -144,8 +144,8 @@ onMounted(load);
     <v-dialog v-model="createDialog" max-width="520">
       <v-card :title="$t('users.new')" class="pa-2">
         <v-card-text>
-          <v-text-field v-model="createForm.name" :label="$t('trainees.name')" />
-          <v-text-field v-model="createForm.email" :label="$t('trainees.email')" type="email" />
+          <v-text-field v-model="createForm.name" :label="$t('fields.name')" />
+          <v-text-field v-model="createForm.email" :label="$t('fields.email')" type="email" />
           <v-select
             v-model="createForm.role"
             :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"

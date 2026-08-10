@@ -188,7 +188,7 @@ async function main() {
 
   for (const rule of SLA_RULES) {
     const { key: _key, ...data } = rule;
-    const processKey = data.processKey ?? 'TRAINEE';
+    const processKey = data.processKey ?? 'EMPLOYEE';
     const existing = await prisma.slaRule.findFirst({
       where: { processKey, status: data.status, action: data.action },
     });
@@ -204,7 +204,7 @@ async function main() {
 /** Default status ownership (system-managed; editable in admin Settings). */
 const OWNERSHIP: Array<{ processKey: string; status: string; roles: string[] }> = [
   ...['CREATED', 'AWAITING_FORM', 'FORM_RECEIVED', 'CONTRACT_CREATION', 'AWAITING_CONTRACT_APPROVAL', 'EXPIRED'].map(
-    (status) => ({ processKey: 'TRAINEE', status, roles: ['HR'] }),
+    (status) => ({ processKey: 'EMPLOYEE', status, roles: ['HR'] }),
   ),
   { processKey: 'GOSI', status: 'PENDING', roles: ['INSURANCE'] },
   { processKey: 'GOSI', status: 'ON_HOLD', roles: ['INSURANCE'] },

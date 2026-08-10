@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRoute } from 'vue-router';
-import { api, ApiError } from '../api/client';
+import { useRoute, useRouter } from 'vue-router';
+import { api, ApiError, getAccessToken } from '../api/client';
 import ProcessCard from '../components/ProcessCard.vue';
+import StatusChip from '../components/StatusChip.vue';
 import { useAuthStore } from '../stores/auth';
 
 interface ProcessData {
@@ -48,24 +49,58 @@ interface OffboardingRow {
   createdAt: string;
 }
 
+interface ContractSummary {
+  startDate: string | null;
+  durationMonths: number | null;
+  terms: string | null;
+  salary?: number | null;
+  sentAt: string | null;
+  approvedAt: string | null;
+}
+
+interface OnboardingDoc {
+  id: string;
+  type: string;
+  label: string | null;
+  required: boolean;
+  uploaded: boolean;
+}
+
+interface RequestRow {
+  id: string;
+  type: string;
+  notes: string | null;
+  createdAt: string;
+  createdBy: { name: string };
+}
+
 interface EmployeeDetail {
   id: string;
-  employeeNo: string;
+  employeeNo: string | null;
   firstName: string;
   lastName: string;
   email: string;
   phone: string | null;
+  nationalId: string | null;
+  birthDate: string | null;
   department: string | null;
   project: string | null;
   jobTitle: string | null;
-  hireDate: string;
+  directManager: string | null;
+  employmentType: string;
+  photoKey: string | null;
+  hireDate: string | null;
   status: string;
+  contract: ContractSummary | null;
+  onboardingDocuments: OnboardingDoc[];
+  requests: RequestRow[];
   gosi: ProcessData | null;
   medical: ProcessData | null;
   criminalRecord: ProcessData | null;
   assetForms: AssetFormRow[];
   offboardings: OffboardingRow[];
   auditLogs: AuditRow[];
+  availableActions: string[];
   processActions: { gosi: string[]; medical: string[]; criminal: string[] };
 }
 
@@ -140,6 +175,126 @@ async function load() {
     api.get<EmployeeDetail>(`/api/employees/${id}`),
     api.get<ExpiryDoc[]>(`/api/employees/${id}/documents`),
   ]);
+  void loadPhoto();
+}
+
+// ------------------------------------------------------------- profile photo
+const photoUrl = ref('');
+const photoInput = ref<HTMLInputElement | null>(null);
+
+async function loadPhoto() {
+  if (!employee.value?.photoKey) {
+    photoUrl.value = '';
+    return;
+  }
+  const res = await fetch(`/api/employees/${id}/photo`, {
+    headers: { Authorization: `Bearer ${getAccessToken()}` },
+  });
+  if (res.ok) {
+    if (photoUrl.value) URL.revokeObjectURL(photoUrl.value);
+    photoUrl.value = URL.createObjectURL(await res.blob());
+  }
+}
+
+async function onPhotoPicked(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  busy.value = 'photo';
+  try {
+    const body = new FormData();
+    body.append('photo', file);
+    await api.post(`/api/employees/${id}/photo`, body);
+    notify(t('common.saved'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+    if (photoInput.value) photoInput.value.value = '';
+  }
+}
+
+const initials = computed(() => {
+  const e = employee.value;
+  return e ? `${e.firstName[0] ?? ''}${e.lastName[0] ?? ''}`.toUpperCase() : '';
+});
+
+/** The reference's "employee status" panel: is anything still missing? */
+const missingCount = computed(() => {
+  const e = employee.value;
+  if (!e) return 0;
+  const gaps = [e.phone, e.nationalId, e.birthDate, e.department, e.jobTitle].filter(
+    (v) => !v,
+  ).length;
+  const missingDocs = e.onboardingDocuments.filter((d) => d.required && !d.uploaded).length;
+  return gaps + missingDocs;
+});
+
+// ------------------------------------------------------------- edit profile
+const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'TEMPORARY'];
+const editDialog = ref(false);
+const editForm = ref({
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  nationalId: '',
+  birthDate: '',
+  department: '',
+  project: '',
+  jobTitle: '',
+  directManager: '',
+  employmentType: 'FULL_TIME',
+  hireDate: '',
+});
+
+function openEdit() {
+  const e = employee.value;
+  if (!e) return;
+  editForm.value = {
+    firstName: e.firstName,
+    lastName: e.lastName,
+    email: e.email,
+    phone: e.phone ?? '',
+    nationalId: e.nationalId ?? '',
+    birthDate: e.birthDate?.slice(0, 10) ?? '',
+    department: e.department ?? '',
+    project: e.project ?? '',
+    jobTitle: e.jobTitle ?? '',
+    directManager: e.directManager ?? '',
+    employmentType: e.employmentType,
+    hireDate: e.hireDate?.slice(0, 10) ?? '',
+  };
+  editDialog.value = true;
+}
+
+async function saveEdit() {
+  busy.value = 'edit';
+  try {
+    const f = editForm.value;
+    // Empty optional fields clear the column (null); required ones are trimmed.
+    await api.put(`/api/employees/${id}`, {
+      firstName: f.firstName.trim(),
+      lastName: f.lastName.trim(),
+      email: f.email.trim(),
+      phone: f.phone.trim() || null,
+      nationalId: f.nationalId.trim() || null,
+      birthDate: f.birthDate || null,
+      department: f.department.trim() || null,
+      project: f.project.trim() || null,
+      jobTitle: f.jobTitle.trim() || null,
+      directManager: f.directManager.trim() || null,
+      employmentType: f.employmentType,
+      ...(f.hireDate ? { hireDate: f.hireDate } : {}),
+    });
+    editDialog.value = false;
+    notify(t('common.saved'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
 }
 
 function docDaysLeft(doc: ExpiryDoc): number {
@@ -268,10 +423,185 @@ function formActions(status: string): Array<'send' | 'cancel' | 'revise'> {
   return [];
 }
 
-// ------------------------------------------------------------- offboarding
-import { computed } from 'vue';
-import { useRouter } from 'vue-router';
+// ------------------------------------------------------------- tabs
+const tab = ref('overview');
 
+// ------------------------------------------------------- onboarding pipeline
+const PIPELINE_STAGES = [
+  'CREATED',
+  'AWAITING_FORM',
+  'FORM_RECEIVED',
+  'CONTRACT_CREATION',
+  'AWAITING_CONTRACT_APPROVAL',
+];
+
+const ONBOARDING_ACTIONS: Record<string, { endpoint: string; icon: string; color: string }> = {
+  SEND_FORM: { endpoint: 'send-form', icon: 'mdi-send', color: 'primary' },
+  REQUEST_MISSING: { endpoint: 'request-missing', icon: 'mdi-file-alert', color: 'warning' },
+  ACCEPT_DOCUMENTS: { endpoint: 'accept-documents', icon: 'mdi-file-check', color: 'success' },
+  SEND_CONTRACT: { endpoint: 'send-contract', icon: 'mdi-file-sign', color: 'primary' },
+  REOPEN: { endpoint: 'reopen', icon: 'mdi-restore', color: 'secondary' },
+};
+
+const isPipeline = computed(
+  () => !!employee.value && !['ACTIVE', 'INACTIVE'].includes(employee.value.status),
+);
+
+const onboardingButtons = computed(
+  () =>
+    employee.value?.availableActions
+      .filter((a) => ONBOARDING_ACTIONS[a])
+      .map((a) => ({ action: a, ...ONBOARDING_ACTIONS[a]! })) ?? [],
+);
+
+const notesDialog = ref(false);
+const missingNotes = ref('');
+
+async function runOnboardingAction(endpoint: string, body?: { notes?: string }) {
+  busy.value = endpoint;
+  try {
+    const result = await api.post<{ url?: string }>(
+      `/api/employees/${id}/actions/${endpoint}`,
+      body ?? {},
+    );
+    if (result.url) linkDialog.value = { show: true, url: result.url };
+    notify(t('common.done'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
+function onOnboardingAction(action: string) {
+  if (action === 'REQUEST_MISSING') {
+    missingNotes.value = '';
+    notesDialog.value = true;
+    return;
+  }
+  void runOnboardingAction(ONBOARDING_ACTIONS[action]!.endpoint);
+}
+
+/** HR reviews an uploaded checklist file — authenticated blob download. */
+async function downloadOnboardingDoc(doc: OnboardingDoc) {
+  const res = await fetch(`/api/employees/${id}/onboarding-documents/${doc.id}/download`, {
+    headers: { Authorization: `Bearer ${getAccessToken()}` },
+  });
+  if (!res.ok) {
+    notify(t('common.error'), 'error');
+    return;
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = doc.label ?? doc.type;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Contract drafting (CONTRACT_CREATION only)
+const contractDialog = ref(false);
+const contractForm = ref({ salary: '', durationMonths: '', startDate: '', terms: '' });
+
+function openContractDialog() {
+  const c = employee.value?.contract;
+  contractForm.value = {
+    salary: c?.salary != null ? String(c.salary) : '',
+    durationMonths: c?.durationMonths != null ? String(c.durationMonths) : '',
+    startDate: typeof c?.startDate === 'string' ? c.startDate.slice(0, 10) : '',
+    terms: c?.terms ?? '',
+  };
+  contractDialog.value = true;
+}
+
+async function saveContract() {
+  busy.value = 'contract';
+  try {
+    const details: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(contractForm.value)) if (v.trim()) details[k] = v.trim();
+    await api.put(`/api/employees/${id}/contract`, { details });
+    contractDialog.value = false;
+    notify(t('common.saved'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
+// ------------------------------------------------------------- requests & services
+const REQUEST_TYPES = [
+  { type: 'SALARY_LETTER', icon: 'mdi-file-account-outline' },
+  { type: 'BANK_LETTER', icon: 'mdi-bank-outline' },
+  { type: 'DEPARTMENT_CHANGE', icon: 'mdi-sitemap-outline' },
+  { type: 'JOB_TITLE_CHANGE', icon: 'mdi-account-convert' },
+  { type: 'PROMOTION', icon: 'mdi-arrow-up-bold-circle-outline' },
+  { type: 'PROJECT_TRANSFER', icon: 'mdi-swap-horizontal' },
+  { type: 'WARNING', icon: 'mdi-alert-outline' },
+  { type: 'INVESTIGATION', icon: 'mdi-magnify' },
+];
+
+const requestDialog = ref({ show: false, type: 'SALARY_LETTER', notes: '' });
+
+function openRequest(type: string) {
+  requestDialog.value = { show: true, type, notes: '' };
+}
+
+async function submitRequest() {
+  busy.value = 'request';
+  try {
+    await api.post(`/api/employees/${id}/requests`, {
+      type: requestDialog.value.type,
+      notes: requestDialog.value.notes.trim() || undefined,
+    });
+    requestDialog.value.show = false;
+    notify(t('common.saved'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
+// ------------------------------------------------------------- contract card
+const showTerms = ref(false);
+
+const contractEnd = computed(() => {
+  const c = employee.value?.contract;
+  if (!c?.startDate || !c.durationMonths) return null;
+  const end = new Date(c.startDate);
+  end.setMonth(end.getMonth() + Number(c.durationMonths));
+  return end;
+});
+
+const contractRemainingMonths = computed(() => {
+  if (!contractEnd.value) return null;
+  return Math.max(0, Math.ceil((contractEnd.value.getTime() - Date.now()) / (30.44 * 86_400_000)));
+});
+
+const contractState = computed<'active' | 'expired' | 'awaiting' | null>(() => {
+  const c = employee.value?.contract;
+  if (!c) return null;
+  if (!c.approvedAt) return 'awaiting';
+  if (contractEnd.value && contractEnd.value.getTime() < Date.now()) return 'expired';
+  return 'active';
+});
+
+/** The fourth process tile — custody at a glance. */
+const custodySummary = computed(() => {
+  const forms = employee.value?.assetForms ?? [];
+  return {
+    latest: forms[0] ?? null,
+    approvedItems: forms
+      .filter((f) => f.status === 'APPROVED')
+      .reduce((n, f) => n + f.items.length, 0),
+  };
+});
+
+// ------------------------------------------------------------- offboarding
 const router = useRouter();
 const offboardingDialog = ref(false);
 const offboardingForm = ref({ reason: 'RESIGNATION', notes: '' });
@@ -303,39 +633,212 @@ onMounted(load);
 <template>
   <v-container v-if="employee" class="py-8" style="max-width: 1200px">
     <!-- Header -->
-    <div class="d-flex align-center flex-wrap mb-6" style="gap: 12px">
+    <div class="d-flex align-center mb-4" style="gap: 8px">
       <v-btn icon="mdi-arrow-left" variant="text" to="/employees" class="flip-rtl" />
-      <div>
-        <h1 class="text-h4 font-weight-bold">
-          {{ employee.firstName }} {{ employee.lastName }}
-          <v-chip color="primary" variant="tonal" size="small" class="ms-2 font-weight-bold">
-            {{ employee.employeeNo }}
-          </v-chip>
-          <v-chip
-            :color="employee.status === 'ACTIVE' ? 'success' : 'grey'"
-            variant="tonal"
-            size="small"
-            class="ms-1"
-          >
-            {{ $t(`employees.statuses.${employee.status}`) }}
-          </v-chip>
-        </h1>
-        <p class="text-medium-emphasis mt-1">
-          {{ employee.jobTitle ?? '—' }} · {{ employee.department ?? '—' }} ·
-          {{ $t('employees.hired') }} {{ new Date(employee.hireDate).toLocaleDateString() }}
-        </p>
-      </div>
-      <v-spacer />
-      <v-btn
-        v-if="!openOffboarding && employee.status === 'ACTIVE' && auth.hasRole('HR')"
-        color="warning"
-        variant="tonal"
-        prepend-icon="mdi-exit-run"
-        @click="offboardingDialog = true"
-      >
-        {{ $t('offboarding.start') }}
-      </v-btn>
+      <span class="text-medium-emphasis text-body-2">
+        {{ $t('employees.title') }} / {{ employee.firstName }} {{ employee.lastName }}
+      </span>
     </div>
+
+    <!-- Profile card -->
+    <v-card class="mb-6 profile-card" elevation="1">
+      <v-card-text class="pa-6">
+        <div class="d-flex flex-wrap align-start" style="gap: 24px">
+          <!-- Photo -->
+          <div class="position-relative flex-shrink-0">
+            <v-avatar size="96" color="primary" variant="tonal">
+              <v-img v-if="photoUrl" :src="photoUrl" cover />
+              <span v-else class="text-h4 font-weight-bold">{{ initials }}</span>
+            </v-avatar>
+            <v-btn
+              v-if="auth.hasRole('HR')"
+              icon="mdi-camera"
+              size="x-small"
+              color="primary"
+              class="photo-edit-btn"
+              :loading="busy === 'photo'"
+              :title="$t('profile.uploadPhoto')"
+              @click="photoInput?.click()"
+            />
+            <input
+              ref="photoInput"
+              type="file"
+              accept="image/jpeg,image/png"
+              class="d-none"
+              @change="onPhotoPicked"
+            />
+          </div>
+
+          <!-- Identity -->
+          <div class="flex-grow-1" style="min-width: 220px">
+            <h1 class="text-h4 font-weight-bold mb-1">
+              {{ employee.firstName }} {{ employee.lastName }}
+            </h1>
+            <div class="text-medium-emphasis">
+              {{ employee.jobTitle ?? '—' }}<template v-if="employee.department">
+                · {{ employee.department }}</template
+              >
+            </div>
+            <div class="mt-2">
+              <StatusChip :status="employee.status" />
+            </div>
+          </div>
+
+          <!-- Status panel (حالة الموظف) -->
+          <v-sheet class="status-panel pa-4 text-center flex-shrink-0" rounded="lg">
+            <div class="text-subtitle-2 font-weight-bold mb-2">
+              {{ $t('profile.statusTitle') }}
+            </div>
+            <v-icon
+              :icon="
+                employee.status === 'ACTIVE'
+                  ? 'mdi-check-circle-outline'
+                  : employee.status === 'INACTIVE'
+                    ? 'mdi-pause-circle-outline'
+                    : 'mdi-progress-clock'
+              "
+              :color="
+                employee.status === 'ACTIVE'
+                  ? 'success'
+                  : employee.status === 'INACTIVE'
+                    ? 'grey'
+                    : 'warning'
+              "
+              size="44"
+            />
+            <div class="mt-2">
+              <StatusChip :status="employee.status" />
+            </div>
+            <div
+              class="text-caption mt-2"
+              :class="missingCount === 0 ? 'text-success' : 'text-warning'"
+            >
+              {{
+                missingCount === 0
+                  ? $t('profile.dataComplete')
+                  : $t('profile.dataMissing', { n: missingCount })
+              }}
+            </div>
+          </v-sheet>
+        </div>
+
+        <v-divider class="my-5" />
+
+        <!-- Info grid -->
+        <v-row dense>
+          <v-col
+            v-for="field in [
+              { label: $t('employees.no'), value: employee.employeeNo },
+              { label: $t('fields.department'), value: employee.department },
+              { label: $t('employees.project'), value: employee.project },
+              { label: $t('fields.nationalId'), value: employee.nationalId },
+              {
+                label: $t('fields.birthDate'),
+                value: employee.birthDate ? new Date(employee.birthDate).toLocaleDateString() : null,
+              },
+              { label: $t('fields.phone'), value: employee.phone },
+              { label: $t('fields.email'), value: employee.email },
+              {
+                label: $t('employees.hireDate'),
+                value: employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : null,
+              },
+              {
+                label: $t('profile.employmentType'),
+                value: $t(`profile.types.${employee.employmentType}`),
+              },
+              { label: $t('profile.directManager'), value: employee.directManager },
+            ]"
+            :key="field.label"
+            cols="6"
+            sm="4"
+            md="2"
+            class="info-cell"
+          >
+            <div class="text-caption text-medium-emphasis">{{ field.label }}</div>
+            <div class="text-body-2 font-weight-medium">{{ field.value ?? '—' }}</div>
+          </v-col>
+        </v-row>
+
+        <v-divider class="my-5" />
+
+        <!-- Actions -->
+        <div class="d-flex flex-wrap align-center" style="gap: 12px">
+          <!-- Onboarding pipeline actions (server-driven, machine-legal only) -->
+          <v-btn
+            v-for="btn in onboardingButtons"
+            :key="btn.action"
+            :color="btn.color"
+            variant="tonal"
+            :prepend-icon="btn.icon"
+            :loading="busy === btn.endpoint"
+            @click="onOnboardingAction(btn.action)"
+          >
+            {{ $t(`actions.${btn.action}`) }}
+          </v-btn>
+          <v-btn
+            v-if="isPipeline && employee.status === 'CONTRACT_CREATION' && auth.hasRole('HR')"
+            color="indigo"
+            variant="tonal"
+            prepend-icon="mdi-file-document-edit"
+            @click="openContractDialog"
+          >
+            {{ employee.contract ? $t('contract.edit') : $t('contract.createBtn') }}
+          </v-btn>
+
+          <v-menu v-if="!isPipeline">
+            <template #activator="{ props }">
+              <v-btn v-bind="props" color="primary" variant="tonal" prepend-icon="mdi-plus-circle-outline">
+                {{ $t('profile.newAction') }}
+              </v-btn>
+            </template>
+            <v-list density="compact">
+              <v-list-item
+                v-if="auth.hasRole('IT')"
+                prepend-icon="mdi-laptop"
+                :title="$t('assets.newForm')"
+                @click="formDialog = true"
+              />
+              <v-list-item
+                v-if="auth.hasRole('HR')"
+                prepend-icon="mdi-file-clock"
+                :title="$t('expiryDocs.add')"
+                @click="openDocDialog()"
+              />
+              <v-list-item
+                v-if="auth.hasRole('HR')"
+                prepend-icon="mdi-hand-extended-outline"
+                :title="$t('requests.new')"
+                @click="openRequest('SALARY_LETTER')"
+              />
+              <v-list-item
+                v-if="auth.hasRole('HR') && !openOffboarding && employee.status === 'ACTIVE'"
+                prepend-icon="mdi-exit-run"
+                :title="$t('offboarding.start')"
+                @click="offboardingDialog = true"
+              />
+            </v-list>
+          </v-menu>
+          <v-btn
+            v-if="auth.hasRole('HR')"
+            variant="outlined"
+            prepend-icon="mdi-pencil"
+            @click="openEdit"
+          >
+            {{ $t('profile.edit') }}
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            v-if="!openOffboarding && employee.status === 'ACTIVE' && auth.hasRole('HR')"
+            color="error"
+            variant="outlined"
+            prepend-icon="mdi-logout-variant"
+            @click="offboardingDialog = true"
+          >
+            {{ $t('profile.endContract') }}
+          </v-btn>
+        </div>
+      </v-card-text>
+    </v-card>
 
     <!-- Offboarding banner -->
     <v-alert
@@ -359,9 +862,70 @@ onMounted(load);
       </template>
     </v-alert>
 
-    <!-- BRD Stage 2: the three independent processes -->
+    <!-- Overview / Timeline tabs -->
+    <v-tabs v-model="tab" color="primary" class="mb-4">
+      <v-tab value="overview" prepend-icon="mdi-view-dashboard-outline">
+        {{ $t('profile.overview') }}
+      </v-tab>
+      <v-tab value="timeline" prepend-icon="mdi-history">
+        {{ $t('profile.timelineTab') }}
+      </v-tab>
+    </v-tabs>
+
+    <v-window v-model="tab" :touch="false">
+      <v-window-item value="overview">
+    <!-- Onboarding pipeline progress (pre-activation) -->
+    <v-card v-if="isPipeline" class="mb-6">
+      <v-card-item>
+        <v-card-title class="text-subtitle-1 font-weight-bold">
+          <v-icon icon="mdi-school" class="me-2" color="primary" />
+          {{ $t('onboarding.section') }}
+        </v-card-title>
+      </v-card-item>
+      <v-card-text>
+        <div class="d-flex flex-wrap align-center mb-2" style="gap: 8px">
+          <template v-for="(stage, i) in PIPELINE_STAGES" :key="stage">
+            <v-chip
+              :color="
+                stage === employee.status
+                  ? 'primary'
+                  : PIPELINE_STAGES.indexOf(employee.status) > i
+                    ? 'success'
+                    : 'grey'
+              "
+              :variant="stage === employee.status ? 'flat' : 'tonal'"
+              size="small"
+              :prepend-icon="
+                PIPELINE_STAGES.indexOf(employee.status) > i ? 'mdi-check' : undefined
+              "
+            >
+              {{ $t(`status.${stage}`) }}
+            </v-chip>
+            <v-icon
+              v-if="i < PIPELINE_STAGES.length - 1"
+              icon="mdi-chevron-right"
+              size="16"
+              class="text-medium-emphasis flip-rtl"
+            />
+          </template>
+        </div>
+        <v-alert
+          v-if="employee.status === 'EXPIRED'"
+          type="error"
+          variant="tonal"
+          density="compact"
+          class="mt-2 mb-0"
+        >
+          {{ $t('status.EXPIRED') }} — {{ $t(`audit.EXPIRE`) }}
+        </v-alert>
+      </v-card-text>
+    </v-card>
+
+    <!-- BRD Stage 2: the independent processes (عمليات الموظف) -->
+    <template v-if="!isPipeline">
+    <h2 class="text-subtitle-1 font-weight-bold mb-3">{{ $t('profile.processes') }}</h2>
     <v-row class="mb-2">
-      <v-col cols="12" md="4">
+      <v-col cols="12" sm="6" md="3">
         <ProcessCard
           :title="$t('processes.gosi')"
           icon="mdi-shield-account"
@@ -372,7 +936,7 @@ onMounted(load);
           @act="(a, p) => actOnProcess('gosi', a, p)"
         />
       </v-col>
-      <v-col cols="12" md="4">
+      <v-col cols="12" sm="6" md="3">
         <ProcessCard
           :title="$t('processes.medical')"
           icon="mdi-hospital-box"
@@ -383,7 +947,7 @@ onMounted(load);
           @act="(a, p) => actOnProcess('medical', a, p)"
         />
       </v-col>
-      <v-col cols="12" md="4">
+      <v-col cols="12" sm="6" md="3">
         <ProcessCard
           :title="$t('processes.criminal')"
           icon="mdi-file-certificate"
@@ -394,13 +958,123 @@ onMounted(load);
           @act="(a) => actOnProcess('criminal', a)"
         />
       </v-col>
+      <!-- Custody at a glance (إدارة العهد) -->
+      <v-col cols="12" sm="6" md="3">
+        <v-card class="h-100">
+          <v-card-text class="text-center py-5">
+            <v-icon icon="mdi-package-variant-closed" size="36" color="deep-purple" class="mb-2" />
+            <div class="text-subtitle-2 font-weight-bold mb-2">{{ $t('assets.title') }}</div>
+            <v-chip
+              v-if="custodySummary.latest"
+              :color="ASSET_STATUS_COLORS[custodySummary.latest.status]"
+              size="small"
+              variant="tonal"
+              class="font-weight-medium"
+            >
+              {{ $t(`assetStatus.${custodySummary.latest.status}`) }}
+            </v-chip>
+            <v-chip v-else size="small" variant="tonal">—</v-chip>
+            <div class="text-caption text-medium-emphasis mt-2">
+              {{ custodySummary.approvedItems }} {{ $t('assets.items') }}
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
     </v-row>
+    </template>
 
     <v-row>
-      <!-- Assets -->
       <v-col cols="12" md="7">
-        <!-- Expiry-tracked documents -->
+        <!-- Contract (العقد) -->
         <v-card class="mb-4">
+          <v-card-item>
+            <v-card-title class="text-subtitle-1 font-weight-bold">
+              <v-icon icon="mdi-file-sign" class="me-2" color="primary" />
+              {{ $t('contractCard.title') }}
+            </v-card-title>
+            <template #append>
+              <v-chip
+                v-if="contractState"
+                :color="
+                  contractState === 'active'
+                    ? 'success'
+                    : contractState === 'expired'
+                      ? 'error'
+                      : 'warning'
+                "
+                size="small"
+                variant="tonal"
+              >
+                {{ $t(`contractCard.${contractState}`) }}
+              </v-chip>
+            </template>
+          </v-card-item>
+          <v-card-text v-if="!employee.contract" class="text-medium-emphasis">
+            {{ $t('contractCard.none') }}
+          </v-card-text>
+          <v-card-text v-else>
+            <v-row dense>
+              <v-col
+                v-for="cell in [
+                  {
+                    label: $t('contractCard.type'),
+                    value: employee.contract.durationMonths ? $t('contractCard.fixedTerm') : null,
+                  },
+                  {
+                    label: $t('contractCard.start'),
+                    value: employee.contract.startDate
+                      ? new Date(employee.contract.startDate).toLocaleDateString()
+                      : null,
+                  },
+                  {
+                    label: $t('contractCard.end'),
+                    value: contractEnd ? contractEnd.toLocaleDateString() : null,
+                  },
+                  {
+                    label: $t('contractCard.duration'),
+                    value: employee.contract.durationMonths
+                      ? $t('contractCard.months', { n: employee.contract.durationMonths })
+                      : null,
+                  },
+                  {
+                    label: $t('contractCard.remaining'),
+                    value:
+                      contractRemainingMonths !== null
+                        ? $t('contractCard.months', { n: contractRemainingMonths })
+                        : null,
+                  },
+                  ...(employee.contract.salary != null
+                    ? [{ label: $t('contractCard.salary'), value: String(employee.contract.salary) }]
+                    : []),
+                ]"
+                :key="cell.label"
+                cols="6"
+                sm="4"
+                class="info-cell"
+              >
+                <div class="text-caption text-medium-emphasis">{{ cell.label }}</div>
+                <div class="text-body-2 font-weight-medium">{{ cell.value ?? '—' }}</div>
+              </v-col>
+            </v-row>
+            <template v-if="employee.contract.terms">
+              <v-btn
+                size="small"
+                variant="text"
+                color="primary"
+                :append-icon="showTerms ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+                @click="showTerms = !showTerms"
+              >
+                {{ $t('contractCard.view') }}
+              </v-btn>
+              <p v-if="showTerms" class="text-body-2 text-medium-emphasis mt-2 mb-0">
+                {{ employee.contract.terms }}
+              </p>
+            </template>
+          </v-card-text>
+        </v-card>
+
+        <!-- Expiry-tracked documents -->
+        <v-card v-if="!isPipeline" class="mb-4">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
               <v-icon icon="mdi-card-account-details" class="me-2" color="primary" />
@@ -461,7 +1135,7 @@ onMounted(load);
             </v-list-item>
           </v-list>
         </v-card>
-        <v-card>
+        <v-card v-if="!isPipeline">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
               <v-icon icon="mdi-laptop" class="me-2" color="secondary" />
@@ -541,9 +1215,94 @@ onMounted(load);
         </v-card>
       </v-col>
 
-      <!-- Timeline -->
+      <!-- Requests & services + onboarding documents -->
       <v-col cols="12" md="5">
-        <v-card :title="$t('trainees.timeline')">
+        <v-card v-if="!isPipeline" class="mb-4">
+          <v-card-item>
+            <v-card-title class="text-subtitle-1 font-weight-bold">
+              <v-icon icon="mdi-hand-extended-outline" class="me-2" color="primary" />
+              {{ $t('requests.title') }}
+            </v-card-title>
+          </v-card-item>
+          <v-card-text>
+            <v-row v-if="auth.hasRole('HR')" dense class="mb-1">
+              <v-col v-for="r in REQUEST_TYPES" :key="r.type" cols="6">
+                <v-btn
+                  block
+                  variant="outlined"
+                  class="justify-start text-none service-btn"
+                  :prepend-icon="r.icon"
+                  @click="openRequest(r.type)"
+                >
+                  {{ $t(`requests.types.${r.type}`) }}
+                </v-btn>
+              </v-col>
+            </v-row>
+            <v-divider v-if="auth.hasRole('HR')" class="my-3" />
+            <template v-if="employee.requests.length">
+              <div class="text-caption text-medium-emphasis mb-1">{{ $t('requests.recent') }}</div>
+              <v-list density="compact" class="pa-0">
+                <v-list-item v-for="r in employee.requests.slice(0, 5)" :key="r.id" class="px-0">
+                  <template #prepend>
+                    <v-icon icon="mdi-clipboard-text-clock-outline" size="20" class="me-2" />
+                  </template>
+                  <v-list-item-title>{{ $t(`requests.types.${r.type}`) }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    {{ new Date(r.createdAt).toLocaleDateString() }} ·
+                    {{ $t('requests.by', { name: r.createdBy.name }) }}
+                    <template v-if="r.notes"> · {{ r.notes }}</template>
+                  </v-list-item-subtitle>
+                </v-list-item>
+              </v-list>
+            </template>
+            <p v-else class="text-medium-emphasis mb-0">{{ $t('requests.empty') }}</p>
+          </v-card-text>
+        </v-card>
+
+        <!-- Onboarding documents checklist (المستندات) -->
+        <v-card v-if="employee.onboardingDocuments.length">
+          <v-card-item>
+            <v-card-title class="text-subtitle-1 font-weight-bold">
+              <v-icon icon="mdi-folder-account-outline" class="me-2" color="secondary" />
+              {{ $t('onboarding.documents') }}
+            </v-card-title>
+          </v-card-item>
+          <v-list density="compact">
+            <v-list-item v-for="doc in employee.onboardingDocuments" :key="doc.id">
+              <template #prepend>
+                <v-icon
+                  :icon="doc.uploaded ? 'mdi-file-check' : 'mdi-file-remove-outline'"
+                  :color="doc.uploaded ? 'success' : doc.required ? 'error' : 'grey'"
+                />
+              </template>
+              <v-list-item-title>
+                {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }}
+                <v-chip v-if="!doc.required" size="x-small" variant="tonal" class="ms-1">
+                  {{ $t('onboarding.optional') }}
+                </v-chip>
+              </v-list-item-title>
+              <v-list-item-subtitle>
+                {{ doc.uploaded ? $t('onboarding.uploaded') : $t('onboarding.missing') }}
+              </v-list-item-subtitle>
+              <template #append>
+                <v-btn
+                  v-if="doc.uploaded && auth.hasRole('HR')"
+                  icon="mdi-download"
+                  variant="text"
+                  size="small"
+                  @click="downloadOnboardingDoc(doc)"
+                />
+              </template>
+            </v-list-item>
+          </v-list>
+        </v-card>
+      </v-col>
+    </v-row>
+      </v-window-item>
+
+      <!-- Timeline tab (السجل الزمني) -->
+      <v-window-item value="timeline">
+        <v-card :title="$t('profile.timelineTab')">
           <v-card-text>
             <v-timeline density="compact" side="end" truncate-line="both">
               <v-timeline-item
@@ -563,8 +1322,8 @@ onMounted(load);
             </v-timeline>
           </v-card-text>
         </v-card>
-      </v-col>
-    </v-row>
+      </v-window-item>
+    </v-window>
 
     <!-- New custody form dialog -->
     <v-dialog v-model="formDialog" max-width="760">
@@ -674,6 +1433,139 @@ onMounted(load);
       </v-card>
     </v-dialog>
 
+    <!-- Request-missing-documents dialog (onboarding loop) -->
+    <v-dialog v-model="notesDialog" max-width="480">
+      <v-card :title="$t('actions.REQUEST_MISSING')" class="pa-2">
+        <v-card-text>
+          <v-textarea v-model="missingNotes" :label="$t('onboarding.missingNotes')" rows="3" />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="notesDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn
+            color="warning"
+            :loading="busy === 'request-missing'"
+            @click="
+              notesDialog = false;
+              runOnboardingAction('request-missing', missingNotes ? { notes: missingNotes } : undefined);
+            "
+          >
+            {{ $t('common.send') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Contract drafting dialog (CONTRACT_CREATION only) -->
+    <v-dialog v-model="contractDialog" max-width="560">
+      <v-card :title="$t('contractCard.title')" class="pa-2">
+        <v-card-text>
+          <v-row dense>
+            <v-col cols="6"><v-text-field v-model="contractForm.salary" :label="$t('contract.salary')" /></v-col>
+            <v-col cols="6">
+              <v-text-field v-model="contractForm.durationMonths" :label="$t('contract.durationMonths')" type="number" min="1" />
+            </v-col>
+            <v-col cols="12">
+              <v-text-field v-model="contractForm.startDate" :label="$t('contract.startDate')" type="date" />
+            </v-col>
+            <v-col cols="12">
+              <v-textarea v-model="contractForm.terms" :label="$t('contract.terms')" rows="3" />
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="contractDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="primary" :loading="busy === 'contract'" @click="saveContract">
+            {{ $t('common.save') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- New request dialog -->
+    <v-dialog v-model="requestDialog.show" max-width="440">
+      <v-card :title="$t('requests.new')" class="pa-2">
+        <v-card-text>
+          <v-select
+            v-model="requestDialog.type"
+            :items="REQUEST_TYPES.map((r) => ({ title: $t(`requests.types.${r.type}`), value: r.type }))"
+            :label="$t('requests.title')"
+          />
+          <v-textarea v-model="requestDialog.notes" :label="$t('requests.notes')" rows="3" />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="requestDialog.show = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="primary" :loading="busy === 'request'" @click="submitRequest">
+            {{ $t('common.save') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Edit profile dialog -->
+    <v-dialog v-model="editDialog" max-width="720">
+      <v-card :title="$t('profile.edit')" class="pa-2">
+        <v-card-text>
+          <v-row dense>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.firstName" :label="$t('fields.firstName')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.lastName" :label="$t('fields.lastName')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.email" :label="$t('fields.email')" type="email" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.phone" :label="$t('fields.phone')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.nationalId" :label="$t('fields.nationalId')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.birthDate" :label="$t('fields.birthDate')" type="date" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.department" :label="$t('fields.department')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.project" :label="$t('employees.project')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.jobTitle" :label="$t('fields.jobTitle')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.directManager" :label="$t('profile.directManager')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="editForm.employmentType"
+                :items="EMPLOYMENT_TYPES.map((v) => ({ title: $t(`profile.types.${v}`), value: v }))"
+                :label="$t('profile.employmentType')"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="editForm.hireDate" :label="$t('employees.hireDate')" type="date" />
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="editDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn
+            color="primary"
+            :loading="busy === 'edit'"
+            :disabled="!editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim() || !editForm.hireDate"
+            @click="saveEdit"
+          >
+            {{ $t('common.save') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Start offboarding dialog -->
     <v-dialog v-model="offboardingDialog" max-width="480">
       <v-card :title="$t('offboarding.start')" class="pa-2">
@@ -708,5 +1600,26 @@ onMounted(load);
 <style scoped>
 [dir='rtl'] .flip-rtl {
   transform: scaleX(-1);
+}
+
+.photo-edit-btn {
+  position: absolute;
+  bottom: -2px;
+  inset-inline-end: -2px;
+}
+
+.status-panel {
+  min-width: 200px;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgba(var(--v-theme-on-surface), 0.02);
+}
+
+.info-cell {
+  padding-block: 8px;
+}
+
+.service-btn {
+  border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+  font-weight: 500;
 }
 </style>

@@ -11,7 +11,7 @@ const NOW = new Date('2026-08-02T12:00:00Z');
 function rule(overrides: Partial<SlaRule>): SlaRule {
   return {
     id: 'rule1',
-    processKey: 'TRAINEE',
+    processKey: 'EMPLOYEE',
     status: 'AWAITING_FORM',
     afterValue: 24,
     afterUnit: 'HOURS',
@@ -28,11 +28,11 @@ function rule(overrides: Partial<SlaRule>): SlaRule {
 
 function record(overrides: Partial<WatchedRecord> = {}): WatchedRecord {
   return {
-    id: 't1',
+    id: 'e1',
     name: 'Sara Ahmed',
     email: 'sara@example.com',
     anchorAt: new Date('2026-08-01T10:00:00Z'), // 26h before NOW
-    traineeId: 't1',
+    employeeId: 'e1',
     ...overrides,
   };
 }
@@ -53,10 +53,10 @@ function makeScheduler(rules: SlaRule[], records: WatchedRecord[], lastFiring: D
   };
   const expire = vi.fn().mockResolvedValue(undefined);
   const watcher: SlaWatcher = {
-    processKey: 'TRAINEE',
+    processKey: 'EMPLOYEE',
     listInStatusSince: vi.fn().mockResolvedValue(records),
     subjectTemplate: (status) =>
-      status === 'AWAITING_FORM' ? 'trainee.form_reminder' : undefined,
+      status === 'AWAITING_FORM' ? 'employee.form_reminder' : undefined,
     expire,
   };
   return { scheduler: new SlaScheduler(deps as never, [watcher]), deps, watcher, expire };
@@ -69,9 +69,9 @@ describe('SlaScheduler (generalized)', () => {
 
     expect(deps.notifications.notifyExternal).toHaveBeenCalledWith(
       'sara@example.com',
-      'trainee.form_reminder',
+      'employee.form_reminder',
       expect.objectContaining({ name: 'Sara Ahmed' }),
-      { entity: 'TRAINEE', entityId: 't1' },
+      { entity: 'EMPLOYEE', entityId: 'e1' },
     );
     expect(deps.notifications.notifyRole).toHaveBeenCalledWith(
       'HR',
@@ -82,7 +82,7 @@ describe('SlaScheduler (generalized)', () => {
     expect(deps.audit.append).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'SLA_REMINDER', actorType: 'SYSTEM' }),
     );
-    expect(deps.firings.record).toHaveBeenCalledWith('rule1', 't1', NOW);
+    expect(deps.firings.record).toHaveBeenCalledWith('rule1', 'e1', NOW);
   });
 
   it('a one-shot REMIND never fires twice (sla_firings memory)', async () => {

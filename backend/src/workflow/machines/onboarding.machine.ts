@@ -1,24 +1,28 @@
-import type { Trainee } from '../../generated/prisma/client.js';
+import type { Employee } from '../../generated/prisma/client.js';
 import type { MachineDef } from '../engine.js';
 import { GuardFailedError } from '../errors.js';
 
 /**
  * Async data the guards need — injected so the machine stays unit-testable.
- * Wired to TraineeDocumentRepository / ContractRepository in the services.
+ * Wired to OnboardingDocumentRepository / ContractRepository in the services.
  */
-export interface TraineeGates {
+export interface OnboardingGates {
   /** Required checklist rows without an upload. */
-  countMissingRequiredDocs(traineeId: string): Promise<number>;
-  /** A contract row exists for this trainee. */
-  hasContract(traineeId: string): Promise<boolean>;
-  /** The contract was sent to the trainee (sentAt stamped). */
-  contractWasSent(traineeId: string): Promise<boolean>;
+  countMissingRequiredDocs(employeeId: string): Promise<number>;
+  /** A contract row exists for this employee. */
+  hasContract(employeeId: string): Promise<boolean>;
+  /** The contract was sent to the new hire (sentAt stamped). */
+  contractWasSent(employeeId: string): Promise<boolean>;
 }
 
-/** Stage 1 — Trainee Management (BRD workflow diagram, README §1). */
-export function traineeMachine(gates: TraineeGates): MachineDef<Trainee> {
-  const documentsComplete = async (traineeId: string) => {
-    const missing = await gates.countMissingRequiredDocs(traineeId);
+/**
+ * The employee onboarding pipeline (BRD stage 1) — the front half of the
+ * single employee lifecycle. Contract approval activates the employee;
+ * ACTIVE → INACTIVE is flipped by offboarding closure, outside this machine.
+ */
+export function onboardingMachine(gates: OnboardingGates): MachineDef<Employee> {
+  const documentsComplete = async (employeeId: string) => {
+    const missing = await gates.countMissingRequiredDocs(employeeId);
     if (missing > 0) {
       throw new GuardFailedError(
         'DOCUMENTS_INCOMPLETE',
@@ -28,15 +32,15 @@ export function traineeMachine(gates: TraineeGates): MachineDef<Trainee> {
   };
 
   return {
-    key: 'TRAINEE',
+    key: 'EMPLOYEE',
     transitions: [
       // HR sends the data-completion form (signed link goes out).
       { action: 'SEND_FORM', from: 'CREATED', to: 'AWAITING_FORM', actors: ['USER'], roles: ['HR'] },
 
-      // Trainee submits the form through the signed link.
+      // The new hire submits the form through the signed link.
       { action: 'SUBMIT_FORM', from: 'AWAITING_FORM', to: 'FORM_RECEIVED', actors: ['LINK'] },
 
-      // HR review: incomplete → back to the trainee (BRD loop).
+      // HR review: incomplete → back to the new hire (BRD loop).
       {
         action: 'REQUEST_MISSING',
         from: 'FORM_RECEIVED',
@@ -69,11 +73,13 @@ export function traineeMachine(gates: TraineeGates): MachineDef<Trainee> {
         },
       },
 
-      // Trainee approves electronically → employee profile creation follows.
+      // E-approval through the signed link activates the employee —
+      // the service then allocates the employee number and opens the
+      // Stage-2 process tracks.
       {
         action: 'APPROVE_CONTRACT',
         from: 'AWAITING_CONTRACT_APPROVAL',
-        to: 'EMPLOYEE_CREATED',
+        to: 'ACTIVE',
         actors: ['LINK'],
       },
 

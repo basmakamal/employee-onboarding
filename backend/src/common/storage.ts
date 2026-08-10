@@ -22,7 +22,7 @@ export function storagePath(storageKey: string): string {
 }
 
 /**
- * Multer instance for trainee document uploads: whitelist by MIME,
+ * Multer instance for onboarding document uploads: whitelist by MIME,
  * 10 MB per file, random server-side filenames (never the client's).
  */
 export const documentUpload = multer({
@@ -35,6 +35,26 @@ export const documentUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024, files: 20 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME[file.mimetype]) cb(null, true);
+    else cb(new GuardFailedError('UNSUPPORTED_FILE_TYPE', `file type ${file.mimetype} not allowed`));
+  },
+});
+
+const PHOTO_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+};
+
+/** Profile photos: images only, 5 MB, one file. */
+export const photoUpload = multer({
+  storage: multer.diskStorage({
+    destination: uploadRoot,
+    filename: (_req, file, cb) => {
+      cb(null, `${randomUUID()}${PHOTO_MIME[file.mimetype] ?? ''}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (PHOTO_MIME[file.mimetype]) cb(null, true);
     else cb(new GuardFailedError('UNSUPPORTED_FILE_TYPE', `file type ${file.mimetype} not allowed`));
   },
 });

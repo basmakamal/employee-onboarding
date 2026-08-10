@@ -58,7 +58,7 @@ onMounted(load);
         <thead>
           <tr>
             <th>{{ $t('ownership.machine') }}</th>
-            <th>{{ $t('trainees.status') }}</th>
+            <th>{{ $t('fields.status') }}</th>
             <th style="width: 340px">{{ $t('ownership.groups') }}</th>
           </tr>
         </thead>
