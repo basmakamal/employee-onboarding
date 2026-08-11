@@ -38,6 +38,8 @@ import { GosiRepository } from './modules/processes/gosi.repository.js';
 import { MedicalInsuranceRepository } from './modules/processes/medical-insurance.repository.js';
 import { CriminalRecordRepository } from './modules/processes/criminal-record.repository.js';
 import { AuthService } from './auth/auth.service.js';
+import { RedisRefreshTokenStore } from './auth/refresh-token.store.js';
+import { getMailQueue, getSharedRedis, redisEnabled } from './common/queue.js';
 
 /**
  * Composition root — the ONLY place where concrete implementations are
@@ -62,7 +64,14 @@ export function buildContainer() {
   // (console/gmail/microsoft/custom) — no restart needed after changes.
   const settingsService = new SettingsService(prisma);
   const notifier = new DynamicNotifier(settingsService);
-  const notifications = new NotificationService(notificationRepo, users, notifier);
+  // With Redis, emails are queued and the worker delivers them (with
+  // retries); without it they send inline exactly as before.
+  const notifications = new NotificationService(
+    notificationRepo,
+    users,
+    notifier,
+    redisEnabled ? (job) => getMailQueue().add('send', job) : undefined,
+  );
   const dashboardService = new DashboardService(prisma);
   const reportsService = new ReportsService(prisma);
   const aiService = new AiService(
@@ -142,10 +151,15 @@ export function buildContainer() {
     ],
   );
 
-  const authService = new AuthService(users, {
-    access: config.JWT_ACCESS_SECRET,
-    refresh: config.JWT_REFRESH_SECRET,
-  });
+  const authService = new AuthService(
+    users,
+    {
+      access: config.JWT_ACCESS_SECRET,
+      refresh: config.JWT_REFRESH_SECRET,
+    },
+    // Refresh tokens become single-use + revocable when Redis is present.
+    redisEnabled ? new RedisRefreshTokenStore(getSharedRedis()) : undefined,
+  );
 
   const linkTokenService = new LinkTokenService(linkTokens, config.APP_URL, config.LINK_TTL_HOURS);
   const onboardingService = new OnboardingService(
@@ -202,6 +216,7 @@ export function buildContainer() {
       notificationRepo,
     },
     notifications,
+    notifier,
     onboardingWorkflow,
     slaScheduler,
     linkTokenService,

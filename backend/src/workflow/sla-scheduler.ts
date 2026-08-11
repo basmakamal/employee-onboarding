@@ -4,6 +4,7 @@ import type { SlaFiringRepository } from './sla-firing.repository.js';
 import type { AuditLogRepository } from './audit-log.repository.js';
 import type { NotificationService } from '../notifications/notification.service.js';
 import { workingDaysBetween } from './working-days.js';
+import { config } from '../common/config.js';
 import { logger } from '../common/logger.js';
 
 /** Daily reminders re-fire after this many hours (slightly under 24h so a
@@ -27,7 +28,7 @@ export interface WatchedRecord {
 /** One per state machine the SLA engine watches. */
 export interface SlaWatcher {
   processKey: string; // EMPLOYEE | OFFBOARDING | GOSI | MEDICAL_INSURANCE | ...
-  listInStatusSince(status: string, threshold: Date): Promise<WatchedRecord[]>;
+  listInStatusSince(status: string, threshold: Date, limit?: number): Promise<WatchedRecord[]>;
   /**
    * Deadline-style dueness (e.g. "N days BEFORE a document expires").
    * When present it replaces the elapsed-time check entirely — the watcher
@@ -36,6 +37,7 @@ export interface SlaWatcher {
   listDue?(
     rule: { status: string; afterValue: number; afterUnit: string },
     now: Date,
+    limit?: number,
   ): Promise<WatchedRecord[]>;
   /** Subject-facing template key per status (staff always get the generic one). */
   subjectTemplate?(status: string): string | undefined;
@@ -72,27 +74,50 @@ export class SlaScheduler {
 
   async tick(now: Date = new Date()): Promise<void> {
     const rules = await this.deps.rules.listAllActive();
+    // Weekend config is the same for every rule — fetch once per tick.
+    const weekend = (await this.deps.calendar?.getCalendar())?.weekendDays;
     for (const rule of rules) {
       try {
-        await this.applyRule(rule, now);
+        await this.applyRule(rule, now, weekend);
       } catch (err) {
         logger.error({ err, ruleId: rule.id }, 'SLA rule application failed');
       }
     }
   }
 
-  private async applyRule(rule: SlaRule, now: Date): Promise<void> {
+  private async applyRule(rule: SlaRule, now: Date, weekend?: number[]): Promise<void> {
     const watcher = this.watchers.get(rule.processKey);
     if (!watcher) return;
 
     const candidates = watcher.listDue
-      ? await watcher.listDue(rule, now)
-      : await watcher.listInStatusSince(rule.status, this.prefilterThreshold(rule, now));
+      ? await watcher.listDue(rule, now, config.SLA_BATCH_SIZE)
+      : await watcher.listInStatusSince(
+          rule.status,
+          this.prefilterThreshold(rule, now),
+          config.SLA_BATCH_SIZE,
+        );
+    if (candidates.length === 0) return;
+
+    // The dedupe memory for ALL candidates in one GROUP BY — the old
+    // per-candidate lookup was one query per row per rule per tick, forever.
+    const lastFirings = await this.deps.firings.lastFirings(
+      rule.id,
+      candidates.map((c) => c.id),
+    );
+
+    // Working-day rules need the holiday table once, spanning the oldest
+    // anchor — not one query per record.
+    let holidays: Date[] = [];
+    if (rule.afterUnit === 'WORKING_DAYS') {
+      const oldest = candidates.reduce((min, c) => (c.anchorAt < min ? c.anchorAt : min), now);
+      holidays = (await this.deps.holidays.listBetween(oldest, now)).map((h) => h.date);
+    }
 
     for (const record of candidates) {
-      // Deadline watchers decide dueness themselves; only dedupe applies.
-      if (!watcher.listDue && !(await this.elapsedEnough(rule, record, now))) continue;
-      if (!(await this.firingAllowed(rule, record, now))) continue;
+      // Cheap map lookup first — already-fired records cost nothing more.
+      if (!this.firingAllowed(rule, lastFirings.get(record.id) ?? null, now)) continue;
+      // Deadline watchers decide dueness themselves.
+      if (!watcher.listDue && !this.elapsedEnough(rule, record, now, holidays, weekend)) continue;
 
       if (rule.action === 'EXPIRE') {
         if (!watcher.expire) continue;
@@ -123,17 +148,18 @@ export class SlaScheduler {
     return t;
   }
 
-  private async elapsedEnough(rule: SlaRule, record: WatchedRecord, now: Date): Promise<boolean> {
+  private elapsedEnough(
+    rule: SlaRule,
+    record: WatchedRecord,
+    now: Date,
+    holidays: Date[],
+    weekend?: number[],
+  ): boolean {
     if (rule.afterUnit !== 'WORKING_DAYS') return true; // hours/calendar prefiltered in SQL
-    const holidays = (await this.deps.holidays.listBetween(record.anchorAt, now)).map(
-      (h) => h.date,
-    );
-    const weekend = (await this.deps.calendar?.getCalendar())?.weekendDays;
     return workingDaysBetween(record.anchorAt, now, holidays, weekend) >= rule.afterValue;
   }
 
-  private async firingAllowed(rule: SlaRule, record: WatchedRecord, now: Date): Promise<boolean> {
-    const lastFiring = await this.deps.firings.lastFiring(rule.id, record.id);
+  private firingAllowed(rule: SlaRule, lastFiring: Date | null, now: Date): boolean {
     if (lastFiring === null) return true;
     if (rule.action !== 'REMIND_DAILY') return false; // one-shot already fired
     return (now.getTime() - lastFiring.getTime()) / 3_600_000 >= DAILY_REFIRE_HOURS;

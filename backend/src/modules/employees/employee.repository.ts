@@ -367,9 +367,12 @@ export class EmployeeRepository {
   }
 
   /** SLA scan input — statusChangedAt is the elapsed-time anchor. */
-  listInStatusSince(status: EmployeeStatus, threshold: Date) {
+  listInStatusSince(status: EmployeeStatus, threshold: Date, limit = 500) {
     return this.db.employee.findMany({
       where: { status, statusChangedAt: { lt: threshold } },
+      // Oldest first so a backlog larger than one batch drains fairly.
+      orderBy: { statusChangedAt: 'asc' },
+      take: limit,
     });
   }
 

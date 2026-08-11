@@ -26,10 +26,12 @@ export class OffboardingRepository {
   }
 
   /** SLA scan input: records sitting in `status` since before `threshold`. */
-  listInStatusSince(status: string, threshold: Date) {
+  listInStatusSince(status: string, threshold: Date, limit = 500) {
     return this.db.offboarding.findMany({
       where: { status: status as OffboardingStatus, updatedAt: { lt: threshold } },
       include: { employee: { select: { firstName: true, lastName: true } } },
+      orderBy: { updatedAt: 'asc' },
+      take: limit,
     });
   }
 

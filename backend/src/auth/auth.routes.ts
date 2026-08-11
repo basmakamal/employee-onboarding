@@ -53,10 +53,15 @@ export function authRouter(auth: AuthService): Router {
     }),
   );
 
-  router.post('/logout', (_req, res) => {
-    res.clearCookie(REFRESH_COOKIE, { path: '/api/auth' });
-    res.status(204).end();
-  });
+  router.post(
+    '/logout',
+    asyncHandler(async (req, res) => {
+      // Kill the refresh token server-side too (no-op without Redis).
+      await auth.logout((req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE]);
+      res.clearCookie(REFRESH_COOKIE, { path: '/api/auth' });
+      res.status(204).end();
+    }),
+  );
 
   router.get(
     '/me',

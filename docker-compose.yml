@@ -20,5 +20,19 @@ services:
       timeout: 3s
       retries: 10
 
+  # Queues + refresh-token revocation (backend/.env: REDIS_URL=redis://127.0.0.1:6379).
+  # Optional in development — without it the app sends email inline and runs
+  # the SLA timer in-process, exactly as before.
+  redis:
+    image: redis:7-alpine
+    container_name: onboarding-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - onboarding_redis:/data
+    command: ["redis-server", "--appendonly", "yes"]
+
 volumes:
   onboarding_mysql:
+  onboarding_redis:
