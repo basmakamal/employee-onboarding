@@ -18,7 +18,11 @@ import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
 import { asyncHandler } from './common/http.js';
 import { requireRole } from './auth/require-auth.middleware.js';
-import { closeQueues, getMailQueue, redisEnabled } from './common/queue.js';
+import { statfsSync } from 'node:fs';
+import { closeQueues, getMailQueue, getSharedRedis, redisEnabled } from './common/queue.js';
+import { uploadRoot } from './common/storage.js';
+import { subscribeNotify } from './notifications/realtime.js';
+import type { Response } from 'express';
 
 const container = buildContainer();
 
@@ -73,6 +77,98 @@ staffApi.get(
     res.json({ enabled: true, mail });
   }),
 );
+/** One health snapshot for admins: DB, Redis, queues, disk, table growth. */
+staffApi.get(
+  '/admin/health',
+  requireRole('ADMIN'),
+  asyncHandler(async (_req, res) => {
+    const t0 = Date.now();
+    const db = await container.prisma
+      .$queryRaw`SELECT 1`.then(() => ({ up: true, latencyMs: Date.now() - t0 }))
+      .catch(() => ({ up: false, latencyMs: null as number | null }));
+
+    let redis: { up: boolean } | { up: false } = { up: false };
+    let mail = null;
+    if (redisEnabled) {
+      redis = await getSharedRedis()
+        .ping()
+        .then(() => ({ up: true }))
+        .catch(() => ({ up: false }));
+      mail = await getMailQueue()
+        .getJobCounts('waiting', 'active', 'failed', 'delayed')
+        .catch(() => null);
+    }
+
+    // Growth of the unbounded tables — what retention keeps in check.
+    const [auditLogs, notifications, slaFirings, linkTokens] = await Promise.all([
+      container.prisma.auditLog.count(),
+      container.prisma.notification.count(),
+      container.prisma.slaFiring.count(),
+      container.prisma.linkToken.count(),
+    ]);
+
+    let disk: { totalGb: number; freeGb: number; usedPct: number } | null = null;
+    try {
+      const s = statfsSync(uploadRoot);
+      const total = s.blocks * s.bsize;
+      const free = s.bavail * s.bsize;
+      disk = {
+        totalGb: Math.round(total / 1e9),
+        freeGb: Math.round(free / 1e9),
+        usedPct: Math.round(((total - free) / total) * 100),
+      };
+    } catch {
+      /* statfs unavailable on this platform — omit */
+    }
+
+    res.json({
+      db,
+      redis: redisEnabled ? redis : { up: false, configured: false },
+      queues: { mail },
+      tables: { auditLogs, notifications, slaFirings, linkTokens },
+      storage: disk,
+      uptimeSeconds: Math.round(process.uptime()),
+    });
+  }),
+);
+// ---------------------------------------------------------------- realtime
+// Server-sent events: one long-lived response per open tab. The client
+// reconnects on drop and keeps a slow poll as its fallback, so losing this
+// stream never loses notifications — only their immediacy.
+const sseClients = new Map<string, Set<Response>>();
+const unsubscribeNotify = subscribeNotify((userId) => {
+  for (const res of sseClients.get(userId) ?? []) {
+    res.write('event: notify\ndata: 1\n\n');
+  }
+});
+
+staffApi.get('/events', (req, res) => {
+  const userId = req.actor?.id;
+  if (!userId) {
+    res.status(401).end();
+    return;
+  }
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  res.write(': connected\n\n');
+
+  const mine = sseClients.get(userId) ?? new Set<Response>();
+  mine.add(res);
+  sseClients.set(userId, mine);
+
+  // Comment-line heartbeat keeps proxies from reaping the idle connection.
+  const heartbeat = setInterval(() => res.write(': ping\n\n'), 25_000);
+  heartbeat.unref();
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    mine.delete(res);
+    if (mine.size === 0) sseClients.delete(userId);
+  });
+});
+
 staffApi.use('/', assetRouter(container.assetService));
 
 const app = createApp({
@@ -111,6 +207,8 @@ if (runInline) {
 function shutdown(signal: string) {
   logger.info(`${signal} received, shutting down`);
   stopScheduler();
+  unsubscribeNotify();
+  for (const clients of sseClients.values()) for (const res of clients) res.end();
   server.close((err) => {
     if (err) {
       logger.error(err, 'error during shutdown');

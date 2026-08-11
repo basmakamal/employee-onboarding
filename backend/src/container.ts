@@ -40,6 +40,7 @@ import { CriminalRecordRepository } from './modules/processes/criminal-record.re
 import { AuthService } from './auth/auth.service.js';
 import { RedisRefreshTokenStore } from './auth/refresh-token.store.js';
 import { getMailQueue, getSharedRedis, redisEnabled } from './common/queue.js';
+import { publishNotify } from './notifications/realtime.js';
 
 /**
  * Composition root — the ONLY place where concrete implementations are
@@ -71,6 +72,7 @@ export function buildContainer() {
     users,
     notifier,
     redisEnabled ? (job) => getMailQueue().add('send', job) : undefined,
+    publishNotify,
   );
   const dashboardService = new DashboardService(prisma);
   const reportsService = new ReportsService(prisma);

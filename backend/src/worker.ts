@@ -13,7 +13,9 @@ import { Queue, Worker } from 'bullmq';
 import { config } from './common/config.js';
 import { logger } from './common/logger.js';
 import { buildContainer } from './container.js';
-import { createRedis, MAIL_QUEUE, SLA_QUEUE, closeQueues, type MailJob } from './common/queue.js';
+import { createRedis, getMailQueue, MAIL_QUEUE, SLA_QUEUE, closeQueues, type MailJob } from './common/queue.js';
+import { RetentionService } from './maintenance/retention.js';
+import { publishNotify } from './notifications/realtime.js';
 
 if (!config.REDIS_URL) {
   logger.error('REDIS_URL is not set — the worker has nothing to do (email sends inline and the SLA timer runs in the API process). Exiting.');
@@ -46,7 +48,11 @@ mailWorker.on('failed', (job, err) => {
 const slaQueue = new Queue(SLA_QUEUE, { connection: createRedis() });
 const slaWorker = new Worker(
   SLA_QUEUE,
-  async () => {
+  async (job) => {
+    if (job.name === 'maintenance') {
+      await maintenance();
+      return;
+    }
     await container.slaScheduler.tick();
   },
   // concurrency 1 — ticks never overlap, even if one runs long.
@@ -54,6 +60,36 @@ const slaWorker = new Worker(
 );
 
 slaWorker.on('failed', (_job, err) => logger.error({ err }, 'SLA tick failed'));
+
+// -------------------------------------------------------------- maintenance
+// Nightly (03:10): retention/archival, then an admin alert if mail delivery
+// has been failing. Rides the SLA queue with a distinct job name.
+const retention = new RetentionService(container.prisma);
+
+async function alertAdmins(subject: string, body: string) {
+  const admins = await container.repos.users.listActiveByRole('ADMIN');
+  for (const admin of admins) {
+    await container.repos.notificationRepo.create({
+      channel: 'IN_APP',
+      recipientUserId: admin.id,
+      subject,
+      body,
+    });
+    publishNotify(admin.id);
+  }
+}
+
+async function maintenance() {
+  const report = await retention.run();
+  const failed = (await getMailQueue().getJobCounts('failed')).failed ?? 0;
+  if (failed > 0) {
+    await alertAdmins(
+      'تنبيه النظام / System alert: email delivery failing',
+      `${failed} email job(s) have exhausted their retries. Check the mail settings (SMTP) and the queue counts under /api/admin/health. ` +
+        `Last retention run: ${report.auditArchived} audit rows archived, ${report.notificationsPurged} notifications purged.`,
+    );
+  }
+}
 
 async function main() {
   if (config.SLA_TICK_MINUTES > 0) {
@@ -64,7 +100,12 @@ async function main() {
     );
     logger.info(`SLA tick scheduled every ${config.SLA_TICK_MINUTES} minute(s)`);
   }
-  logger.info('worker up: mail queue + SLA engine');
+  await slaQueue.upsertJobScheduler(
+    'maintenance-nightly',
+    { pattern: '10 3 * * *' }, // 03:10 every night
+    { name: 'maintenance' },
+  );
+  logger.info('worker up: mail queue + SLA engine + nightly maintenance');
 }
 
 async function shutdown(signal: string) {

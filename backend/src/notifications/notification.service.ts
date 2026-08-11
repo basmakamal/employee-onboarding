@@ -32,6 +32,8 @@ export class NotificationService {
     private readonly notifier: Notifier,
     /** When present, emails are queued instead of sent in the request path. */
     private readonly enqueue?: MailEnqueuer,
+    /** Realtime nudge after an IN_APP row is created for a user. */
+    private readonly onInApp?: (userId: string) => void,
   ) {}
 
   /** Email an external person (trainee / employee). Arabic by default. */
@@ -89,6 +91,8 @@ export class NotificationService {
         body: message.text,
         ...ref,
       });
+      // Nudge the user's open browser tabs (SSE) — best-effort.
+      this.onInApp?.(user.id);
 
       const emailRow = await this.notifications.create({
         channel: 'EMAIL',

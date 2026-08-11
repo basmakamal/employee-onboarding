@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
-import { api } from '../api/client';
+import { api, getAccessToken } from '../api/client';
 
 interface BellItem {
   id: string;
@@ -13,6 +13,8 @@ interface BellItem {
 const items = ref<BellItem[]>([]);
 const unread = ref(0);
 let timer: ReturnType<typeof setInterval> | undefined;
+let streamAbort: AbortController | null = null;
+let stopped = false;
 
 async function load() {
   try {
@@ -20,7 +22,37 @@ async function load() {
     items.value = data.items;
     unread.value = data.unread;
   } catch {
-    /* transient — the next poll retries */
+    /* transient — the next poll or nudge retries */
+  }
+}
+
+/**
+ * Live channel: the server pushes "notify" over SSE the moment a new
+ * in-app notification lands, and we refetch. EventSource can't carry the
+ * Authorization header, so this reads the stream via fetch. Any drop
+ * reconnects after a short pause — and the slow poll below covers the gaps.
+ */
+async function listen() {
+  while (!stopped) {
+    streamAbort = new AbortController();
+    try {
+      const res = await fetch('/api/events', {
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
+        credentials: 'include',
+        signal: streamAbort.signal,
+      });
+      if (!res.ok || !res.body) throw new Error(String(res.status));
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (decoder.decode(value).includes('event: notify')) void load();
+      }
+    } catch {
+      /* dropped — fall through to the retry pause */
+    }
+    if (!stopped) await new Promise((r) => setTimeout(r, 5_000));
   }
 }
 
@@ -33,9 +65,18 @@ async function onOpen(open: boolean) {
 
 onMounted(() => {
   void load();
-  timer = setInterval(() => void load(), 60_000);
+  void listen();
+  // Safety-net poll: 5 minutes, and only while the tab is visible — SSE
+  // carries the real-time load now.
+  timer = setInterval(() => {
+    if (document.visibilityState === 'visible') void load();
+  }, 300_000);
 });
-onUnmounted(() => clearInterval(timer));
+onUnmounted(() => {
+  stopped = true;
+  streamAbort?.abort();
+  clearInterval(timer);
+});
 </script>
 
 <template>
