@@ -99,7 +99,9 @@ interface EmployeeDetail {
   criminalRecord: ProcessData | null;
   assetForms: AssetFormRow[];
   offboardings: OffboardingRow[];
+  /** Latest page only (newest first) — auditTotal is the full length. */
   auditLogs: AuditRow[];
+  auditTotal: number;
   availableActions: string[];
   processActions: { gosi: string[]; medical: string[]; criminal: string[] };
 }
@@ -175,7 +177,31 @@ async function load() {
     api.get<EmployeeDetail>(`/api/employees/${id}`),
     api.get<ExpiryDoc[]>(`/api/employees/${id}/documents`),
   ]);
+  // The payload carries the newest timeline page; older ones load on demand.
+  timelineLogs.value = employee.value.auditLogs;
+  timelinePage.value = 1;
   void loadPhoto();
+}
+
+// -------------------------------------------------------------- timeline
+const timelineLogs = ref<AuditRow[]>([]);
+const timelinePage = ref(1);
+const timelineBusy = ref(false);
+const TIMELINE_PAGE_SIZE = 20;
+
+async function loadMoreTimeline() {
+  timelineBusy.value = true;
+  try {
+    const next = timelinePage.value + 1;
+    const res = await api.get<{ items: AuditRow[]; total: number }>(
+      `/api/employees/${id}/audit?page=${next}&limit=${TIMELINE_PAGE_SIZE}`,
+    );
+    timelineLogs.value = [...timelineLogs.value, ...res.items];
+    timelinePage.value = next;
+    if (employee.value) employee.value.auditTotal = res.total;
+  } finally {
+    timelineBusy.value = false;
+  }
 }
 
 // ------------------------------------------------------------- profile photo
@@ -1512,7 +1538,7 @@ onMounted(load);
           <v-card-text>
             <v-timeline density="compact" side="end" truncate-line="both">
               <v-timeline-item
-                v-for="log in [...employee.auditLogs].reverse()"
+                v-for="log in timelineLogs"
                 :key="log.id"
                 size="small"
                 dot-color="secondary"
@@ -1526,6 +1552,17 @@ onMounted(load);
                 </div>
               </v-timeline-item>
             </v-timeline>
+            <div v-if="timelineLogs.length < employee.auditTotal" class="text-center mt-2">
+              <v-btn
+                variant="tonal"
+                size="small"
+                :loading="timelineBusy"
+                prepend-icon="mdi-history"
+                @click="loadMoreTimeline"
+              >
+                {{ $t('profile.timelineMore') }} ({{ employee.auditTotal - timelineLogs.length }})
+              </v-btn>
+            </div>
           </v-card-text>
         </v-card>
       </v-window-item>

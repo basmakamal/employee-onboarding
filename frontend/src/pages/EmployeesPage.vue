@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, ApiError } from '../api/client';
@@ -17,24 +17,39 @@ interface EmployeeRow {
   status: string;
 }
 
-const PIPELINE = [
-  'CREATED',
-  'AWAITING_FORM',
-  'FORM_RECEIVED',
-  'CONTRACT_CREATION',
-  'AWAITING_CONTRACT_APPROVAL',
-  'EXPIRED',
-];
+/** Server response: one page + the tab badge counts. */
+interface EmployeePage {
+  items: EmployeeRow[];
+  total: number;
+  counts: { all: number; onboarding: number; active: number; inactive: number };
+}
 
 const { t } = useI18n();
 const router = useRouter();
 const auth = useAuthStore();
 const employees = ref<EmployeeRow[]>([]);
+const total = ref(0);
+const counts = ref<EmployeePage['counts']>({ all: 0, onboarding: 0, active: 0, inactive: 0 });
 const loading = ref(true);
 const dialog = ref(false);
 const saving = ref(false);
 const error = ref('');
 const filter = ref<'all' | 'onboarding' | 'active' | 'inactive'>('all');
+const search = ref('');
+
+// v-data-table-server drives these; the server does the actual work.
+const page = ref(1);
+const itemsPerPage = ref(25);
+const sortBy = ref<Array<{ key: string; order: 'asc' | 'desc' }>>([]);
+
+/** Table column key → API sort field ('name' sorts by first name). */
+const SORT_KEYS: Record<string, string> = {
+  employeeNo: 'employeeNo',
+  name: 'firstName',
+  email: 'email',
+  department: 'department',
+  status: 'status',
+};
 
 const form = ref({
   mode: 'onboarding' as 'onboarding' | 'direct',
@@ -56,28 +71,62 @@ const options = ref<{ departments: string[]; jobTitles: string[] }>({
   jobTitles: [],
 });
 
+/** Fetch the current page from the server — search/filter/sort included. */
 async function load() {
   loading.value = true;
-  [employees.value, options.value] = await Promise.all([
-    api.get<EmployeeRow[]>('/api/employees'),
-    api.get<{ departments: string[]; jobTitles: string[] }>('/api/employees/options'),
-  ]);
-  loading.value = false;
+  try {
+    const params = new URLSearchParams({
+      filter: filter.value,
+      page: String(page.value),
+      limit: String(itemsPerPage.value),
+    });
+    if (search.value.trim()) params.set('q', search.value.trim());
+    const sort = sortBy.value[0];
+    if (sort && SORT_KEYS[sort.key]) {
+      params.set('sortBy', SORT_KEYS[sort.key] as string);
+      params.set('sortDir', sort.order);
+    }
+    const data = await api.get<EmployeePage>(`/api/employees?${params}`);
+    employees.value = data.items;
+    total.value = data.total;
+    counts.value = data.counts;
+  } finally {
+    loading.value = false;
+  }
 }
 
-const filtered = computed(() => {
-  if (filter.value === 'all') return employees.value;
-  if (filter.value === 'active') return employees.value.filter((e) => e.status === 'ACTIVE');
-  if (filter.value === 'inactive') return employees.value.filter((e) => e.status === 'INACTIVE');
-  return employees.value.filter((e) => PIPELINE.includes(e.status));
+/** The table drives page/size/sort; one handler reloads from the server. */
+function onTableOptions(options: {
+  page: number;
+  itemsPerPage: number;
+  sortBy: Array<{ key: string; order: 'asc' | 'desc' }>;
+}) {
+  page.value = options.page;
+  itemsPerPage.value = options.itemsPerPage;
+  sortBy.value = options.sortBy;
+  void load();
+}
+
+// Filter chips and typing in search restart from page 1. Search debounces so
+// the server sees one query per pause, not one per keystroke.
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(filter, () => {
+  page.value = 1;
+  void load();
+});
+watch(search, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    page.value = 1;
+    void load();
+  }, 300);
 });
 
-const counts = computed(() => ({
-  all: employees.value.length,
-  onboarding: employees.value.filter((e) => PIPELINE.includes(e.status)).length,
-  active: employees.value.filter((e) => e.status === 'ACTIVE').length,
-  inactive: employees.value.filter((e) => e.status === 'INACTIVE').length,
-}));
+async function loadOptions() {
+  options.value = await api.get<{ departments: string[]; jobTitles: string[] }>(
+    '/api/employees/options',
+  );
+}
 
 async function createEmployee() {
   saving.value = true;
@@ -140,7 +189,8 @@ async function removeEmployee() {
 
 const snackbar = ref({ show: false, text: '' });
 
-onMounted(load);
+// The table's initial @update:options fires load(); options load in parallel.
+onMounted(loadOptions);
 </script>
 
 <template>
@@ -170,7 +220,27 @@ onMounted(load);
     </v-chip-group>
 
     <v-card>
-      <v-data-table :headers="headers" :items="filtered" :loading="loading" hover @click:row="openRow">
+      <v-text-field
+        v-model="search"
+        :placeholder="$t('employees.searchPlaceholder')"
+        prepend-inner-icon="mdi-magnify"
+        variant="solo"
+        flat
+        hide-details
+        clearable
+        class="px-2 pt-2"
+      />
+      <v-data-table-server
+        v-model:page="page"
+        v-model:items-per-page="itemsPerPage"
+        :headers="headers"
+        :items="employees"
+        :items-length="total"
+        :loading="loading"
+        hover
+        @click:row="openRow"
+        @update:options="onTableOptions"
+      >
         <template #item.employeeNo="{ item }">
           <span class="font-weight-bold">{{ item.employeeNo ?? '—' }}</span>
         </template>
@@ -197,7 +267,7 @@ onMounted(load);
         <template #no-data>
           <div class="pa-8 text-medium-emphasis">{{ $t('employees.empty') }}</div>
         </template>
-      </v-data-table>
+      </v-data-table-server>
     </v-card>
 
     <!-- Hard delete confirmation (ADMIN) -->

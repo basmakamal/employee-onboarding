@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api/client';
 import StatusChip from '../components/StatusChip.vue';
@@ -40,9 +40,22 @@ const PIPELINE = [
 
 const FUNNEL_STAGES = [...PIPELINE.slice(0, 5), 'ACTIVE', 'EXPIRED'];
 
+/** Server response: one page + lifecycle counts for the stat cards. */
+interface EmployeePage {
+  items: EmployeeRow[];
+  total: number;
+  counts: { all: number; onboarding: number; active: number; inactive: number };
+}
+
 const router = useRouter();
 const data = ref<Summary | null>(null);
 const employees = ref<EmployeeRow[]>([]);
+const empTotal = ref(0);
+const counts = ref<EmployeePage['counts']>({ all: 0, onboarding: 0, active: 0, inactive: 0 });
+const empLoading = ref(false);
+const page = ref(1);
+const itemsPerPage = ref(10);
+const sortBy = ref<Array<{ key: string; order: 'asc' | 'desc' }>>([]);
 const downloading = ref('');
 
 // ------------------------------------------------------------------ filters
@@ -68,41 +81,67 @@ function toggleStatus(value: string) {
   statusFilter.value = statusFilter.value === value ? null : value;
 }
 
-const filtered = computed(() => {
-  const q = search.value.trim().toLowerCase();
-  const fromMs = from.value ? new Date(from.value).getTime() : null;
-  // The "to" day is inclusive — push it to the end of that day.
-  const toMs = to.value ? new Date(to.value).getTime() + 86_399_999 : null;
-
-  return employees.value.filter((e) => {
-    if (statusFilter.value === 'ONBOARDING') {
-      if (!PIPELINE.includes(e.status)) return false;
-    } else if (statusFilter.value && e.status !== statusFilter.value) {
-      return false;
+/** Search, dates and status all travel to the server — nothing filters here. */
+async function loadEmployees() {
+  empLoading.value = true;
+  try {
+    const params = new URLSearchParams({
+      page: String(page.value),
+      limit: String(itemsPerPage.value),
+      basis: basis.value,
+    });
+    if (search.value?.trim()) params.set('q', search.value.trim());
+    if (from.value) params.set('from', from.value);
+    if (to.value) params.set('to', to.value);
+    // Group filters map to `filter`; a funnel stage is an exact `status`.
+    if (statusFilter.value === 'ONBOARDING') params.set('filter', 'onboarding');
+    else if (statusFilter.value === 'ACTIVE') params.set('filter', 'active');
+    else if (statusFilter.value === 'INACTIVE') params.set('filter', 'inactive');
+    else if (statusFilter.value) params.set('status', statusFilter.value);
+    const sort = sortBy.value[0];
+    if (sort) {
+      params.set('sortBy', sort.key === 'name' ? 'firstName' : sort.key);
+      params.set('sortDir', sort.order);
     }
+    const res = await api.get<EmployeePage>(`/api/employees?${params}`);
+    employees.value = res.items;
+    empTotal.value = res.total;
+    counts.value = res.counts;
+  } finally {
+    empLoading.value = false;
+  }
+}
 
-    if (q) {
-      const haystack =
-        `${e.firstName} ${e.lastName} ${e.email} ${e.employeeNo ?? ''} ${e.department ?? ''} ${e.jobTitle ?? ''}`.toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
+function onTableOptions(options: {
+  page: number;
+  itemsPerPage: number;
+  sortBy: Array<{ key: string; order: 'asc' | 'desc' }>;
+}) {
+  page.value = options.page;
+  itemsPerPage.value = options.itemsPerPage;
+  sortBy.value = options.sortBy;
+  void loadEmployees();
+}
 
-    if (fromMs !== null || toMs !== null) {
-      const raw = basis.value === 'hireDate' ? e.hireDate : e.createdAt;
-      if (!raw) return false; // no hire date yet → outside any hire-date range
-      const ts = new Date(raw).getTime();
-      if (fromMs !== null && ts < fromMs) return false;
-      if (toMs !== null && ts > toMs) return false;
-    }
-    return true;
-  });
+// Every filter change restarts from page 1; typing debounces.
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(search, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    page.value = 1;
+    void loadEmployees();
+  }, 300);
+});
+watch([from, to, basis, statusFilter], () => {
+  page.value = 1;
+  void loadEmployees();
 });
 
 // ------------------------------------------------------------------ totals
 const totals = computed(() => ({
-  active: employees.value.filter((e) => e.status === 'ACTIVE').length,
-  onboarding: employees.value.filter((e) => PIPELINE.includes(e.status)).length,
-  inactive: employees.value.filter((e) => e.status === 'INACTIVE').length,
+  active: counts.value.active,
+  onboarding: counts.value.onboarding,
+  inactive: counts.value.inactive,
   expiring: (data.value?.expiringDocuments.expired ?? 0) + (data.value?.expiringDocuments.in30 ?? 0),
 }));
 
@@ -156,10 +195,8 @@ function authHeader(): Record<string, string> {
 }
 
 onMounted(async () => {
-  [data.value, employees.value] = await Promise.all([
-    api.get<Summary>('/api/reports/summary'),
-    api.get<EmployeeRow[]>('/api/employees'),
-  ]);
+  // The table's initial @update:options triggers loadEmployees().
+  data.value = await api.get<Summary>('/api/reports/summary');
 });
 </script>
 
@@ -227,7 +264,7 @@ onMounted(async () => {
           <v-card-title class="text-subtitle-1 font-weight-bold">
             <v-icon icon="mdi-account-search" class="me-2" color="primary" />
             {{ $t('reports.people') }}
-            <v-chip size="small" variant="tonal" class="ms-2">{{ filtered.length }}</v-chip>
+            <v-chip size="small" variant="tonal" class="ms-2">{{ empTotal }}</v-chip>
           </v-card-title>
         </v-card-item>
         <v-card-text class="pb-0">
@@ -285,19 +322,23 @@ onMounted(async () => {
             </v-col>
           </v-row>
         </v-card-text>
-        <v-data-table
+        <v-data-table-server
+          v-model:page="page"
+          v-model:items-per-page="itemsPerPage"
           :headers="[
             { title: $t('employees.no'), key: 'employeeNo' },
-            { title: $t('fields.name'), key: 'name', sortable: false },
+            { title: $t('fields.name'), key: 'name' },
             { title: $t('fields.department'), key: 'department' },
             { title: $t('fields.jobTitle'), key: 'jobTitle' },
             { title: $t('fields.status'), key: 'status' },
             { title: $t('employees.hireDate'), key: 'hireDate' },
           ]"
-          :items="filtered"
-          items-per-page="10"
+          :items="employees"
+          :items-length="empTotal"
+          :loading="empLoading"
           hover
           @click:row="openEmployee"
+          @update:options="onTableOptions"
         >
           <template #item.employeeNo="{ item }">
             <span class="font-weight-bold">{{ item.employeeNo ?? '—' }}</span>
@@ -312,7 +353,7 @@ onMounted(async () => {
           <template #no-data>
             <div class="pa-8 text-medium-emphasis">{{ $t('employees.empty') }}</div>
           </template>
-        </v-data-table>
+        </v-data-table-server>
       </v-card>
 
       <v-row>

@@ -44,6 +44,59 @@ describe('EmployeeRepository.moveStatus', () => {
   });
 });
 
+describe('EmployeeRepository.listPaged', () => {
+  it('search, filter, sort and slice all travel into the query', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const count = vi.fn().mockResolvedValue(0);
+    const repo = new EmployeeRepository({ employee: { findMany, count } } as unknown as Db);
+
+    await repo.listPaged({
+      q: 'nora',
+      filter: 'onboarding',
+      basis: 'hireDate',
+      page: 3,
+      limit: 25,
+      sortBy: 'employeeNo',
+      sortDir: 'asc',
+    });
+
+    const args = findMany.mock.calls[0]![0];
+    expect(args.skip).toBe(50); // page 3 × 25
+    expect(args.take).toBe(25);
+    expect(args.orderBy).toEqual({ employeeNo: 'asc' });
+    expect(args.where.status.in).toContain('AWAITING_FORM'); // onboarding group
+    expect(args.where.OR).toEqual(
+      expect.arrayContaining([{ firstName: { contains: 'nora' } }]),
+    );
+    // count() must see the SAME filter, or totals drift from the rows.
+    expect(count.mock.calls[0]![0].where).toEqual(args.where);
+  });
+
+  it('an exact status wins over the group filter; date range excludes null', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const count = vi.fn().mockResolvedValue(0);
+    const repo = new EmployeeRepository({ employee: { findMany, count } } as unknown as Db);
+
+    await repo.listPaged({
+      filter: 'all',
+      status: 'AWAITING_FORM',
+      from: new Date('2026-01-01T00:00:00Z'),
+      to: new Date('2026-06-30T00:00:00Z'),
+      basis: 'hireDate',
+      page: 1,
+      limit: 10,
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+    });
+
+    const where = findMany.mock.calls[0]![0].where;
+    expect(where.status).toBe('AWAITING_FORM');
+    expect(where.hireDate.gte).toEqual(new Date('2026-01-01T00:00:00Z'));
+    // The "to" day is inclusive — pushed to its final millisecond.
+    expect(where.hireDate.lte.toISOString()).toBe('2026-06-30T23:59:59.999Z');
+  });
+});
+
 describe('OnboardingDocumentRepository.countMissingRequired', () => {
   it('counts required checklist rows without an upload — the contract gate', async () => {
     const count = vi.fn().mockResolvedValue(2);

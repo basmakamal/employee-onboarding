@@ -20,8 +20,8 @@ export function onboardingWatcher(
 ): SlaWatcher {
   return {
     processKey: 'EMPLOYEE',
-    async listInStatusSince(status, threshold): Promise<WatchedRecord[]> {
-      const rows = await employees.listInStatusSince(status as EmployeeStatus, threshold);
+    async listInStatusSince(status, threshold, limit): Promise<WatchedRecord[]> {
+      const rows = await employees.listInStatusSince(status as EmployeeStatus, threshold, limit);
       return rows.map((e) => ({
         id: e.id,
         name: `${e.firstName} ${e.lastName}`,
@@ -43,8 +43,8 @@ export function onboardingWatcher(
 export function offboardingWatcher(offboardings: OffboardingRepository): SlaWatcher {
   return {
     processKey: 'OFFBOARDING',
-    async listInStatusSince(status, threshold): Promise<WatchedRecord[]> {
-      const rows = await offboardings.listInStatusSince(status, threshold);
+    async listInStatusSince(status, threshold, limit): Promise<WatchedRecord[]> {
+      const rows = await offboardings.listInStatusSince(status, threshold, limit);
       return rows.map((o) => ({
         id: o.id,
         name: o.employee ? `${o.employee.firstName} ${o.employee.lastName}` : o.id,
@@ -65,8 +65,8 @@ export function documentExpiryWatcher(documents: EmployeeDocumentRepository): Sl
     processKey: 'DOCUMENT_EXPIRY',
     // Unused for deadline watchers, but part of the contract.
     listInStatusSince: () => Promise.resolve([]),
-    async listDue(rule, now): Promise<WatchedRecord[]> {
-      const rows = await documents.listExpiring(rule.afterValue, rule.status, now);
+    async listDue(rule, now, limit): Promise<WatchedRecord[]> {
+      const rows = await documents.listExpiring(rule.afterValue, rule.status, now, limit);
       return rows.map((doc) => {
         const daysLeft = Math.ceil((doc.expiryDate.getTime() - now.getTime()) / 86_400_000);
         return {
@@ -97,8 +97,8 @@ export function processWatcher(
 ): SlaWatcher {
   return {
     processKey,
-    async listInStatusSince(status, threshold): Promise<WatchedRecord[]> {
-      const rows = await repo.listInStatusSince(status, threshold);
+    async listInStatusSince(status, threshold, limit): Promise<WatchedRecord[]> {
+      const rows = await repo.listInStatusSince(status, threshold, limit);
       return rows.map((p) => ({
         id: p.id,
         name: p.employee ? `${p.employee.firstName} ${p.employee.lastName}` : p.id,

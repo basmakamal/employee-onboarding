@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { Notifier, OutboundMessage } from '../../notifications/notifier.js';
 import { config } from '../../common/config.js';
@@ -42,6 +42,11 @@ const CACHE_MS = 30_000;
 export class SettingsService {
   private cached: { value: MailSettings; at: number } | null = null;
   private calendarCache: { value: CalendarSettings; at: number } | null = null;
+  /** Pooled transporter, keyed by the settings object it was built from. */
+  private transportCache: {
+    key: MailSettings;
+    value: { transporter: Transporter; from: string } | null;
+  } | null = null;
 
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -125,25 +130,42 @@ export class SettingsService {
     });
   }
 
-  /** Build a transporter from settings (throws when smtp is incomplete). */
+  /**
+   * Pooled transporter from the current settings (throws when smtp is
+   * incomplete). Reused for every message until the settings cache turns
+   * over — the old per-message transport re-did the SMTP handshake on
+   * every single email.
+   */
   async buildTransport() {
     const settings = await this.getMailSettings();
-    if (settings.provider === 'console') return null;
-    if (!settings.host || !settings.user || !settings.password) {
-      throw new GuardFailedError(
-        'MAIL_INCOMPLETE',
-        'mail settings are incomplete: host, user and password are required',
-      );
+    // Same cached settings object → same pooled transporter.
+    if (this.transportCache && this.transportCache.key === settings) {
+      return this.transportCache.value;
     }
-    return {
-      transporter: nodemailer.createTransport({
-        host: settings.host,
-        port: settings.port ?? 587,
-        secure: false, // STARTTLS on 587 for gmail + office365
-        auth: { user: settings.user, pass: settings.password },
-      }),
-      from: settings.from ?? settings.user,
-    };
+    this.transportCache?.value?.transporter.close();
+
+    let value: { transporter: Transporter; from: string } | null = null;
+    if (settings.provider !== 'console') {
+      if (!settings.host || !settings.user || !settings.password) {
+        throw new GuardFailedError(
+          'MAIL_INCOMPLETE',
+          'mail settings are incomplete: host, user and password are required',
+        );
+      }
+      value = {
+        transporter: nodemailer.createTransport({
+          pool: true,
+          maxConnections: 3,
+          host: settings.host,
+          port: settings.port ?? 587,
+          secure: false, // STARTTLS on 587 for gmail + office365
+          auth: { user: settings.user, pass: settings.password },
+        }),
+        from: settings.from ?? settings.user,
+      };
+    }
+    this.transportCache = { key: settings, value };
+    return value;
   }
 }
 

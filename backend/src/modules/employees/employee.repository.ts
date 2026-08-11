@@ -1,5 +1,92 @@
 import type { Db } from '../../common/prisma.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import type { EmployeeStatus, EmploymentType } from '../../generated/prisma/enums.js';
+
+/** The onboarding pipeline statuses (everything before ACTIVE/INACTIVE). */
+export const PIPELINE_STATUSES = [
+  'CREATED',
+  'AWAITING_FORM',
+  'FORM_RECEIVED',
+  'CONTRACT_CREATION',
+  'AWAITING_CONTRACT_APPROVAL',
+  'EXPIRED',
+] as const;
+
+export const EMPLOYEE_SORT_FIELDS = [
+  'createdAt',
+  'firstName',
+  'employeeNo',
+  'email',
+  'department',
+  'jobTitle',
+  'status',
+  'hireDate',
+] as const;
+export type EmployeeSortField = (typeof EMPLOYEE_SORT_FIELDS)[number];
+
+export interface EmployeeListQuery {
+  /** Free-text search across name, email, number, national id, phone. */
+  q?: string;
+  filter: 'all' | 'onboarding' | 'active' | 'inactive';
+  /** Exact status (reports drill-down) — takes precedence over `filter`. */
+  status?: EmployeeStatus;
+  /** Inclusive date range applied to `basis` (reports duration filter). */
+  from?: Date;
+  to?: Date;
+  basis: 'hireDate' | 'createdAt';
+  page: number; // 1-based
+  limit: number;
+  sortBy: EmployeeSortField;
+  sortDir: 'asc' | 'desc';
+}
+
+export interface EmployeeListItem {
+  id: string;
+  employeeNo: string | null;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+  department: string | null;
+  project: string | null;
+  jobTitle: string | null;
+  status: EmployeeStatus;
+  hireDate: Date | null;
+  createdAt: Date;
+}
+
+function employeeListWhere(query: EmployeeListQuery): Prisma.EmployeeWhereInput {
+  const where: Prisma.EmployeeWhereInput = {};
+  if (query.status) where.status = query.status;
+  else if (query.filter === 'onboarding') where.status = { in: [...PIPELINE_STATUSES] };
+  else if (query.filter === 'active') where.status = 'ACTIVE';
+  else if (query.filter === 'inactive') where.status = 'INACTIVE';
+
+  if (query.from || query.to) {
+    // SQL comparisons against NULL are never true, so a hire-date range
+    // naturally excludes the not-yet-hired — same as the old client filter.
+    // The "to" day is inclusive: push it to the last millisecond of the day.
+    const range: { gte?: Date; lte?: Date } = {};
+    if (query.from) range.gte = query.from;
+    if (query.to) range.lte = new Date(query.to.getTime() + 86_399_999);
+    where[query.basis] = range;
+  }
+
+  const q = query.q?.trim();
+  if (q) {
+    where.OR = [
+      { firstName: { contains: q } },
+      { lastName: { contains: q } },
+      { email: { contains: q } },
+      { employeeNo: { contains: q } },
+      { nationalId: { contains: q } },
+      { phone: { contains: q } },
+      { department: { contains: q } },
+      { jobTitle: { contains: q } },
+    ];
+  }
+  return where;
+}
 
 /** New-hire intake: opens the record in the onboarding pipeline. */
 export interface CreateOnboardingData {
@@ -178,34 +265,114 @@ export class EmployeeRepository {
         },
         assetForms: { include: { items: true }, orderBy: { createdAt: 'desc' } },
         offboardings: { orderBy: { createdAt: 'desc' } },
-        auditLogs: { orderBy: { at: 'asc' } },
+        // Latest page only — the timeline grows forever; the rest is served
+        // by auditPage() on demand.
+        auditLogs: { orderBy: { at: 'desc' }, take: 20 },
+        _count: { select: { auditLogs: true } },
       },
     });
   }
 
-  list() {
-    return this.db.employee.findMany({ orderBy: { createdAt: 'desc' } });
+  /**
+   * Server-side page of the employee list. Search, filter, sort and slice
+   * all happen in the database — the API never ships the whole table.
+   */
+  async listPaged(query: EmployeeListQuery): Promise<{ items: EmployeeListItem[]; total: number }> {
+    const where = employeeListWhere(query);
+    const orderBy = { [query.sortBy]: query.sortDir } as Record<string, 'asc' | 'desc'>;
+    const [items, total] = await Promise.all([
+      this.db.employee.findMany({
+        where,
+        orderBy,
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+        select: {
+          id: true,
+          employeeNo: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          department: true,
+          project: true,
+          jobTitle: true,
+          status: true,
+          hireDate: true,
+          createdAt: true,
+        },
+      }),
+      this.db.employee.count({ where }),
+    ]);
+    return { items, total };
+  }
+
+  /** Tab badges for the list page — one GROUP BY instead of four scans. */
+  async statusCounts(): Promise<{
+    all: number;
+    onboarding: number;
+    active: number;
+    inactive: number;
+  }> {
+    const groups = await this.db.employee.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+    const byStatus = new Map(groups.map((g) => [g.status as string, g._count._all]));
+    const sum = (statuses: readonly string[]) =>
+      statuses.reduce((acc, s) => acc + (byStatus.get(s) ?? 0), 0);
+    const all = [...byStatus.values()].reduce((a, b) => a + b, 0);
+    return {
+      all,
+      onboarding: sum(PIPELINE_STATUSES),
+      active: byStatus.get('ACTIVE') ?? 0,
+      inactive: byStatus.get('INACTIVE') ?? 0,
+    };
   }
 
   /** Distinct departments / job titles in use — feeds the form comboboxes. */
   async fieldOptions(): Promise<{ departments: string[]; jobTitles: string[] }> {
-    const rows = await this.db.employee.findMany({
-      select: { department: true, jobTitle: true },
-    });
-    const distinct = (values: Array<string | null>) =>
+    // GROUP BY runs the dedup in the database instead of loading every row.
+    const [departments, jobTitles] = await Promise.all([
+      this.db.employee.groupBy({
+        by: ['department'],
+        where: { department: { not: null } },
+      }),
+      this.db.employee.groupBy({
+        by: ['jobTitle'],
+        where: { jobTitle: { not: null } },
+      }),
+    ]);
+    const clean = (values: Array<string | null>) =>
       [...new Set(values.filter((v): v is string => !!v?.trim()).map((v) => v.trim()))].sort(
         (a, b) => a.localeCompare(b),
       );
     return {
-      departments: distinct(rows.map((r) => r.department)),
-      jobTitles: distinct(rows.map((r) => r.jobTitle)),
+      departments: clean(departments.map((d) => d.department)),
+      jobTitles: clean(jobTitles.map((j) => j.jobTitle)),
     };
   }
 
+  /** One page of the employee's audit timeline, newest first. */
+  async auditPage(employeeId: string, page: number, limit: number) {
+    const [items, total] = await Promise.all([
+      this.db.auditLog.findMany({
+        where: { employeeId },
+        orderBy: { at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.db.auditLog.count({ where: { employeeId } }),
+    ]);
+    return { items, total };
+  }
+
   /** SLA scan input — statusChangedAt is the elapsed-time anchor. */
-  listInStatusSince(status: EmployeeStatus, threshold: Date) {
+  listInStatusSince(status: EmployeeStatus, threshold: Date, limit = 500) {
     return this.db.employee.findMany({
       where: { status, statusChangedAt: { lt: threshold } },
+      // Oldest first so a backlog larger than one batch drains fairly.
+      orderBy: { statusChangedAt: 'asc' },
+      take: limit,
     });
   }
 

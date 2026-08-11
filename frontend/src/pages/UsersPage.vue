@@ -59,7 +59,9 @@ function notify(text: string, color = 'success') {
 
 async function load() {
   loading.value = true;
-  users.value = await api.get<UserRow[]>('/api/users');
+  // Staff accounts stay a small set — one capped page is the whole list.
+  const data = await api.get<{ items: UserRow[]; total: number }>('/api/users?limit=100');
+  users.value = data.items;
   loading.value = false;
 }
 
