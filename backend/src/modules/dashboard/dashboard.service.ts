@@ -1,13 +1,19 @@
 import type { PrismaClient } from '../../generated/prisma/client.js';
 
+/** Six GROUP BYs per view is real work — reuse the answer briefly. */
+const CACHE_MS = 30_000;
+
 /**
  * Aggregations for the home dashboard: everyone sees where every record
  * stands per stage, plus the latest activity across the system.
  */
 export class DashboardService {
+  private cache: { value: unknown; at: number } | null = null;
+
   constructor(private readonly prisma: PrismaClient) {}
 
   async summary() {
+    if (this.cache && Date.now() - this.cache.at < CACHE_MS) return this.cache.value;
     const [byStatus, gosi, medical, criminal, assetForms, offboardings, recent] =
       await Promise.all([
         this.prisma.employee.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -37,7 +43,7 @@ export class DashboardService {
       else onboarding[status] = count;
     }
 
-    return {
+    const value = {
       onboarding,
       employees,
       processes: {
@@ -59,5 +65,7 @@ export class DashboardService {
           : null,
       })),
     };
+    this.cache = { value, at: Date.now() };
+    return value;
   }
 }
