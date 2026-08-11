@@ -19,6 +19,8 @@ import { aiRouter } from './ai/ai.routes.js';
 import { asyncHandler } from './common/http.js';
 import { requireRole } from './auth/require-auth.middleware.js';
 import { closeQueues, getMailQueue, redisEnabled } from './common/queue.js';
+import { subscribeNotify } from './notifications/realtime.js';
+import type { Response } from 'express';
 
 const container = buildContainer();
 
@@ -73,6 +75,44 @@ staffApi.get(
     res.json({ enabled: true, mail });
   }),
 );
+// ---------------------------------------------------------------- realtime
+// Server-sent events: one long-lived response per open tab. The client
+// reconnects on drop and keeps a slow poll as its fallback, so losing this
+// stream never loses notifications — only their immediacy.
+const sseClients = new Map<string, Set<Response>>();
+const unsubscribeNotify = subscribeNotify((userId) => {
+  for (const res of sseClients.get(userId) ?? []) {
+    res.write('event: notify\ndata: 1\n\n');
+  }
+});
+
+staffApi.get('/events', (req, res) => {
+  const userId = req.actor?.id;
+  if (!userId) {
+    res.status(401).end();
+    return;
+  }
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  res.write(': connected\n\n');
+
+  const mine = sseClients.get(userId) ?? new Set<Response>();
+  mine.add(res);
+  sseClients.set(userId, mine);
+
+  // Comment-line heartbeat keeps proxies from reaping the idle connection.
+  const heartbeat = setInterval(() => res.write(': ping\n\n'), 25_000);
+  heartbeat.unref();
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    mine.delete(res);
+    if (mine.size === 0) sseClients.delete(userId);
+  });
+});
+
 staffApi.use('/', assetRouter(container.assetService));
 
 const app = createApp({
@@ -111,6 +151,8 @@ if (runInline) {
 function shutdown(signal: string) {
   logger.info(`${signal} received, shutting down`);
   stopScheduler();
+  unsubscribeNotify();
+  for (const clients of sseClients.values()) for (const res of clients) res.end();
   server.close((err) => {
     if (err) {
       logger.error(err, 'error during shutdown');
