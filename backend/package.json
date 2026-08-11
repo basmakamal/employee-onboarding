@@ -17,6 +17,7 @@
     "lint": "eslint src tests",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "migrate:storage": "tsx scripts/migrate-storage.ts",
+    "retention": "tsx scripts/run-retention.ts",
     "test": "vitest run"
   },
   "dependencies": {

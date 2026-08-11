@@ -18,7 +18,9 @@ import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
 import { asyncHandler } from './common/http.js';
 import { requireRole } from './auth/require-auth.middleware.js';
-import { closeQueues, getMailQueue, redisEnabled } from './common/queue.js';
+import { statfsSync } from 'node:fs';
+import { closeQueues, getMailQueue, getSharedRedis, redisEnabled } from './common/queue.js';
+import { uploadRoot } from './common/storage.js';
 import { subscribeNotify } from './notifications/realtime.js';
 import type { Response } from 'express';
 
@@ -73,6 +75,60 @@ staffApi.get(
       'delayed',
     );
     res.json({ enabled: true, mail });
+  }),
+);
+/** One health snapshot for admins: DB, Redis, queues, disk, table growth. */
+staffApi.get(
+  '/admin/health',
+  requireRole('ADMIN'),
+  asyncHandler(async (_req, res) => {
+    const t0 = Date.now();
+    const db = await container.prisma
+      .$queryRaw`SELECT 1`.then(() => ({ up: true, latencyMs: Date.now() - t0 }))
+      .catch(() => ({ up: false, latencyMs: null as number | null }));
+
+    let redis: { up: boolean } | { up: false } = { up: false };
+    let mail = null;
+    if (redisEnabled) {
+      redis = await getSharedRedis()
+        .ping()
+        .then(() => ({ up: true }))
+        .catch(() => ({ up: false }));
+      mail = await getMailQueue()
+        .getJobCounts('waiting', 'active', 'failed', 'delayed')
+        .catch(() => null);
+    }
+
+    // Growth of the unbounded tables — what retention keeps in check.
+    const [auditLogs, notifications, slaFirings, linkTokens] = await Promise.all([
+      container.prisma.auditLog.count(),
+      container.prisma.notification.count(),
+      container.prisma.slaFiring.count(),
+      container.prisma.linkToken.count(),
+    ]);
+
+    let disk: { totalGb: number; freeGb: number; usedPct: number } | null = null;
+    try {
+      const s = statfsSync(uploadRoot);
+      const total = s.blocks * s.bsize;
+      const free = s.bavail * s.bsize;
+      disk = {
+        totalGb: Math.round(total / 1e9),
+        freeGb: Math.round(free / 1e9),
+        usedPct: Math.round(((total - free) / total) * 100),
+      };
+    } catch {
+      /* statfs unavailable on this platform — omit */
+    }
+
+    res.json({
+      db,
+      redis: redisEnabled ? redis : { up: false, configured: false },
+      queues: { mail },
+      tables: { auditLogs, notifications, slaFirings, linkTokens },
+      storage: disk,
+      uptimeSeconds: Math.round(process.uptime()),
+    });
   }),
 );
 // ---------------------------------------------------------------- realtime
