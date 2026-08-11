@@ -16,6 +16,15 @@ const envSchema = z
     MAIL_FROM: z.string().optional(),
     /** SLA engine tick interval; 0 disables the scheduler (tests). */
     SLA_TICK_MINUTES: z.coerce.number().int().min(0).default(5),
+    /** Max records one SLA rule processes per tick (backlog safety valve). */
+    SLA_BATCH_SIZE: z.coerce.number().int().positive().default(500),
+    /**
+     * Redis connection (e.g. redis://127.0.0.1:6379). When set, email goes
+     * through the BullMQ queue (run `npm run worker`), the SLA engine runs
+     * in the worker, and refresh tokens become revocable. When unset the
+     * app behaves as before — inline email, in-process SLA timer.
+     */
+    REDIS_URL: z.string().url().optional(),
     /** Public base URL of the frontend — signed links point here. */
     APP_URL: z.string().url().default('http://localhost:3000'),
     /** Uploaded files live here — outside the webroot, gitignored. */

@@ -42,7 +42,12 @@ function makeScheduler(rules: SlaRule[], records: WatchedRecord[], lastFiring: D
     rules: { listAllActive: vi.fn().mockResolvedValue(rules) },
     holidays: { listBetween: vi.fn().mockResolvedValue([]) },
     firings: {
-      lastFiring: vi.fn().mockResolvedValue(lastFiring),
+      // Batch memory: every candidate shares the same simulated last firing.
+      lastFirings: vi
+        .fn()
+        .mockImplementation((_ruleId: string, ids: string[]) =>
+          Promise.resolve(new Map(lastFiring ? ids.map((id) => [id, lastFiring] as const) : [])),
+        ),
       record: vi.fn().mockResolvedValue({}),
     },
     audit: { append: vi.fn().mockResolvedValue({}) },
@@ -193,7 +198,10 @@ describe('SlaScheduler (generalized)', () => {
     const deps = {
       rules: { listAllActive: vi.fn().mockResolvedValue([expiryRule]) },
       holidays: { listBetween: vi.fn().mockResolvedValue([]) },
-      firings: { lastFiring: vi.fn().mockResolvedValue(null), record: vi.fn().mockResolvedValue({}) },
+      firings: {
+        lastFirings: vi.fn().mockResolvedValue(new Map()),
+        record: vi.fn().mockResolvedValue({}),
+      },
       audit: { append: vi.fn().mockResolvedValue({}) },
       notifications: {
         notifyExternal: vi.fn().mockResolvedValue(undefined),
@@ -213,6 +221,7 @@ describe('SlaScheduler (generalized)', () => {
     expect(watcher.listDue).toHaveBeenCalledWith(
       expect.objectContaining({ afterValue: 30, status: 'ANY' }),
       NOW,
+      expect.any(Number), // the per-tick batch cap
     );
     // … the override template is used, and meta params flow through.
     expect(deps.notifications.notifyRole).toHaveBeenCalledWith(

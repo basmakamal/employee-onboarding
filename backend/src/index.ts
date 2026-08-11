@@ -17,6 +17,8 @@ import { notificationRouter } from './notifications/notification.routes.js';
 import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
 import { asyncHandler } from './common/http.js';
+import { requireRole } from './auth/require-auth.middleware.js';
+import { closeQueues, getMailQueue, redisEnabled } from './common/queue.js';
 
 const container = buildContainer();
 
@@ -52,6 +54,25 @@ staffApi.get(
     res.json(await container.dashboardService.summary());
   }),
 );
+/** Queue visibility for admins (feeds the phase-6 health dashboard). */
+staffApi.get(
+  '/admin/queues',
+  requireRole('ADMIN'),
+  asyncHandler(async (_req, res) => {
+    if (!redisEnabled) {
+      res.json({ enabled: false });
+      return;
+    }
+    const mail = await getMailQueue().getJobCounts(
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed',
+    );
+    res.json({ enabled: true, mail });
+  }),
+);
 staffApi.use('/', assetRouter(container.assetService));
 
 const app = createApp({
@@ -73,12 +94,17 @@ const server = app.listen(config.PORT, () => {
 });
 
 // The BRD automation engine: reminders, daily nags, auto-expiry.
-const stopScheduler =
-  config.SLA_TICK_MINUTES > 0
-    ? startSlaScheduler(container.slaScheduler, config.SLA_TICK_MINUTES)
-    : () => {};
-if (config.SLA_TICK_MINUTES > 0) {
-  logger.info(`SLA scheduler running every ${config.SLA_TICK_MINUTES} minute(s)`);
+// With Redis it runs in the worker process (npm run worker) — exactly one
+// instance, no matter how many API processes exist. Without Redis it keeps
+// the original in-process timer.
+const runInline = config.SLA_TICK_MINUTES > 0 && !redisEnabled;
+const stopScheduler = runInline
+  ? startSlaScheduler(container.slaScheduler, config.SLA_TICK_MINUTES)
+  : () => {};
+if (runInline) {
+  logger.info(`SLA scheduler running in-process every ${config.SLA_TICK_MINUTES} minute(s)`);
+} else if (redisEnabled) {
+  logger.info('Redis mode: SLA engine + mail delivery run in the worker (npm run worker)');
 }
 
 // Graceful shutdown: stop accepting connections, drain in-flight requests.
@@ -90,7 +116,10 @@ function shutdown(signal: string) {
       logger.error(err, 'error during shutdown');
       process.exit(1);
     }
-    void container.prisma.$disconnect().finally(() => process.exit(0));
+    void closeQueues()
+      .catch(() => undefined)
+      .then(() => container.prisma.$disconnect())
+      .finally(() => process.exit(0));
   });
   // Hard exit if draining takes too long.
   setTimeout(() => process.exit(1), 10_000).unref();
