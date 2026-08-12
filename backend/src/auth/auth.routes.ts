@@ -31,12 +31,29 @@ function setRefreshCookie(res: Response, token: string) {
 export function authRouter(auth: AuthService): Router {
   const router = Router();
 
+  /**
+   * Native clients cannot use the httpOnly cookie, so they announce
+   * themselves and get the refresh token in the body instead — to be stored
+   * in the Keychain / EncryptedSharedPreferences. Rotation and server-side
+   * revocation are identical either way; only the transport differs.
+   */
+  const isMobile = (req: { header(name: string): string | undefined }) =>
+    req.header('x-client') === 'mobile';
+
   router.post(
     '/login',
     validate(loginSchema),
     asyncHandler(async (req, res) => {
       const { email, password } = req.body as z.infer<typeof loginSchema>;
       const result = await auth.login(email, password);
+      if (isMobile(req)) {
+        res.json({
+          user: result.user,
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+        });
+        return;
+      }
       setRefreshCookie(res, result.refreshToken);
       res.json({ user: result.user, accessToken: result.accessToken });
     }),
@@ -45,9 +62,19 @@ export function authRouter(auth: AuthService): Router {
   router.post(
     '/refresh',
     asyncHandler(async (req, res) => {
-      const token = (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE];
+      const body = req.body as { refreshToken?: string } | undefined;
+      const token =
+        (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE] ?? body?.refreshToken;
       if (!token) throw new UnauthorizedError('no refresh token');
       const result = await auth.refresh(token);
+      if (isMobile(req)) {
+        res.json({
+          user: result.user,
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+        });
+        return;
+      }
       setRefreshCookie(res, result.refreshToken);
       res.json({ user: result.user, accessToken: result.accessToken });
     }),
@@ -57,7 +84,10 @@ export function authRouter(auth: AuthService): Router {
     '/logout',
     asyncHandler(async (req, res) => {
       // Kill the refresh token server-side too (no-op without Redis).
-      await auth.logout((req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE]);
+      const body = req.body as { refreshToken?: string } | undefined;
+      await auth.logout(
+        (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE] ?? body?.refreshToken,
+      );
       res.clearCookie(REFRESH_COOKIE, { path: '/api/auth' });
       res.status(204).end();
     }),

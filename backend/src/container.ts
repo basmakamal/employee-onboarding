@@ -14,6 +14,7 @@ import { NotificationRepository } from './notifications/notification.repository.
 import { NotificationService } from './notifications/notification.service.js';
 import { SettingsService, DynamicNotifier } from './modules/settings/settings.service.js';
 import { DashboardService } from './modules/dashboard/dashboard.service.js';
+import { WorkService } from './modules/work/work.service.js';
 import { ReportsService } from './modules/reports/reports.service.js';
 import { AiService } from './ai/ai.service.js';
 import { buildOnboardingWorkflow } from './workflow/onboarding-workflow.js';
@@ -85,6 +86,8 @@ export function buildContainer() {
 
   const eventBus = new EventBus();
   const ownershipService = new OwnershipService(prisma);
+  // The mobile queue reads the same ownership table the engine enforces.
+  const workService = new WorkService(prisma, ownershipService, slaRules);
   const onboardingWorkflow = buildOnboardingWorkflow(
     { employees, documents, contracts, audit },
     ownershipService,
@@ -229,6 +232,7 @@ export function buildContainer() {
     authService,
     settingsService,
     dashboardService,
+    workService,
     reportsService,
     aiService,
     ownershipService,

@@ -16,6 +16,7 @@ import { reportsRouter } from './modules/reports/reports.routes.js';
 import { notificationRouter } from './notifications/notification.routes.js';
 import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
+import { meRouter, workRouter } from './modules/work/work.routes.js';
 import { asyncHandler } from './common/http.js';
 import { requireRole } from './auth/require-auth.middleware.js';
 import { statfsSync } from 'node:fs';
@@ -52,6 +53,9 @@ staffApi.use(
 staffApi.use('/users', usersRouter(container.repos.users));
 staffApi.use('/notifications', notificationRouter(container.repos.notificationRepo));
 staffApi.use('/ai', aiRouter(container.aiService));
+// Mobile enablers: what this session may see, and what needs it right now.
+staffApi.use('/me', meRouter(container.workService));
+staffApi.use('/work', workRouter(container.workService));
 staffApi.get(
   '/dashboard',
   asyncHandler(async (_req, res) => {
