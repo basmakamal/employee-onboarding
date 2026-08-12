@@ -23,6 +23,31 @@ export function createApp(deps: AppDeps = {}) {
 
   app.disable('x-powered-by');
   app.use(helmet({ contentSecurityPolicy: false })); // JSON API — CSP is the SPA's concern
+
+  /**
+   * Cross-origin access for local development only: the Vue app is served
+   * through Vite's proxy and the mobile app is native, so neither needs this
+   * in production — but a Flutter web debug build runs on its own port and
+   * would otherwise be blocked by the browser. Localhost origins only, and
+   * never enabled in production.
+   */
+  if (config.NODE_ENV !== 'production') {
+    app.use((req, res, next) => {
+      const origin = req.header('origin');
+      if (origin && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        if (req.method === 'OPTIONS') {
+          res.status(204).end();
+          return;
+        }
+      }
+      next();
+    });
+  }
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
   app.use(pinoHttp({ logger }));
