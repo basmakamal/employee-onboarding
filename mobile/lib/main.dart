@@ -7,6 +7,7 @@ import 'app/shell.dart';
 import 'app/theme/app_theme.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/auth/login_screen.dart';
+import 'features/more/more_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: RiyadaHrApp()));
@@ -25,8 +26,9 @@ class RiyadaHrApp extends ConsumerWidget {
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ThemeMode.system,
-      // Arabic first: it is the product's default, as on the web.
-      locale: const Locale('ar'),
+      // Arabic first: it is the product's default, as on the web. The More
+      // tab can override it for the session.
+      locale: ref.watch(localeProvider) ?? const Locale('ar'),
       supportedLocales: S.supported,
       localizationsDelegates: const [
         SDelegate(),

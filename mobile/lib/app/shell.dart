@@ -3,30 +3,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/auth_controller.dart';
 import '../features/directory/directory_screen.dart';
+import '../features/home/home_screen.dart';
 import '../features/inbox/inbox_screen.dart';
+import '../features/more/more_screen.dart';
 import '../features/work/work_screen.dart';
 import 'i18n/strings.dart';
 import 'theme/tokens.dart';
 
+/// Selected tab — a provider rather than widget state so a dashboard tile
+/// can open the Work tab pre-filtered.
+final shellIndexProvider = StateProvider<int>((ref) => 0);
+
 /// The signed-in shell. Its tab set is NOT hardcoded — it comes from
 /// /api/me/capabilities, so Insurance gets three destinations and HR gets
 /// five without the client knowing why.
-class AppShell extends ConsumerStatefulWidget {
+class AppShell extends ConsumerWidget {
   const AppShell({super.key});
 
   @override
-  ConsumerState<AppShell> createState() => _AppShellState();
-}
-
-class _AppShellState extends ConsumerState<AppShell> {
-  int _index = 0;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final s = S.of(context);
     final caps = ref.watch(authControllerProvider).capabilities;
     final tabs = caps?.tabs ?? const ['work'];
-    final safeIndex = _index.clamp(0, tabs.length - 1);
+    final safeIndex = ref.watch(shellIndexProvider).clamp(0, tabs.length - 1);
 
     return Scaffold(
       body: _pageFor(tabs[safeIndex]),
@@ -34,7 +33,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           ? null
           : NavigationBar(
               selectedIndex: safeIndex,
-              onDestinationSelected: (i) => setState(() => _index = i),
+              onDestinationSelected: (i) =>
+                  ref.read(shellIndexProvider.notifier).state = i,
               destinations: [
                 for (final tab in tabs)
                   NavigationDestination(
@@ -49,12 +49,16 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   Widget _pageFor(String tab) {
     switch (tab) {
+      case 'home':
+        return const HomeScreen();
       case 'work':
         return const WorkScreen();
       case 'directory':
         return const DirectoryScreen();
       case 'inbox':
         return const InboxScreen();
+      case 'more':
+        return const MoreScreen();
       default:
         return _Placeholder(tab: tab);
     }

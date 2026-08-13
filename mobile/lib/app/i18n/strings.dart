@@ -250,6 +250,68 @@ class S {
     return at.toIso8601String().substring(0, 10);
   }
 
+  // ── home dashboard
+  String dateLine(DateTime d) {
+    const weekdaysAr = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
+    const weekdaysEn = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const monthsAr = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    const monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final w = (isAr ? weekdaysAr : weekdaysEn)[d.weekday - 1];
+    final m = (isAr ? monthsAr : monthsEn)[d.month - 1];
+    return isAr ? '$w، ${d.day} $m' : '$w, ${d.day} $m';
+  }
+
+  String get pipelineTitle => _('مسار التوظيف', 'Onboarding pipeline');
+  String nActive(int n) => isAr ? '$n قيد الإجراء' : '$n active';
+  String get pipelineEmpty =>
+      _('لا توجد سجلات في مسار التوظيف حاليًا.', 'Nothing is in the pipeline right now.');
+  String get expiryTitle => _('وثائق قاربت على الانتهاء', 'Expiring documents');
+  String get expiryExpired => _('منتهية', 'Expired');
+  String expiryWithin(int days) => isAr ? 'خلال $days يومًا' : '≤ $days days';
+  String get recentActivity => _('آخر النشاطات', 'Recent activity');
+  String get noActivity => _('لا نشاط بعد.', 'No activity yet.');
+
+  /// Audit verbs for the activity feed; raw key when a new one appears.
+  String auditAction(String key) {
+    switch (key) {
+      case 'CREATE':
+        return _('تم الإنشاء', 'created');
+      case 'ACTIVATED':
+        return _('تم التفعيل', 'activated');
+      case 'EXPIRE':
+        return _('انتهت المهلة', 'expired');
+      case 'SLA_REMINDER':
+        return _('تذكير آلي', 'reminder sent');
+      case 'SLA_ESCALATION':
+        return _('تصعيد آلي', 'escalated');
+      case 'LINK_SENT':
+        return _('تم إرسال الرابط', 'link sent');
+      case 'UPDATE_PROFILE':
+        return _('تحديث البيانات', 'profile updated');
+      case 'DOCUMENT_ADDED':
+        return _('إضافة وثيقة', 'document added');
+      case 'DOCUMENT_RENEWED':
+        return _('تجديد وثيقة', 'document renewed');
+      default:
+        return key;
+    }
+  }
+
+  // ── more / privacy
+  String get privacyAccountTitle => _('حسابك', 'Your account');
+  String get privacyAccountBody => _(
+      'الحسابات في هذا التطبيق تُدار من قِبل جهة العمل. لا يوجد تسجيل ذاتي، ويقتصر الوصول على موظفي الموارد البشرية والأدوار المخوّلة.',
+      'Accounts in this app are managed by the employer. There is no self-registration; access is limited to HR staff and authorised roles.');
+  String get privacyDataTitle => _('بياناتك', 'Your data');
+  String get privacyDataBody => _(
+      'يعرض التطبيق بيانات نظام الموارد البشرية المخزّنة على خادم الشركة، ولا يخزّن نسخًا منها على الجهاز باستثناء رمز الدخول في المخزن الآمن.',
+      'The app shows HR records stored on the company server. Nothing is kept on the device except the sign-in token, held in secure storage.');
+  String get privacyDeleteTitle => _('حذف البيانات', 'Data deletion');
+  String get privacyDeleteBody => _(
+      'لطلب حذف بياناتك أو حسابك، تواصل مع إدارة الموارد البشرية — الحسابات تُدار من قِبل جهة العمل.',
+      'To request deletion of your data or account, contact the HR department — accounts are employer-managed.');
+  String get privacyPolicyTitle => _('سياسة الخصوصية', 'Privacy policy');
+
   // ── shared
   String get retry => _('إعادة المحاولة', 'Retry');
   String get offline =>
