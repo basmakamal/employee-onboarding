@@ -139,6 +139,117 @@ class S {
     }
   }
 
+  // ── directory
+  String get searchHint =>
+      _('ابحث بالاسم أو الرقم الوظيفي', 'Search name or employee no.');
+  String get filterOnboarding => _('قيد التوظيف', 'Onboarding');
+  String get filterActive => _('على رأس العمل', 'Active');
+  String get filterInactive => _('منتهي الخدمة', 'Inactive');
+  String get noResults => _('لا توجد نتائج', 'No results');
+  String get noResultsHint =>
+      _('جرّب اسمًا آخر أو غيّر التصفية.', 'Try another name or change the filter.');
+
+  // ── employee file
+  String get employeeFile => _('ملف الموظف', 'Employee file');
+  String get stageTwoProcesses => _('الإجراءات', 'Stage-2 processes');
+  String doneOf(int done, int total) =>
+      isAr ? 'اكتمل $done من $total' : '$done of $total done';
+  String get employment => _('بيانات التوظيف', 'Employment');
+  String get jobTitle => _('المسمى الوظيفي', 'Job title');
+  String get employmentType => _('نوع التعاقد', 'Type');
+  String get hireDate => _('تاريخ التعيين', 'Hire date');
+  String get project => _('المشروع', 'Project');
+  String get phone => _('الجوال', 'Phone');
+  String get actions => _('الإجراءات', 'Actions');
+  String get moreActions => _('إجراءات أخرى', 'More');
+  String get actionDone => _('تم تنفيذ الإجراء', 'Done');
+  String get holdTitle => _('تعليق الإجراء', 'Put on hold');
+  String get reason => _('السبب', 'Reason');
+  String get noteOptional => _('ملاحظة (اختياري)', 'Note (optional)');
+  String get confirmHold => _('تعليق', 'Put on hold');
+
+  String processName(String key) {
+    switch (key) {
+      case 'gosi':
+        return _('التأمينات الاجتماعية', 'GOSI');
+      case 'medical':
+        return _('التأمين الطبي', 'Medical insurance');
+      case 'criminal':
+        return _('خلو السوابق', 'Criminal record');
+      default:
+        return key;
+    }
+  }
+
+  String employmentTypeLabel(String key) {
+    switch (key) {
+      case 'FULL_TIME':
+        return _('دوام كامل', 'Full time');
+      case 'PART_TIME':
+        return _('دوام جزئي', 'Part time');
+      case 'TEMPORARY':
+        return _('مؤقت', 'Temporary');
+      default:
+        return key;
+    }
+  }
+
+  /// Transition verbs. Unknown actions render their raw name rather than
+  /// disappearing — a new machine edge must never produce a blank button.
+  String action(String key) {
+    switch (key) {
+      case 'SEND_FORM':
+        return _('إرسال النموذج', 'Send form');
+      case 'REQUEST_MISSING':
+        return _('طلب المستندات الناقصة', 'Request missing');
+      case 'ACCEPT_DOCUMENTS':
+        return _('اعتماد المستندات', 'Accept documents');
+      case 'SEND_CONTRACT':
+        return _('إرسال العقد', 'Send contract');
+      case 'REOPEN':
+        return _('إعادة الفتح', 'Reopen');
+      case 'COMPLETE':
+        return _('إتمام', 'Complete');
+      case 'HOLD':
+        return _('تعليق', 'Hold');
+      case 'RESUME':
+        return _('استئناف', 'Resume');
+      case 'CANCEL':
+        return _('إلغاء', 'Cancel');
+      case 'SEND_REQUEST':
+        return _('إرسال الطلب', 'Send request');
+      case 'RECEIVE':
+        return _('استلام', 'Receive');
+      default:
+        return key;
+    }
+  }
+
+  // ── inbox
+  String unreadCount(int n) =>
+      n == 0 ? _('لا جديد', 'Nothing new') : (isAr ? '$n غير مقروء' : '$n unread');
+  String get markAllRead => _('تعليم الكل كمقروء', 'Mark all read');
+  String get inboxEmpty => _('لا توجد إشعارات', 'No notifications');
+  String get inboxEmptyHint =>
+      _('ستظهر هنا التنبيهات والتذكيرات.', 'Alerts and reminders will appear here.');
+
+  /// Coarse on purpose: an exact timestamp is noise in a notification list.
+  String relativeTime(DateTime at) {
+    final diff = DateTime.now().difference(at);
+    if (diff.inMinutes < 1) return _('الآن', 'Just now');
+    if (diff.inMinutes < 60) {
+      return isAr ? 'منذ ${diff.inMinutes} د' : '${diff.inMinutes}m ago';
+    }
+    if (diff.inHours < 24) {
+      return isAr ? 'منذ ${diff.inHours} س' : '${diff.inHours}h ago';
+    }
+    if (diff.inDays == 1) return _('أمس', 'Yesterday');
+    if (diff.inDays < 7) {
+      return isAr ? 'منذ ${diff.inDays} أيام' : '${diff.inDays}d ago';
+    }
+    return at.toIso8601String().substring(0, 10);
+  }
+
   // ── shared
   String get retry => _('إعادة المحاولة', 'Retry');
   String get offline =>

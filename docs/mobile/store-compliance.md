@@ -143,3 +143,79 @@ an automatic Apple rejection.
 | Privacy policy text, PDPL/AI disclosure sign-off | Riyada legal / HR |
 | Developer accounts, signing certs, ABM / managed Play setup | Riyada IT |
 | Demo account + staging data for review | HR + this implementation |
+
+---
+
+# Action plan
+
+Account setup is the long pole — weeks, not days — and it blocks release while
+blocking nothing in development. Start items **A1 and B1 now**; the app can be
+finished in parallel.
+
+## Question 0 — answer this first, it removes work
+
+**How many staff use iPhone?**
+
+- **None** → skip the entire Apple track (A1–A4). Android can be distributed
+  straight through MDM or a signed download, with no store, no review, no fee.
+  This is the fastest possible path to staff having the app.
+- **Some** → the Apple track is unavoidable. Apple offers no legitimate
+  sideloading in Saudi Arabia, so any iPhone user forces items A1–A4.
+
+**Question 0b:** will this app ever be sold to other companies? If no, everything
+below assumes private distribution.
+
+## Track A — Apple (only if iPhones are in scope)
+
+| # | Task | Owner | Cost | Lead time | Blocks |
+|---|---|---|---|---|---|
+| A1 | **D-U-N-S number** for the legal entity | IT / Finance | free | **1–3 weeks** | A2 — start first |
+| A2 | Apple Developer Program, *organization* enrolment | IT | ~$99/yr | days after A1 | A3, A4 |
+| A3 | Apple Business Manager account, linked to A2 | IT | free | days | custom-app distribution |
+| A4 | iOS signing certificates + provisioning profiles | IT | — | hours | any build |
+
+Distribution: **Custom App via Apple Business Manager** — private to Riyada,
+still reviewed but exempt from the "no public value" rejection that kills
+internal apps on the public store.
+
+## Track B — Android
+
+| # | Task | Owner | Cost | Lead time | Blocks |
+|---|---|---|---|---|---|
+| B1 | Google Play Console account, *organization* type | IT | ~$25 once | days | B3 |
+| B2 | **Release keystore** generated and stored in the company vault | IT | — | hours | every release |
+| B3 | Managed Google Play private app (needs Google Workspace) — **or skip** and distribute via MDM | IT | free | days | — |
+
+⚠️ **B2 is the item that bites years later.** Lose the keystore and the app can
+never be updated under the same identity again. It must live in a permanent,
+backed-up secret store and must never enter git.
+
+## Track C — legal & content (needed for either store)
+
+| # | Task | Owner | Lead time | Blocks |
+|---|---|---|---|---|
+| C1 | **Privacy policy** written and published at a public URL | Legal / HR | 1–2 weeks | submission on both stores |
+| C2 | **AI / PDPL decision**: disclose the national-ID + salary sharing with Anthropic, or ship v1 with those features disabled | Legal | 1–2 weeks | data-safety forms, camera feature |
+| C3 | Data-deletion route documented (employer-managed accounts → HR contact) | HR | days | Play data-deletion field |
+| C4 | Play **Data Safety** form + Apple **Privacy Nutrition Label** filled from §2 | IT + this implementation | days | submission |
+| C5 | **Demo account** on staging with fake data, for App Review | HR + implementation | days | Apple review |
+
+## Track D — in the app (this implementation)
+
+| # | Task | State |
+|---|---|---|
+| D1 | Cleartext blocked except loopback; backups + device transfer excluded | **done** |
+| D2 | iOS purpose strings + encryption declaration | **done** |
+| D3 | No install-time permissions beyond internet | **done** |
+| D4 | Riyada icons, splash, bilingual app name | pending brand assets |
+| D5 | In-app **Privacy & data** screen (policy, support, deletion route) | pending C1/C3 |
+| D6 | Signing config reading an external keystore, never committed | pending B2 |
+| D7 | Final bundle id (`com.riyada.hr`), version scheme | pending |
+| D8 | Staging flavour for the review build | pending C5 |
+| D9 | Pre-submission smoke list (§8) executed on a real device | pending a device |
+
+## This week
+
+1. **IT:** start the D-U-N-S lookup (A1) — free, longest lead time, blocks the whole Apple track.
+2. **HR/Legal:** commission the privacy policy (C1) and settle the AI question (C2).
+3. **Anyone:** count the iPhone users — that single number decides whether Track A is needed at all.

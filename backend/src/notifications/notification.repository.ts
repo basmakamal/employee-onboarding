@@ -25,10 +25,14 @@ export class NotificationRepository {
     return this.db.notification.update({ where: { id }, data: { status: 'FAILED' } });
   }
 
-  /** In-app bell: unread first, newest first. */
-  listForUser(userId: string, limit = 20) {
+  /** In-app bell / mobile inbox: unread first, newest first. */
+  listForUser(userId: string, limit = 20, unreadOnly = false) {
     return this.db.notification.findMany({
-      where: { recipientUserId: userId, channel: 'IN_APP' },
+      where: {
+        recipientUserId: userId,
+        channel: 'IN_APP',
+        ...(unreadOnly ? { readAt: null } : {}),
+      },
       orderBy: [{ readAt: 'asc' }, { createdAt: 'desc' }],
       take: limit,
     });

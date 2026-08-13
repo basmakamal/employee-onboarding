@@ -5,6 +5,7 @@ import '../../app/i18n/strings.dart';
 import '../../app/theme/tokens.dart';
 import '../../core/network/api_client.dart';
 import '../auth/auth_controller.dart';
+import '../employee/employee_screen.dart';
 import 'work_models.dart';
 import 'work_providers.dart';
 
@@ -78,7 +79,16 @@ class WorkScreen extends ConsumerWidget {
                   children: [
                     _GroupHeader(bucket: bucket, count: rows.length),
                     for (final item in rows) ...[
-                      _WorkCard(item: item),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(T.rCard),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                EmployeeScreen(employeeId: item.employeeId),
+                          ),
+                        ),
+                        child: _WorkCard(item: item),
+                      ),
                       const SizedBox(height: T.s8),
                     ],
                     const SizedBox(height: T.s8),

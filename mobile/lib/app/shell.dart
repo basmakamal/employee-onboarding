@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/auth_controller.dart';
+import '../features/directory/directory_screen.dart';
+import '../features/inbox/inbox_screen.dart';
 import '../features/work/work_screen.dart';
 import 'i18n/strings.dart';
 import 'theme/tokens.dart';
@@ -49,6 +51,10 @@ class _AppShellState extends ConsumerState<AppShell> {
     switch (tab) {
       case 'work':
         return const WorkScreen();
+      case 'directory':
+        return const DirectoryScreen();
+      case 'inbox':
+        return const InboxScreen();
       default:
         return _Placeholder(tab: tab);
     }

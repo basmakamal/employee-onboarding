@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, validateQuery } from '../../common/http.js';
+import { asyncHandler, pagedQuery, validateQuery } from '../../common/http.js';
 import { UnauthorizedError } from '../../workflow/errors.js';
 import type { Role } from '../../generated/prisma/enums.js';
 import type { WorkService } from './work.service.js';
@@ -24,7 +24,8 @@ export function workRouter(service: WorkService): Router {
     '/',
     validateQuery(queueQuerySchema),
     asyncHandler(async (req, res) => {
-      const { bucket, limit } = req.query as unknown as z.infer<typeof queueQuerySchema>;
+      // Parsed by validateQuery — req.query itself is still raw strings.
+      const { bucket, limit } = pagedQuery<z.infer<typeof queueQuerySchema>>(req);
       res.json(await service.queue(actorRole(req), { ...(bucket ? { bucket } : {}), limit }));
     }),
   );
