@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { onMounted, ref } from 'vue';
+﻿<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
 import { useAuthStore } from '../stores/auth';
@@ -27,6 +27,9 @@ const createForm = ref({ name: '', email: '', role: 'HR', password: '' });
 const resetDialog = ref({ show: false, userId: '', name: '', password: '' });
 
 const editDialog = ref({ show: false, userId: '', name: '', email: '', role: 'HR', active: true });
+
+/** Admins cannot demote or lock themselves out — enforced server-side too. */
+const isSelf = computed(() => editDialog.value.userId === auth.user?.id);
 
 function openEdit(user: UserRow) {
   editDialog.value = { show: true, userId: user.id, ...user, email: user.email };
@@ -223,7 +226,9 @@ onMounted(load);
           <v-spacer />
           <v-btn variant="text" @click="createDialog = false">{{ $t('common.cancel') }}</v-btn>
           <v-btn
+            variant="flat"
             color="primary"
+            class="px-5"
             :loading="busy === 'create'"
             :disabled="!createForm.name || !createForm.email || createForm.password.length < 8"
             @click="createUser"
@@ -236,31 +241,80 @@ onMounted(load);
 
     <!-- Edit user -->
     <v-dialog v-model="editDialog.show" max-width="520">
-      <v-card :title="`${$t('common.edit')} — ${editDialog.name}`" class="pa-2">
-        <v-card-text>
-          <v-text-field v-model="editDialog.name" :label="$t('fields.name')" />
-          <v-text-field v-model="editDialog.email" :label="$t('fields.email')" type="email" />
+      <v-card>
+        <div class="d-flex align-center ga-3 px-6 pt-6 pb-2">
+          <v-avatar color="primary" variant="tonal" size="42" rounded="lg">
+            <v-icon icon="mdi-account-edit-outline" size="22" />
+          </v-avatar>
+          <div class="min-w-0">
+            <h2 class="text-subtitle-1 font-weight-bold">{{ $t('users.editTitle') }}</h2>
+            <p class="text-caption text-medium-emphasis mb-0 text-truncate">
+              {{ editDialog.email }}
+            </p>
+          </div>
+        </div>
+
+        <v-card-text class="pt-4">
+          <v-text-field
+            v-model="editDialog.name"
+            :label="$t('fields.name')"
+            prepend-inner-icon="mdi-account-outline"
+            class="mb-1"
+          />
+          <v-text-field
+            v-model="editDialog.email"
+            :label="$t('fields.email')"
+            type="email"
+            prepend-inner-icon="mdi-email-outline"
+            dir="ltr"
+            class="mb-1"
+          />
           <v-select
             v-model="editDialog.role"
             :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
             :label="$t('users.role')"
-            :disabled="editDialog.userId === auth.user?.id"
-            :hint="editDialog.userId === auth.user?.id ? $t('users.selfHint') : ''"
-            persistent-hint
+            prepend-inner-icon="mdi-shield-account-outline"
+            :disabled="isSelf"
           />
-          <v-switch
-            v-model="editDialog.active"
-            :label="$t('users.active')"
-            color="success"
-            :disabled="editDialog.userId === auth.user?.id"
-            hide-details
-          />
+
+          <!-- Access sits in its own panel: it is a different kind of decision
+               from a name or an email, and it deserves the visual pause. -->
+          <div class="access-panel mt-2 px-4 py-3 rounded-lg">
+            <v-switch
+              v-model="editDialog.active"
+              color="success"
+              :disabled="isSelf"
+              hide-details
+              density="comfortable"
+            >
+              <template #label>
+                <div class="ms-2">
+                  <div class="text-body-2 font-weight-medium">{{ $t('users.active') }}</div>
+                  <div class="text-caption text-medium-emphasis">
+                    {{ editDialog.active ? $t('users.activeHint') : $t('users.inactiveHint') }}
+                  </div>
+                </div>
+              </template>
+            </v-switch>
+          </div>
+
+          <v-alert
+            v-if="isSelf"
+            type="info"
+            density="compact"
+            class="mt-4 text-caption"
+          >
+            {{ $t('users.selfHint') }}
+          </v-alert>
         </v-card-text>
-        <v-card-actions>
+
+        <v-card-actions class="px-6 pb-5 pt-2">
           <v-spacer />
           <v-btn variant="text" @click="editDialog.show = false">{{ $t('common.cancel') }}</v-btn>
           <v-btn
+            variant="flat"
             color="primary"
+            class="px-5"
             :loading="busy === 'edit'"
             :disabled="!editDialog.name.trim() || !editDialog.email.trim()"
             @click="saveEdit"
@@ -287,7 +341,9 @@ onMounted(load);
           <v-spacer />
           <v-btn variant="text" @click="resetDialog.show = false">{{ $t('common.cancel') }}</v-btn>
           <v-btn
+            variant="flat"
             color="primary"
+            class="px-5"
             :loading="busy === 'reset'"
             :disabled="resetDialog.password.length < 8"
             @click="resetPassword"
@@ -303,3 +359,10 @@ onMounted(load);
     </v-snackbar>
   </v-container>
 </template>
+
+<style scoped>
+.access-panel {
+  background: rgba(var(--v-theme-surface-variant), 0.5);
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+</style>

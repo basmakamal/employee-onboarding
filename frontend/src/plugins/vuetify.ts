@@ -1,4 +1,4 @@
-import { createVuetify } from 'vuetify';
+﻿import { createVuetify } from 'vuetify';
 import 'vuetify/styles';
 
 /**
@@ -89,45 +89,49 @@ export const vuetify = createVuetify({
     },
     VBtn: {
       rounded: 'lg',
-      // Flat + no shouting caps: buttons read as words, not stamps.
+      // Filled but shadowless, and no shouting caps: buttons read as words.
+      variant: 'flat',
       class: 'text-none font-weight-medium',
-      elevation: 0,
+    },
+    VCardActions: {
+      /**
+       * Vuetify forces `variant="text"` on every button inside card actions,
+       * which turns a dialog's confirm button into what looks like a link.
+       * Clearing it lets each button resolve its own variant, so
+       * `<v-btn color="primary">` is a real button again and the explicit
+       * `variant="text"` cancels stay text.
+       */
+      VBtn: { variant: 'flat' },
     },
     VTextField: {
       variant: 'outlined',
       density: 'comfortable',
       rounded: 'lg',
-      hideDetails: 'auto',
     },
     VTextarea: {
       variant: 'outlined',
       density: 'comfortable',
       rounded: 'lg',
-      hideDetails: 'auto',
     },
     VSelect: {
       variant: 'outlined',
       density: 'comfortable',
       rounded: 'lg',
-      hideDetails: 'auto',
     },
     VAutocomplete: {
       variant: 'outlined',
       density: 'comfortable',
       rounded: 'lg',
-      hideDetails: 'auto',
     },
     VCombobox: {
       variant: 'outlined',
       density: 'comfortable',
       rounded: 'lg',
-      hideDetails: 'auto',
     },
     VFileInput: {
       variant: 'outlined',
       density: 'comfortable',
       rounded: 'lg',
-      hideDetails: 'auto',
     },
     VChip: {
       rounded: 'pill',
