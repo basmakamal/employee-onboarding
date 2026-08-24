@@ -23,6 +23,7 @@ export class MedicalInsuranceRepository {
     from: ProcessStatus,
     to: ProcessStatus,
     hold?: { reason: MedicalHoldReason; note?: string },
+    certificateStorageKey?: string,
   ): Promise<boolean> {
     const result = await this.db.medicalInsuranceProcess.updateMany({
       where: { id, status: from },
@@ -30,6 +31,7 @@ export class MedicalInsuranceRepository {
         status: to,
         holdReason: to === 'ON_HOLD' ? (hold?.reason ?? 'OTHER') : null,
         holdNote: to === 'ON_HOLD' ? (hold?.note ?? null) : null,
+        ...(to === 'DONE' && certificateStorageKey ? { certificateStorageKey } : {}),
       },
     });
     return result.count === 1;

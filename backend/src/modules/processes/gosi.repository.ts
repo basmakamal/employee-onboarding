@@ -18,12 +18,16 @@ export class GosiRepository {
     });
   }
 
-  /** Guarded status move; hold reason/note only meaningful for ON_HOLD. */
+  /**
+   * Guarded status move; hold reason/note only meaningful for ON_HOLD, the
+   * certificate only for DONE (proof attached at completion time).
+   */
   async moveStatus(
     id: string,
     from: ProcessStatus,
     to: ProcessStatus,
     hold?: { reason: GosiHoldReason; note?: string },
+    certificateStorageKey?: string,
   ): Promise<boolean> {
     const result = await this.db.gosiProcess.updateMany({
       where: { id, status: from },
@@ -31,6 +35,7 @@ export class GosiRepository {
         status: to,
         holdReason: to === 'ON_HOLD' ? (hold?.reason ?? 'OTHER') : null,
         holdNote: to === 'ON_HOLD' ? (hold?.note ?? null) : null,
+        ...(to === 'DONE' && certificateStorageKey ? { certificateStorageKey } : {}),
       },
     });
     return result.count === 1;

@@ -7,6 +7,7 @@ import {
 } from './employee.repository.js';
 import {
   discardUploads,
+  documentUpload,
   employeeSubdir,
   photoUpload,
   removeStoredFile,
@@ -327,6 +328,58 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
         .json(
           await service.createRequest(req.params['id'] as string, body.type, actor(req), body.notes),
         );
+    }),
+  );
+
+  /**
+   * Attach the completion document and finish the process in one step:
+   * the file is stored, then COMPLETE runs through the state machine — so
+   * legality and ownership are still the machine's call, and an illegal
+   * completion discards the file rather than orphaning it.
+   */
+  router.post(
+    '/:id/processes/:kind/certificate',
+    (req, _res, next) => {
+      req.uploadSubdir = employeeSubdir(req.params['id'] as string);
+      next();
+    },
+    documentUpload.single('certificate'),
+    asyncHandler(async (req, res) => {
+      const kind = req.params['kind'] as (typeof KINDS)[number];
+      if (!KINDS.includes(kind)) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: `unknown process ${kind}` } });
+        return;
+      }
+      if (!req.file) throw new GuardFailedError('FILE_MISSING', 'no document uploaded');
+      try {
+        await verifyUploadedFiles([req.file]);
+        const key = storageKeyFor(req.uploadSubdir as string, req.file.filename);
+        const result = await service.actOnProcess(
+          req.params['id'] as string,
+          kind,
+          'COMPLETE',
+          actor(req),
+          { certificateStorageKey: key },
+        );
+        res.json(result);
+      } catch (err) {
+        await discardUploads([req.file]);
+        throw err;
+      }
+    }),
+  );
+
+  /** The attached completion document (any staff may review it). */
+  router.get(
+    '/:id/processes/:kind/certificate',
+    asyncHandler(async (req, res) => {
+      const kind = req.params['kind'] as (typeof KINDS)[number];
+      if (!KINDS.includes(kind)) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: `unknown process ${kind}` } });
+        return;
+      }
+      const key = await service.getProcessCertificateKey(req.params['id'] as string, kind);
+      res.sendFile(storagePath(key));
     }),
   );
 

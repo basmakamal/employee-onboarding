@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 interface ProcessData {
   status: string;
   holdReason?: string | null;
   holdNote?: string | null;
+  certificateStorageKey?: string | null;
 }
 
 const props = defineProps<{
@@ -19,11 +20,30 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   act: [action: string, payload?: { holdReason?: string; holdNote?: string }];
+  /** Attach the completion document — the upload IS the COMPLETE action. */
+  attach: [file: File];
+  /** Open the attached document in the viewer. */
+  viewDocument: [];
 }>();
 
 const holdDialog = ref(false);
 const holdReason = ref('');
 const holdNote = ref('');
+const fileInput = ref<HTMLInputElement | null>(null);
+
+/** COMPLETE is offered as "attach the document" — evidence-first completion. */
+const canAttach = computed(() => props.actions.includes('COMPLETE'));
+
+function pickFile() {
+  fileInput.value?.click();
+}
+
+function onFilePicked(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (file) emit('attach', file);
+  input.value = ''; // same file re-selectable after an error
+}
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'orange',
@@ -87,19 +107,53 @@ function confirmHold() {
       </v-alert>
     </v-card-text>
 
-    <v-card-actions v-if="actions.length" class="flex-wrap" style="gap: 4px">
-      <v-btn
-        v-for="action in actions"
-        :key="action"
-        :color="ACTION_META[action]?.color"
-        :prepend-icon="ACTION_META[action]?.icon"
-        :loading="busy"
-        size="small"
+    <!-- Completed with a document on file: review it any time. -->
+    <v-card-text v-if="process?.certificateStorageKey" class="pt-0">
+      <v-chip
+        color="success"
         variant="tonal"
-        @click="onAction(action)"
+        size="small"
+        prepend-icon="mdi-file-eye-outline"
+        @click="emit('viewDocument')"
       >
-        {{ $t(`processActions.${action}`) }}
-      </v-btn>
+        {{ $t('employees.viewProcessDocument') }}
+      </v-chip>
+    </v-card-text>
+
+    <v-card-actions v-if="actions.length" class="flex-wrap" style="gap: 4px">
+      <template v-for="action in actions" :key="action">
+        <!-- COMPLETE happens by attaching the document that proves it. -->
+        <v-btn
+          v-if="action === 'COMPLETE'"
+          color="success"
+          prepend-icon="mdi-paperclip"
+          :loading="busy"
+          size="small"
+          variant="tonal"
+          @click="pickFile"
+        >
+          {{ $t('employees.attachAndComplete') }}
+        </v-btn>
+        <v-btn
+          v-else
+          :color="ACTION_META[action]?.color"
+          :prepend-icon="ACTION_META[action]?.icon"
+          :loading="busy"
+          size="small"
+          variant="tonal"
+          @click="onAction(action)"
+        >
+          {{ $t(`processActions.${action}`) }}
+        </v-btn>
+      </template>
+      <input
+        v-if="canAttach"
+        ref="fileInput"
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+        class="d-none"
+        @change="onFilePicked"
+      />
     </v-card-actions>
 
     <v-dialog v-model="holdDialog" max-width="440">

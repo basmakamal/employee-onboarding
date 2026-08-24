@@ -336,6 +336,8 @@ model GosiProcess {
   status     ProcessStatus   @default(PENDING)
   holdReason GosiHoldReason?
   holdNote   String?
+  /// Proof document attached when the card is completed.
+  certificateStorageKey String?
   updatedAt  DateTime        @updatedAt
   createdAt  DateTime        @default(now())
 
@@ -351,6 +353,8 @@ model MedicalInsuranceProcess {
   status     ProcessStatus      @default(PENDING)
   holdReason MedicalHoldReason?
   holdNote   String?
+  /// Proof document attached when the card is completed.
+  certificateStorageKey String?
   updatedAt  DateTime           @updatedAt
   createdAt  DateTime           @default(now())
 

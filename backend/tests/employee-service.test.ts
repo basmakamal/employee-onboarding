@@ -52,10 +52,13 @@ describe('EmployeeService.actOnProcess', () => {
     });
 
     expect(result).toEqual({ from: 'PENDING', to: 'ON_HOLD', action: 'HOLD' });
-    expect(repos.gosi.moveStatus).toHaveBeenCalledWith('g1', 'PENDING', 'ON_HOLD', {
-      reason: 'GOVERNMENT_EMPLOYEE',
-      note: 'works at ministry',
-    });
+    expect(repos.gosi.moveStatus).toHaveBeenCalledWith(
+      'g1',
+      'PENDING',
+      'ON_HOLD',
+      { reason: 'GOVERNMENT_EMPLOYEE', note: 'works at ministry' },
+      undefined, // no certificate on a HOLD
+    );
   });
 
   it('audits with the employee anchor and the acting user', async () => {

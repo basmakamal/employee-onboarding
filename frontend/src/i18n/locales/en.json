@@ -1,4 +1,4 @@
-{
+﻿{
   "app": {
     "title": "HR System",
     "tagline": "Onboarding, employee file, and offboarding — one auditable workflow."
@@ -73,6 +73,9 @@
     "hired": "Hired",
     "holdReason": "Hold reason",
     "holdNote": "Note (optional)",
+    "attachAndComplete": "Attach document & complete",
+    "viewProcessDocument": "View document",
+    "previewUnavailable": "This file type cannot be previewed in the browser - download it to view.",
     "statuses": {
       "ACTIVE": "Active",
       "INACTIVE": "Inactive"
@@ -102,6 +105,7 @@
     "HOLD": "Put on hold",
     "RESUME": "Resume",
     "CANCEL": "Cancel",
+    "download": "Download",
     "SEND_REQUEST": "Send request",
     "MARK_PENDING": "Awaiting certificate"
   },
@@ -136,6 +140,7 @@
     "actions": {
       "send": "Send for approval",
       "cancel": "Cancel",
+    "download": "Download",
       "revise": "Revise"
     }
   },
@@ -162,6 +167,7 @@
   },
   "common": {
     "cancel": "Cancel",
+    "download": "Download",
     "create": "Create",
     "edit": "Edit",
     "print": "Print",

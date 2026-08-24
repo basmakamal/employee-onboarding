@@ -11,6 +11,7 @@ interface ProcessData {
   status: string;
   holdReason?: string | null;
   holdNote?: string | null;
+  certificateStorageKey?: string | null;
 }
 
 interface AssetFormItem {
@@ -518,21 +519,92 @@ function onOnboardingAction(action: string) {
   void runOnboardingAction(ONBOARDING_ACTIONS[action]!.endpoint);
 }
 
-/** HR reviews an uploaded checklist file — authenticated blob download. */
-async function downloadOnboardingDoc(doc: OnboardingDoc) {
-  const res = await fetch(`/api/employees/${id}/onboarding-documents/${doc.id}/download`, {
+// ------------------------------------------------------- document viewer
+// Clicking a document previews it (PDF/image render in a dialog); download
+// is a button inside the viewer rather than the click's side effect.
+const viewer = ref<{
+  show: boolean;
+  title: string;
+  url: string;
+  kind: 'pdf' | 'image' | 'other';
+  downloadName: string;
+}>({ show: false, title: '', url: '', kind: 'other', downloadName: '' });
+
+async function openViewer(fetchUrl: string, title: string, downloadName: string) {
+  const res = await fetch(fetchUrl, {
     headers: { Authorization: `Bearer ${getAccessToken()}` },
   });
   if (!res.ok) {
     notify(t('common.error'), 'error');
     return;
   }
-  const url = URL.createObjectURL(await res.blob());
+  const blob = await res.blob();
+  if (viewer.value.url) URL.revokeObjectURL(viewer.value.url);
+  const kind = blob.type.includes('pdf')
+    ? 'pdf'
+    : blob.type.startsWith('image/')
+      ? 'image'
+      : 'other';
+  viewer.value = {
+    show: true,
+    title,
+    url: URL.createObjectURL(blob),
+    kind,
+    downloadName,
+  };
+}
+
+function downloadFromViewer() {
   const a = document.createElement('a');
-  a.href = url;
-  a.download = doc.label ?? doc.type;
+  a.href = viewer.value.url;
+  a.download = viewer.value.downloadName;
   a.click();
-  URL.revokeObjectURL(url);
+}
+
+function closeViewer() {
+  if (viewer.value.url) URL.revokeObjectURL(viewer.value.url);
+  viewer.value = { show: false, title: '', url: '', kind: 'other', downloadName: '' };
+}
+
+/** HR reviews an uploaded checklist file — view first, download inside. */
+function viewOnboardingDoc(doc: OnboardingDoc) {
+  const title = doc.label ?? t(`docTypes.${doc.type}`, doc.type);
+  void openViewer(
+    `/api/employees/${id}/onboarding-documents/${doc.id}/download`,
+    title,
+    title,
+  );
+}
+
+/** A process's completion document (GOSI / medical / criminal). */
+function viewProcessDoc(kind: 'gosi' | 'medical' | 'criminal', title: string) {
+  void openViewer(`/api/employees/${id}/processes/${kind}/certificate`, title, title);
+}
+
+/** Attaching the completion document IS the COMPLETE action. */
+async function attachProcessDoc(kind: 'gosi' | 'medical' | 'criminal', file: File) {
+  busy.value = kind;
+  try {
+    const body = new FormData();
+    body.append('certificate', file);
+    const res = await fetch(`/api/employees/${id}/processes/${kind}/certificate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getAccessToken()}` },
+      body,
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      throw new Error(data?.error?.message ?? t('common.error'));
+    }
+    notify(t('common.done'));
+    await load();
+  } catch (e) {
+    notify(e instanceof Error ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
 }
 
 // Contract drafting (CONTRACT_CREATION only)
@@ -1150,6 +1222,8 @@ onMounted(load);
           :hold-reasons="GOSI_REASONS"
           :busy="busy === 'gosi'"
           @act="(a, p) => actOnProcess('gosi', a, p)"
+          @attach="(f) => attachProcessDoc('gosi', f)"
+          @view-document="viewProcessDoc('gosi', $t('processes.gosi'))"
         />
       </v-col>
       <v-col cols="12" sm="6" md="3">
@@ -1161,6 +1235,8 @@ onMounted(load);
           :hold-reasons="MEDICAL_REASONS"
           :busy="busy === 'medical'"
           @act="(a, p) => actOnProcess('medical', a, p)"
+          @attach="(f) => attachProcessDoc('medical', f)"
+          @view-document="viewProcessDoc('medical', $t('processes.medical'))"
         />
       </v-col>
       <v-col cols="12" sm="6" md="3">
@@ -1172,6 +1248,8 @@ onMounted(load);
           :hold-reasons="[]"
           :busy="busy === 'criminal'"
           @act="(a) => actOnProcess('criminal', a)"
+          @attach="(f) => attachProcessDoc('criminal', f)"
+          @view-document="viewProcessDoc('criminal', $t('processes.criminal'))"
         />
       </v-col>
       <!-- Custody at a glance (إدارة العهد) -->
@@ -1516,8 +1594,8 @@ onMounted(load);
                   :prepend-icon="doc.uploaded ? 'mdi-file-check' : 'mdi-file-remove-outline'"
                   :color="doc.uploaded ? 'success' : doc.required ? 'error' : 'grey'"
                   variant="tonal"
-                  :append-icon="doc.uploaded && auth.hasRole('HR') ? 'mdi-download' : undefined"
-                  @click="doc.uploaded && auth.hasRole('HR') && downloadOnboardingDoc(doc)"
+                  :append-icon="doc.uploaded && auth.hasRole('HR') ? 'mdi-eye-outline' : undefined"
+                  @click="doc.uploaded && auth.hasRole('HR') && viewOnboardingDoc(doc)"
                 >
                   {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }}
                   <span v-if="!doc.required" class="text-caption ms-1">
@@ -1948,6 +2026,59 @@ onMounted(load);
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3500">
       {{ snackbar.text }}
     </v-snackbar>
+
+    <!-- Document viewer: preview first, download as an explicit choice. -->
+    <v-dialog
+      :model-value="viewer.show"
+      max-width="860"
+      @update:model-value="closeViewer"
+    >
+      <v-card>
+        <v-card-title class="d-flex align-center text-subtitle-1 font-weight-bold">
+          {{ viewer.title }}
+          <v-spacer />
+          <v-btn
+            prepend-icon="mdi-download"
+            variant="tonal"
+            size="small"
+            color="primary"
+            class="me-2"
+            @click="downloadFromViewer"
+          >
+            {{ $t('common.download') }}
+          </v-btn>
+          <v-btn icon="mdi-close" variant="text" size="small" @click="closeViewer" />
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-0" style="height: 70vh">
+          <iframe
+            v-if="viewer.kind === 'pdf'"
+            :src="viewer.url"
+            style="width: 100%; height: 100%; border: 0"
+            :title="viewer.title"
+          />
+          <div
+            v-else-if="viewer.kind === 'image'"
+            class="d-flex align-center justify-center h-100 pa-4"
+          >
+            <img
+              :src="viewer.url"
+              :alt="viewer.title"
+              style="max-width: 100%; max-height: 100%; object-fit: contain"
+            />
+          </div>
+          <div v-else class="d-flex flex-column align-center justify-center h-100 pa-8">
+            <v-icon icon="mdi-file-document-outline" size="56" class="mb-4 text-medium-emphasis" />
+            <p class="text-medium-emphasis text-center mb-4">
+              {{ $t('employees.previewUnavailable') }}
+            </p>
+            <v-btn color="primary" prepend-icon="mdi-download" @click="downloadFromViewer">
+              {{ $t('common.download') }}
+            </v-btn>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
   </v-container>
 
   <v-container v-else class="py-16 text-center">
