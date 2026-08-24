@@ -202,6 +202,7 @@
   "actions": {
     "toggleTheme": "Toggle dark mode",
     "language": "العربية",
+    "theme": "Switch theme",
     "SEND_FORM": "Send data form",
     "REQUEST_MISSING": "Request missing documents",
     "ACCEPT_DOCUMENTS": "Accept documents",
@@ -240,12 +241,18 @@
     "SYSTEM": "System"
   },
   "login": {
-    "subtitle": "Sign in to your account",
+    "subtitle": "Sign in to pick up where you left off.",
+    "greetMorning": "Good morning",
+    "greetAfternoon": "Good afternoon",
+    "greetEvening": "Good evening",
+    "emailPlaceholder": "you@riyada-ksa.com",
+    "unreachable": "We could not reach the server. Check your connection and try again.",
+    "help": "Trouble signing in? Your HR admin can reset your access.",
     "email": "Email",
     "password": "Password",
     "signIn": "Sign in",
     "signOut": "Sign out",
-    "invalid": "Invalid email or password"
+    "invalid": "That email and password do not match. Give it another try."
   },
   "roles": {
     "HR": "Human Resources",
