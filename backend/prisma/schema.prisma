@@ -38,6 +38,7 @@ enum EmployeeStatus {
   EXPIRED
   ACTIVE
   INACTIVE
+  WITHDRAWN
 }
 
 enum EmploymentType {
@@ -297,8 +298,22 @@ model OnboardingDocument {
   @@map("onboarding_documents")
 }
 
+enum ContractStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  REJECTED
+  EXPIRED
+}
+
 model Contract {
   id          String    @id @default(cuid())
+  /// Set by HR by hand — the contract itself lives on an external platform.
+  status          ContractStatus @default(DRAFT)
+  statusChangedAt DateTime       @default(now())
+  rejectReason    String?
+  /// Reference number on the external contracting platform (optional).
+  externalRef     String?
   employee    Employee  @relation(fields: [employeeId], references: [id])
   employeeId  String    @unique
   createdBy   User      @relation(fields: [createdById], references: [id])

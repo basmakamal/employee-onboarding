@@ -1,8 +1,10 @@
 import type { Employee, Prisma } from '../../generated/prisma/client.js';
+import type { ContractStatus } from '../../generated/prisma/enums.js';
 import type { Actor, Workflow } from '../../workflow/engine.js';
 import type { UnitOfWork } from '../../common/prisma.js';
 import { compact } from '../../common/http.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
+import type { OpenWorkHalter } from '../../workflow/halt-open-work.js';
 import type { EmployeeRepository, CreateOnboardingData } from './employee.repository.js';
 import type { OnboardingDocumentRepository } from './onboarding-document.repository.js';
 import type { ContractRepository } from './contract.repository.js';
@@ -29,6 +31,9 @@ function publicEmployee(e: Employee) {
   };
 }
 
+/** The contract states HR can set by hand (DRAFT is the starting point). */
+export type ManualContractStatus = Exclude<ContractStatus, 'DRAFT'>;
+
 /**
  * Everything a single onboarding unit of work may touch. All members are
  * bound to ONE transaction — a crash mid-way rolls the whole step back
@@ -46,8 +51,13 @@ export interface OnboardingTxScope {
 
 /**
  * The onboarding pipeline (BRD stage 1) on the unified employee record:
- * intake → data form → document review → contract → e-approval, which
- * activates the employee (number allocated, Stage-2 tracks opened).
+ * intake → data form → document review → contract.
+ *
+ * The contract is created and approved on an external platform, so HR
+ * records its status here (Pending Approval / Active / Rejected / Expired).
+ * Recording ACTIVE is the conversion: number allocated, Stage-2 tracks
+ * opened. A trainee can be withdrawn at any stage before that; everything
+ * open on their file is then stopped, nothing deleted.
  *
  * Transaction boundaries: state changes run inside `transact`; emails and
  * link issuance stay OUTSIDE — an SMTP hiccup must never roll back (or hold
@@ -65,6 +75,8 @@ export class OnboardingService {
     private readonly links: LinkTokenService,
     private readonly notifications: NotificationService,
     private readonly transact: UnitOfWork<OnboardingTxScope>,
+    /** Stops links / custody forms / process cards when a trainee withdraws. */
+    private readonly halter?: OpenWorkHalter,
   ) {}
 
   async create(input: CreateOnboardingData, actor: Actor) {
@@ -103,7 +115,12 @@ export class OnboardingService {
   }
 
   /** Contract details may only change while the record sits in CONTRACT_CREATION. */
-  async upsertContract(id: string, details: Prisma.InputJsonValue, actor: Actor) {
+  async upsertContract(
+    id: string,
+    details: Prisma.InputJsonValue,
+    actor: Actor,
+    externalRef?: string | null,
+  ) {
     const employee = await this.mustFind(id);
     if (employee.status !== 'CONTRACT_CREATION') {
       throw new GuardFailedError(
@@ -112,47 +129,123 @@ export class OnboardingService {
       );
     }
     const existing = await this.repos.contracts.findByEmployee(id);
-    if (existing) return this.repos.contracts.updateDetails(existing.id, details);
-    return this.repos.contracts.create({ employeeId: id, createdById: actor.id ?? '', details });
+    if (existing) return this.repos.contracts.updateDetails(existing.id, details, externalRef);
+    return this.repos.contracts.create({
+      employeeId: id,
+      createdById: actor.id ?? '',
+      details,
+      ...(externalRef !== undefined ? { externalRef } : {}),
+    });
   }
 
-  async sendContract(id: string, actor: Actor) {
+  /**
+   * HR records what happened to the contract on the external platform.
+   *
+   *   PENDING_APPROVAL  submitted for approval     → AWAITING_CONTRACT_APPROVAL
+   *   ACTIVE            approved & in force        → ACTIVE (the conversion)
+   *   REJECTED          sent back                  → CONTRACT_CREATION (fix, resubmit)
+   *   EXPIRED           approval window ran out    → EXPIRED (HR may reopen)
+   *
+   * The employee transition and the contract stamp are one transaction, so
+   * the two can never disagree.
+   */
+  async setContractStatus(
+    id: string,
+    status: ManualContractStatus,
+    actor: Actor,
+    opts: { reason?: string } = {},
+  ) {
     const employee = await this.mustFind(id);
-    await this.transact(async (s) => {
-      await s.workflow.transition(employee, 'SEND_CONTRACT', actor);
-      const contract = await s.contracts.findByEmployee(id);
-      if (contract) await s.contracts.markSent(contract.id, new Date());
-    });
+    const contract = await this.repos.contracts.findByEmployee(id);
+    if (!contract) {
+      throw new GuardFailedError('CONTRACT_MISSING', 'enter the contract details first');
+    }
+    const now = new Date();
 
-    const link = await this.links.issue('CONTRACT_APPROVAL', { employeeId: id });
-    await this.notifications.notifyExternal(
-      employee.email,
-      'employee.contract_approval_reminder',
-      { name: `${employee.firstName} ${employee.lastName}`, linkUrl: link.url },
-      { entity: 'EMPLOYEE', entityId: id },
-    );
-    await this.auditLinkSent(id, 'CONTRACT_APPROVAL', actor);
-    return { url: link.url, expiresAt: link.expiresAt };
+    if (status === 'ACTIVE') {
+      const { result, employeeNo } = await this.transact(async (s) => {
+        const r = await s.workflow.transition(employee, 'APPROVE_CONTRACT', actor);
+        await s.contracts.setStatus(contract.id, 'ACTIVE', { approvedAt: now, rejectReason: null });
+
+        // Trainee → employee: number allocated, Stage-2 tracks opened.
+        const employeeNo = await s.employees.allocateEmployeeNo();
+        await s.employees.completeActivation(employee.id, employeeNo, now);
+        await s.audit.append({
+          entity: 'EMPLOYEE',
+          entityId: employee.id,
+          action: 'ACTIVATED',
+          actorType: actor.type,
+          ...(actor.id ? { actorId: actor.id } : {}),
+          employeeId: employee.id,
+          metadata: { employeeNo, from: 'contract-active' },
+        });
+        return { result: r, employeeNo };
+      });
+      return { ...result, contractStatus: status, employeeNo };
+    }
+
+    const result = await this.transact(async (s) => {
+      if (status === 'PENDING_APPROVAL') {
+        const r = await s.workflow.transition(employee, 'SUBMIT_CONTRACT', actor);
+        await s.contracts.setStatus(contract.id, status, { sentAt: now, rejectReason: null });
+        return r;
+      }
+      if (status === 'REJECTED') {
+        const r = await s.workflow.transition(
+          employee,
+          'REJECT_CONTRACT',
+          actor,
+          opts.reason ? { reason: opts.reason } : undefined,
+        );
+        await s.contracts.setStatus(contract.id, status, { rejectReason: opts.reason ?? null });
+        return r;
+      }
+      // EXPIRED — "the approval window closed without a decision".
+      const r = await s.workflow.transition(
+        employee,
+        'EXPIRE',
+        actor,
+        opts.reason ? { reason: opts.reason } : undefined,
+      );
+      await s.contracts.setStatus(contract.id, status);
+      return r;
+    });
+    return { ...result, contractStatus: status };
   }
 
   /** BRD: reopen resumes from the last completed stage. */
   async reopen(id: string, actor: Actor) {
     const employee = await this.mustFind(id);
-    const result = await this.transact((s) => s.workflow.transition(employee, 'REOPEN', actor));
+    const result = await this.transact(async (s) => {
+      const r = await s.workflow.transition(employee, 'REOPEN', actor);
+      // Back to waiting on the platform — the contract card says so again.
+      if (r.to === 'AWAITING_CONTRACT_APPROVAL') {
+        await s.contracts.setStatusByEmployee(id, 'PENDING_APPROVAL');
+      }
+      return r;
+    });
 
     if (result.to === 'AWAITING_FORM') {
       await this.sendDataFormLink(employee, actor);
-    } else if (result.to === 'AWAITING_CONTRACT_APPROVAL') {
-      const link = await this.links.issue('CONTRACT_APPROVAL', { employeeId: id });
-      await this.notifications.notifyExternal(
-        employee.email,
-        'employee.contract_approval_reminder',
-        { name: `${employee.firstName} ${employee.lastName}`, linkUrl: link.url },
-        { entity: 'EMPLOYEE', entityId: id },
-      );
-      await this.auditLinkSent(id, 'CONTRACT_APPROVAL', actor);
     }
     return result;
+  }
+
+  /**
+   * The trainee withdrew (or the hire was dropped) before activation.
+   * Business rule: every open action on the file stops — links, custody
+   * forms, process cards — and everything already recorded stays in the
+   * history. The status move commits first; the sweep runs in its own
+   * transaction right after, so a failed sweep can be retried without the
+   * withdrawal itself being in doubt.
+   */
+  async withdraw(id: string, actor: Actor, reason: string) {
+    const employee = await this.mustFind(id);
+    const result = await this.transact((s) =>
+      s.workflow.transition(employee, 'WITHDRAW', actor, { reason }),
+    );
+    const halted = this.halter ? await this.halter.halt(id, 'WITHDRAWN', actor) : null;
+    return { ...result, halted };
   }
 
   async getDocument(employeeId: string, docId: string) {
@@ -164,7 +257,7 @@ export class OnboardingService {
 
   // ------------------------------------------------------------ signed links
 
-  /** Page context for the public form / approval pages. */
+  /** Page context for the public data-form page. */
   async linkContext(rawToken: string) {
     const token = await this.links.verify(rawToken);
 
@@ -180,15 +273,6 @@ export class OnboardingService {
           required: d.required,
           uploaded: d.storageKey !== null,
         })),
-      };
-    }
-
-    if (token.purpose === 'CONTRACT_APPROVAL' && token.employee) {
-      const contract = await this.repos.contracts.findByEmployee(token.employee.id);
-      return {
-        purpose: token.purpose,
-        employee: publicEmployee(token.employee),
-        contract: contract ? { details: contract.details, sentAt: contract.sentAt } : null,
       };
     }
 
@@ -262,53 +346,6 @@ export class OnboardingService {
     });
 
     return { ...result, orphanedKeys: [...replacedKeys, ...unknown.map((u) => u.storageKey)] };
-  }
-
-  /**
-   * E-approval activates the employee. The transition, contract approval
-   * stamp, number allocation, activation, audit entry and link consumption
-   * are ONE transaction — a crash anywhere leaves no half-activated record.
-   */
-  async approveContract(rawToken: string) {
-    const token = await this.links.verify(rawToken);
-    if (token.purpose !== 'CONTRACT_APPROVAL' || !token.employee) {
-      throw new NotFoundError('link', 'not a contract-approval link');
-    }
-    const employee = token.employee;
-    const now = new Date();
-
-    const { result, employeeNo } = await this.transact(async (s) => {
-      const r = await s.workflow.transition(employee, 'APPROVE_CONTRACT', {
-        type: 'LINK',
-        id: token.id,
-      });
-
-      const contract = await s.contracts.findByEmployee(employee.id);
-      if (contract) await s.contracts.markApproved(contract.id, now);
-
-      const employeeNo = await s.employees.allocateEmployeeNo();
-      await s.employees.completeActivation(employee.id, employeeNo, now);
-
-      await s.audit.append({
-        entity: 'EMPLOYEE',
-        entityId: employee.id,
-        action: 'ACTIVATED',
-        actorType: 'SYSTEM',
-        employeeId: employee.id,
-        metadata: { employeeNo, from: 'contract-approval' },
-      });
-
-      await s.markLinkUsed(token.id, now);
-      return { result: r, employeeNo };
-    });
-
-    await this.notifications.notifyHr(
-      'hr.contract_approved',
-      { name: `${employee.firstName} ${employee.lastName}` },
-      { entity: 'EMPLOYEE', entityId: employee.id },
-    );
-
-    return { ...result, employeeId: employee.id, employeeNo };
   }
 
   // ------------------------------------------------------------------ private

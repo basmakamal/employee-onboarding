@@ -3,20 +3,25 @@ import type { EmployeeStatus } from '../generated/prisma/enums.js';
 import type { Workflow } from './engine.js';
 import type { SlaWatcher, WatchedRecord } from './sla-scheduler.js';
 import type { EmployeeRepository } from '../modules/employees/employee.repository.js';
+import type { ContractRepository } from '../modules/employees/contract.repository.js';
 import type { OffboardingRepository } from '../modules/offboarding/offboarding.repository.js';
 import type { GosiRepository } from '../modules/processes/gosi.repository.js';
 import type { MedicalInsuranceRepository } from '../modules/processes/medical-insurance.repository.js';
 import type { EmployeeDocumentRepository } from '../modules/employees/employee-document.repository.js';
 
+/**
+ * Emails the new hire themselves can act on. Contract approval happens on
+ * an external platform, so there is no link to chase — only the data form.
+ */
 const ONBOARDING_SUBJECT_TEMPLATES: Record<string, string> = {
   AWAITING_FORM: 'employee.form_reminder',
-  AWAITING_CONTRACT_APPROVAL: 'employee.contract_approval_reminder',
 };
 
 /** The onboarding pipeline — subject emails and EXPIRE support. */
 export function onboardingWatcher(
   employees: EmployeeRepository,
   workflow: Workflow<Employee>,
+  contracts?: ContractRepository,
 ): SlaWatcher {
   return {
     processKey: 'EMPLOYEE',
@@ -35,6 +40,10 @@ export function onboardingWatcher(
       const employee = await employees.findById(record.id);
       if (!employee) return;
       await workflow.transition(employee, 'EXPIRE', { type: 'SYSTEM' }, { rule: ruleId });
+      // The contract card mirrors the outcome: "expired without approval".
+      if (employee.status === 'AWAITING_CONTRACT_APPROVAL' && contracts) {
+        await contracts.setStatusByEmployee(employee.id, 'EXPIRED');
+      }
     },
   };
 }

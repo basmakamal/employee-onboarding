@@ -60,7 +60,7 @@ function employeeListWhere(query: EmployeeListQuery): Prisma.EmployeeWhereInput 
   if (query.status) where.status = query.status;
   else if (query.filter === 'onboarding') where.status = { in: [...PIPELINE_STATUSES] };
   else if (query.filter === 'active') where.status = 'ACTIVE';
-  else if (query.filter === 'inactive') where.status = 'INACTIVE';
+  else if (query.filter === 'inactive') where.status = { in: ['INACTIVE', 'WITHDRAWN'] };
 
   if (query.from || query.to) {
     // SQL comparisons against NULL are never true, so a hire-date range
@@ -325,7 +325,8 @@ export class EmployeeRepository {
       all,
       onboarding: sum(PIPELINE_STATUSES),
       active: byStatus.get('ACTIVE') ?? 0,
-      inactive: byStatus.get('INACTIVE') ?? 0,
+      // "Inactive" = no longer with us: offboarded staff and withdrawn trainees.
+      inactive: sum(['INACTIVE', 'WITHDRAWN']),
     };
   }
 

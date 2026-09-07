@@ -257,6 +257,10 @@ export class EmployeeService {
           ...(seesSalary ? { salary: details?.['salary'] ?? null } : {}),
           sentAt: contractRow.sentAt,
           approvedAt: contractRow.approvedAt,
+          status: contractRow.status,
+          statusChangedAt: contractRow.statusChangedAt,
+          rejectReason: contractRow.rejectReason,
+          externalRef: contractRow.externalRef,
         }
       : null;
 

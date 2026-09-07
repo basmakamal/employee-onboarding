@@ -70,6 +70,14 @@ export class AssetFormRepository {
     return result.count === 1;
   }
 
+  /** Forms still undecided — the ones a withdrawal or offboarding must stop. */
+  listOpenByEmployee(employeeId: string) {
+    return this.db.assetForm.findMany({
+      where: { employeeId, status: { in: ['DRAFT', 'SENT', 'PENDING_EMPLOYEE_APPROVAL'] } },
+      select: { id: true, status: true },
+    });
+  }
+
   /** Offboarding gate: approved custody items not yet returned. */
   countUnreturnedItems(employeeId: string): Promise<number> {
     return this.db.assetFormItem.count({

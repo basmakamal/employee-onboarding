@@ -165,8 +165,14 @@ const subjectFieldEn = ref<{ $el: HTMLElement } | null>(null);
 const bodyFieldAr = ref<{ $el: HTMLElement } | null>(null);
 const bodyFieldEn = ref<{ $el: HTMLElement } | null>(null);
 
+/** The literal token text — built here because "}}" inside a template
+ *  interpolation would end the interpolation early. */
+function tokenOf(key: string): string {
+  return `{{${key}}}`;
+}
+
 function insertPlaceholder(key: string) {
-  const token = `{{${key}}}`;
+  const token = tokenOf(key);
   const tab = editor.value.tab;
   const isSubject = focusTarget.value === 'subject';
   const comp = isSubject
@@ -553,7 +559,7 @@ async function removeTrigger(trigger: Trigger) {
                     color="primary"
                     @click="insertPlaceholder(p.key)"
                   >
-                    <span dir="ltr" class="font-weight-medium">{{ '{{' + p.key + '}}' }}</span>
+                    <span dir="ltr" class="font-weight-medium">{{ tokenOf(p.key) }}</span>
                     <span class="ms-2 text-medium-emphasis">{{ lang === 'ar' ? p.ar : p.en }}</span>
                   </v-chip>
                 </div>

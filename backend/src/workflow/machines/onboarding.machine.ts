@@ -11,14 +11,29 @@ export interface OnboardingGates {
   countMissingRequiredDocs(employeeId: string): Promise<number>;
   /** A contract row exists for this employee. */
   hasContract(employeeId: string): Promise<boolean>;
-  /** The contract was sent to the new hire (sentAt stamped). */
+  /** The contract was submitted for approval at least once (sentAt stamped). */
   contractWasSent(employeeId: string): Promise<boolean>;
 }
 
+/** Every status a trainee can be withdrawn from (everything before activation). */
+export const WITHDRAWABLE_STATUSES = [
+  'CREATED',
+  'AWAITING_FORM',
+  'FORM_RECEIVED',
+  'CONTRACT_CREATION',
+  'AWAITING_CONTRACT_APPROVAL',
+  'EXPIRED',
+] as const;
+
 /**
  * The employee onboarding pipeline (BRD stage 1) — the front half of the
- * single employee lifecycle. Contract approval activates the employee;
- * ACTIVE → INACTIVE is flipped by offboarding closure, outside this machine.
+ * single employee lifecycle.
+ *
+ * The contract itself is created and approved on an external platform, so
+ * HR records its status here by hand: submitted for approval, active,
+ * rejected, or expired. Marking it ACTIVE is what converts the trainee into
+ * an employee. ACTIVE → INACTIVE is flipped by offboarding closure, outside
+ * this machine; WITHDRAWN is the trainee-stage exit.
  */
 export function onboardingMachine(gates: OnboardingGates): MachineDef<Employee> {
   const documentsComplete = async (employeeId: string) => {
@@ -58,10 +73,11 @@ export function onboardingMachine(gates: OnboardingGates): MachineDef<Employee> 
         guard: ({ record }) => documentsComplete(record.id),
       },
 
-      // HR sends the contract for e-approval.
+      // HR records that the contract went out for approval on the external
+      // platform (contract status → Pending Approval).
       // BRD rule: "the contract cannot be sent before all documents are complete".
       {
-        action: 'SEND_CONTRACT',
+        action: 'SUBMIT_CONTRACT',
         from: 'CONTRACT_CREATION',
         to: 'AWAITING_CONTRACT_APPROVAL',
         actors: ['USER'], roles: ['HR'],
@@ -73,23 +89,33 @@ export function onboardingMachine(gates: OnboardingGates): MachineDef<Employee> 
         },
       },
 
-      // E-approval through the signed link activates the employee —
-      // the service then allocates the employee number and opens the
-      // Stage-2 process tracks.
+      // HR records the external approval (contract status → Active). The
+      // service then allocates the employee number and opens the Stage-2
+      // process tracks — this is the trainee → employee conversion.
       {
         action: 'APPROVE_CONTRACT',
         from: 'AWAITING_CONTRACT_APPROVAL',
         to: 'ACTIVE',
-        actors: ['LINK'],
+        actors: ['USER'], roles: ['HR'],
       },
 
-      // SLA engine: deadlines expire the two waiting states (BRD table).
+      // The platform rejected the contract — back to drafting so HR can fix
+      // and resubmit. The contract row keeps status REJECTED + reason.
+      {
+        action: 'REJECT_CONTRACT',
+        from: 'AWAITING_CONTRACT_APPROVAL',
+        to: 'CONTRACT_CREATION',
+        actors: ['USER'], roles: ['HR'],
+      },
+
+      // Deadlines expire the two waiting states: automatically by the SLA
+      // engine, or by hand for the contract ("expired without approval").
       { action: 'EXPIRE', from: 'AWAITING_FORM', to: 'EXPIRED', actors: ['SYSTEM'] },
       {
         action: 'EXPIRE',
         from: 'AWAITING_CONTRACT_APPROVAL',
         to: 'EXPIRED',
-        actors: ['SYSTEM'],
+        actors: ['SYSTEM', 'USER'], roles: ['HR'],
       },
 
       // BRD: "if HR reopens the request, it returns to the last completed
@@ -103,6 +129,17 @@ export function onboardingMachine(gates: OnboardingGates): MachineDef<Employee> 
             : 'AWAITING_FORM',
         actors: ['USER'], roles: ['HR'],
       },
+
+      // The trainee withdrew (or HR dropped the hire) at any pre-activation
+      // stage. Terminal: everything open is stopped by the service, nothing
+      // is deleted.
+      ...WITHDRAWABLE_STATUSES.map((from) => ({
+        action: 'WITHDRAW',
+        from,
+        to: 'WITHDRAWN',
+        actors: ['USER' as const],
+        roles: ['HR'],
+      })),
     ],
   };
 }

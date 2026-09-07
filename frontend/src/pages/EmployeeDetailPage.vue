@@ -50,6 +50,8 @@ interface OffboardingRow {
   createdAt: string;
 }
 
+type ContractStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'EXPIRED';
+
 interface ContractSummary {
   startDate: string | null;
   durationMonths: number | null;
@@ -57,7 +59,20 @@ interface ContractSummary {
   salary?: number | null;
   sentAt: string | null;
   approvedAt: string | null;
+  /** Recorded by HR — the contract itself lives on an external platform. */
+  status: ContractStatus;
+  statusChangedAt: string;
+  rejectReason: string | null;
+  externalRef: string | null;
 }
+
+const CONTRACT_STATUS_COLORS: Record<ContractStatus, string> = {
+  DRAFT: 'grey',
+  PENDING_APPROVAL: 'amber',
+  ACTIVE: 'success',
+  REJECTED: 'error',
+  EXPIRED: 'error',
+};
 
 interface OnboardingDoc {
   id: string;
@@ -471,17 +486,99 @@ const PIPELINE_STAGES = [
   'AWAITING_CONTRACT_APPROVAL',
 ];
 
+// Contract actions are NOT here on purpose: they live on the contract card
+// as a status change (the contract is approved on an external platform).
 const ONBOARDING_ACTIONS: Record<string, { endpoint: string; icon: string; color: string }> = {
   SEND_FORM: { endpoint: 'send-form', icon: 'mdi-send', color: 'primary' },
   REQUEST_MISSING: { endpoint: 'request-missing', icon: 'mdi-file-alert', color: 'warning' },
   ACCEPT_DOCUMENTS: { endpoint: 'accept-documents', icon: 'mdi-file-check', color: 'success' },
-  SEND_CONTRACT: { endpoint: 'send-contract', icon: 'mdi-file-sign', color: 'primary' },
   REOPEN: { endpoint: 'reopen', icon: 'mdi-restore', color: 'secondary' },
 };
 
-const isPipeline = computed(
-  () => !!employee.value && !['ACTIVE', 'INACTIVE'].includes(employee.value.status),
+const isWithdrawn = computed(() => employee.value?.status === 'WITHDRAWN');
+/** Someone who has left: no new custody, no new actions. */
+const isClosed = computed(
+  () => !!employee.value && ['INACTIVE', 'WITHDRAWN'].includes(employee.value.status),
 );
+const isPipeline = computed(
+  () => !!employee.value && !['ACTIVE', 'INACTIVE', 'WITHDRAWN'].includes(employee.value.status),
+);
+
+// ------------------------------------------------- contract status (manual)
+/** The status changes HR may record right now, derived from the machine. */
+const contractStatusOptions = computed(() => {
+  const acts = employee.value?.availableActions ?? [];
+  const options: Array<{ status: ContractStatus; label: string; hint: string; icon: string; color: string }> = [];
+  if (acts.includes('SUBMIT_CONTRACT')) {
+    options.push({ status: 'PENDING_APPROVAL', label: t('contract.submit'), hint: t('contract.submitHint'), icon: 'mdi-send-check-outline', color: 'primary' });
+  }
+  if (acts.includes('APPROVE_CONTRACT')) {
+    options.push({ status: 'ACTIVE', label: t('contract.approve'), hint: t('contract.approveHint'), icon: 'mdi-check-decagram', color: 'success' });
+  }
+  if (acts.includes('REJECT_CONTRACT')) {
+    options.push({ status: 'REJECTED', label: t('contract.reject'), hint: t('contract.rejectHint'), icon: 'mdi-close-octagon-outline', color: 'error' });
+  }
+  if (acts.includes('EXPIRE')) {
+    options.push({ status: 'EXPIRED', label: t('contract.expire'), hint: t('contract.expireHint'), icon: 'mdi-timer-off-outline', color: 'warning' });
+  }
+  return options;
+});
+
+const rejectDialog = ref(false);
+const rejectReason = ref('');
+
+function onContractStatus(status: ContractStatus) {
+  const name = `${employee.value?.firstName ?? ''} ${employee.value?.lastName ?? ''}`.trim();
+  if (status === 'REJECTED') {
+    rejectReason.value = '';
+    rejectDialog.value = true;
+    return;
+  }
+  if (status === 'ACTIVE' && !window.confirm(t('contract.approveConfirm', { name }))) return;
+  if (status === 'EXPIRED' && !window.confirm(t('contract.expireConfirm'))) return;
+  void setContractStatus(status);
+}
+
+async function setContractStatus(status: ContractStatus, reason?: string) {
+  busy.value = 'contract-status';
+  try {
+    await api.put(`/api/employees/${id}/contract/status`, { status, ...(reason ? { reason } : {}) });
+    rejectDialog.value = false;
+    const name = `${employee.value?.firstName ?? ''} ${employee.value?.lastName ?? ''}`.trim();
+    notify(status === 'ACTIVE' ? t('contract.activated', { name }) : t('contract.statusChanged'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
+// ------------------------------------------------------------ withdrawal
+const withdrawDialog = ref(false);
+const withdrawReason = ref('');
+
+async function withdrawEmployee() {
+  busy.value = 'withdraw';
+  try {
+    const result = await api.post<{ halted: { links: number; assetForms: number; processes: string[] } | null }>(
+      `/api/employees/${id}/withdraw`,
+      { reason: withdrawReason.value.trim() },
+    );
+    withdrawDialog.value = false;
+    const h = result.halted;
+    notify(
+      h
+        ? `${t('withdraw.done')} ${t('withdraw.stopped', { links: h.links, forms: h.assetForms, processes: h.processes.length })}`
+        : t('withdraw.done'),
+    );
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
 
 const onboardingButtons = computed(
   () =>
@@ -610,6 +707,7 @@ async function attachProcessDoc(kind: 'gosi' | 'medical' | 'criminal', file: Fil
 // Contract drafting (CONTRACT_CREATION only)
 const contractDialog = ref(false);
 const contractForm = ref({ salary: '', durationMonths: '', startDate: '', terms: '' });
+const contractExternalRef = ref('');
 
 function openContractDialog() {
   const c = employee.value?.contract;
@@ -619,6 +717,7 @@ function openContractDialog() {
     startDate: typeof c?.startDate === 'string' ? c.startDate.slice(0, 10) : '',
     terms: c?.terms ?? '',
   };
+  contractExternalRef.value = c?.externalRef ?? '';
   contractDialog.value = true;
 }
 
@@ -627,7 +726,10 @@ async function saveContract() {
   try {
     const details: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(contractForm.value)) if (v.trim()) details[k] = v.trim();
-    await api.put(`/api/employees/${id}/contract`, { details });
+    await api.put(`/api/employees/${id}/contract`, {
+      details,
+      externalRef: contractExternalRef.value.trim() || null,
+    });
     contractDialog.value = false;
     notify(t('common.saved'));
     await load();
@@ -1055,7 +1157,32 @@ onMounted(load);
             {{ employee.contract ? $t('contract.edit') : $t('contract.createBtn') }}
           </v-btn>
 
-          <v-menu v-if="!isPipeline">
+          <!-- Contract status, recorded by hand (external platform) -->
+          <v-btn
+            v-for="opt in contractStatusOptions"
+            :key="opt.status"
+            :color="opt.color"
+            variant="tonal"
+            :prepend-icon="opt.icon"
+            :loading="busy === 'contract-status'"
+            :disabled="opt.status === 'PENDING_APPROVAL' && !employee.contract"
+            @click="onContractStatus(opt.status)"
+          >
+            {{ opt.label }}
+          </v-btn>
+
+          <!-- Custody can start during training (IT) -->
+          <v-btn
+            v-if="isPipeline && auth.hasRole('IT')"
+            color="secondary"
+            variant="tonal"
+            prepend-icon="mdi-laptop"
+            @click="formDialog = true"
+          >
+            {{ $t('assets.newForm') }}
+          </v-btn>
+
+          <v-menu v-if="!isPipeline && !isClosed">
             <template #activator="{ props }">
               <v-btn v-bind="props" color="primary" variant="tonal" prepend-icon="mdi-plus-circle-outline">
                 {{ $t('profile.newAction') }}
@@ -1108,6 +1235,15 @@ onMounted(load);
             @click="offboardingDialog = true"
           >
             {{ $t('profile.endContract') }}
+          </v-btn>
+          <v-btn
+            v-if="employee.availableActions.includes('WITHDRAW')"
+            color="error"
+            variant="outlined"
+            prepend-icon="mdi-account-off-outline"
+            @click="withdrawReason = ''; withdrawDialog = true"
+          >
+            {{ $t('withdraw.button') }}
           </v-btn>
           <v-tooltip
             v-if="auth.user?.role === 'ADMIN'"
@@ -1163,7 +1299,7 @@ onMounted(load);
     <v-window v-model="tab" :touch="false">
       <v-window-item value="overview">
     <!-- Onboarding pipeline progress (pre-activation) -->
-    <v-card v-if="isPipeline" class="mb-6">
+    <v-card v-if="isPipeline || isWithdrawn" class="mb-6">
       <v-card-item>
         <v-card-title class="text-subtitle-1 font-weight-bold">
           <v-icon icon="mdi-school" class="me-2" color="primary" />
@@ -1206,11 +1342,21 @@ onMounted(load);
         >
           {{ $t('status.EXPIRED') }} — {{ $t(`audit.EXPIRE`) }}
         </v-alert>
+        <v-alert
+          v-if="isWithdrawn"
+          type="warning"
+          variant="tonal"
+          density="compact"
+          icon="mdi-account-off-outline"
+          class="mt-2 mb-0"
+        >
+          {{ $t('withdraw.banner') }}
+        </v-alert>
       </v-card-text>
     </v-card>
 
     <!-- BRD Stage 2: the independent processes (عمليات الموظف) -->
-    <template v-if="!isPipeline">
+    <template v-if="!isPipeline && !isWithdrawn">
     <h2 class="text-subtitle-1 font-weight-bold mb-3">{{ $t('profile.processes') }}</h2>
     <v-row class="mb-2">
       <v-col cols="12" sm="6" md="3">
@@ -1288,18 +1434,16 @@ onMounted(load);
             </v-card-title>
             <template #append>
               <v-chip
-                v-if="contractState"
-                :color="
-                  contractState === 'active'
-                    ? 'success'
-                    : contractState === 'expired'
-                      ? 'error'
-                      : 'warning'
-                "
+                v-if="employee.contract"
+                :color="CONTRACT_STATUS_COLORS[employee.contract.status]"
                 size="small"
                 variant="tonal"
+                class="font-weight-medium"
               >
-                {{ $t(`contractCard.${contractState}`) }}
+                {{ $t(`contractStatus.${employee.contract.status}`) }}
+                <template v-if="employee.contract.status === 'ACTIVE' && contractState === 'expired'">
+                  · {{ $t('contractCard.expired') }}
+                </template>
               </v-chip>
             </template>
           </v-card-item>
@@ -1307,6 +1451,21 @@ onMounted(load);
             {{ $t('contractCard.none') }}
           </v-card-text>
           <v-card-text v-else>
+            <p v-if="isPipeline" class="text-caption text-medium-emphasis mb-3">
+              {{ $t('contract.statusHint') }}
+            </p>
+            <v-alert
+              v-if="employee.contract.status === 'REJECTED'"
+              type="error"
+              variant="tonal"
+              density="compact"
+              class="mb-3"
+            >
+              {{ $t('contract.rejectedBanner') }}
+              <div v-if="employee.contract.rejectReason" class="text-body-2 mt-1">
+                {{ $t('contract.rejectReason') }}: {{ employee.contract.rejectReason }}
+              </div>
+            </v-alert>
             <v-row dense>
               <v-col
                 v-for="cell in [
@@ -1340,6 +1499,7 @@ onMounted(load);
                   ...(employee.contract.salary != null
                     ? [{ label: $t('contractCard.salary'), value: String(employee.contract.salary) }]
                     : []),
+                  { label: $t('contract.externalRef'), value: employee.contract.externalRef },
                 ]"
                 :key="cell.label"
                 cols="6"
@@ -1429,7 +1589,9 @@ onMounted(load);
             </v-list-item>
           </v-list>
         </v-card>
-        <v-card v-if="!isPipeline">
+        <!-- Custody (العهد): available from the trainee stage; the same rows
+             follow the person into the employee file on conversion. -->
+        <v-card>
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
               <v-icon icon="mdi-laptop" class="me-2" color="secondary" />
@@ -1437,7 +1599,7 @@ onMounted(load);
             </v-card-title>
             <template #append>
               <v-btn
-                v-if="auth.hasRole('IT')"
+                v-if="auth.hasRole('IT') && !isClosed"
                 color="primary"
                 size="small"
                 prepend-icon="mdi-plus"
@@ -1450,6 +1612,8 @@ onMounted(load);
 
           <v-card-text v-if="employee.assetForms.length === 0" class="text-medium-emphasis">
             {{ $t('assets.empty') }}
+            <div v-if="isPipeline" class="text-caption mt-1">{{ $t('assets.trainee') }}</div>
+            <div v-else-if="isClosed" class="text-caption mt-1">{{ $t('assets.closed') }}</div>
           </v-card-text>
 
           <v-expansion-panels v-else variant="accordion">
@@ -1701,6 +1865,69 @@ onMounted(load);
       </v-card>
     </v-dialog>
 
+    <!-- Contract rejected on the platform: record the reason -->
+    <v-dialog v-model="rejectDialog" max-width="480">
+      <v-card>
+        <div class="px-6 pt-6 pb-2">
+          <h2 class="text-subtitle-1 font-weight-bold">{{ $t('contract.rejectTitle') }}</h2>
+          <p class="text-caption text-medium-emphasis mb-0">{{ $t('contract.rejectHint') }}</p>
+        </div>
+        <v-card-text class="pt-4">
+          <v-textarea v-model="rejectReason" :label="$t('contract.rejectReason')" rows="3" auto-grow />
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5 pt-2">
+          <v-spacer />
+          <v-btn variant="text" @click="rejectDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn
+            variant="flat"
+            color="error"
+            class="px-5"
+            :loading="busy === 'contract-status'"
+            @click="setContractStatus('REJECTED', rejectReason.trim() || undefined)"
+          >
+            {{ $t('contract.reject') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Withdrawal: terminal for a trainee; stops every open item, deletes nothing -->
+    <v-dialog v-model="withdrawDialog" max-width="520">
+      <v-card>
+        <div class="d-flex align-center ga-3 px-6 pt-6 pb-2">
+          <v-avatar color="error" variant="tonal" size="42" rounded="lg">
+            <v-icon icon="mdi-account-off-outline" size="22" />
+          </v-avatar>
+          <div>
+            <h2 class="text-subtitle-1 font-weight-bold">{{ $t('withdraw.title') }}</h2>
+            <p class="text-caption text-medium-emphasis mb-0">
+              {{ employee.firstName }} {{ employee.lastName }}
+            </p>
+          </div>
+        </div>
+        <v-card-text class="pt-4">
+          <v-alert type="warning" variant="tonal" density="compact" class="mb-4">
+            {{ $t('withdraw.hint') }}
+          </v-alert>
+          <v-textarea v-model="withdrawReason" :label="$t('withdraw.reason')" rows="2" auto-grow />
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5 pt-2">
+          <v-spacer />
+          <v-btn variant="text" @click="withdrawDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn
+            variant="flat"
+            color="error"
+            class="px-5"
+            :loading="busy === 'withdraw'"
+            :disabled="!withdrawReason.trim()"
+            @click="withdrawEmployee"
+          >
+            {{ $t('withdraw.confirm') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Signed link dialog (dev convenience: email goes to the console) -->
     <v-dialog v-model="linkDialog.show" max-width="620">
       <v-card :title="$t('assets.linkSent')" class="pa-2">
@@ -1888,6 +2115,13 @@ onMounted(load);
             </v-col>
             <v-col cols="12">
               <v-textarea v-model="contractForm.terms" :label="$t('contract.terms')" rows="3" />
+              <v-text-field
+                v-model="contractExternalRef"
+                :label="$t('contract.externalRef')"
+                :hint="$t('contract.externalRefHint')"
+                persistent-hint
+                dir="ltr"
+              />
             </v-col>
           </v-row>
         </v-card-text>
@@ -2011,6 +2245,9 @@ onMounted(load);
             :items="OFFBOARDING_REASONS.map((r) => ({ title: $t(`offboardingReasons.${r}`), value: r }))"
             :label="$t('offboarding.reason')"
           />
+          <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+            {{ $t('offboarding.stopsOpenWork') }}
+          </v-alert>
           <v-textarea v-model="offboardingForm.notes" :label="$t('assets.notes')" rows="2" />
         </v-card-text>
         <v-card-actions>

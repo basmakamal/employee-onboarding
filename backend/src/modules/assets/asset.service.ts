@@ -99,6 +99,10 @@ export class AssetService {
   ) {
     const employee = await this.repos.employees.findById(input.employeeId);
     if (!employee) throw new NotFoundError('employee', input.employeeId);
+    // Custody can start at the trainee stage — but not for someone who left.
+    if (employee.status === 'WITHDRAWN' || employee.status === 'INACTIVE') {
+      throw new GuardFailedError('EMPLOYEE_CLOSED', 'this person is no longer with the company');
+    }
 
     return this.transact(async (s) => {
       const form = await s.forms.create({ ...input, createdById: actor.id ?? '' });

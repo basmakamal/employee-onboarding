@@ -38,4 +38,24 @@ export class LinkTokenRepository {
       data: { usedAt: at },
     });
   }
+
+  /**
+   * Kill every live link that points at this person — data form, custody
+   * approval, exit interview — used when they withdraw or are offboarded.
+   * Returns how many were still open.
+   */
+  async invalidateAllForEmployee(employeeId: string, at: Date): Promise<number> {
+    const result = await this.db.linkToken.updateMany({
+      where: {
+        usedAt: null,
+        OR: [
+          { employeeId },
+          { assetForm: { is: { employeeId } } },
+          { offboarding: { is: { employeeId } } },
+        ],
+      },
+      data: { usedAt: at },
+    });
+    return result.count;
+  }
 }

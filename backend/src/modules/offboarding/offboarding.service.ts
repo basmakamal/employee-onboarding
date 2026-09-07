@@ -11,6 +11,7 @@ import type { AssetFormRepository } from '../assets/asset-form.repository.js';
 import type { AuditLogRepository } from '../../workflow/audit-log.repository.js';
 import type { LinkTokenService } from '../../auth/link-token.service.js';
 import type { NotificationService } from '../../notifications/notification.service.js';
+import type { OpenWorkHalter } from '../../workflow/halt-open-work.js';
 
 interface ExitLinkRow {
   id: string;
@@ -54,6 +55,8 @@ export class OffboardingService {
     private readonly notifications: NotificationService,
     private readonly transact: UnitOfWork<OffboardingTxScope>,
     private readonly ownership?: OwnershipLookup,
+    /** Stops undecided custody forms, live links and open process cards. */
+    private readonly halter?: OpenWorkHalter,
   ) {
     // The asset gate reads through the root client — a pre-check, like all
     // machine guards, so it doesn't need the transaction.
@@ -99,8 +102,8 @@ export class OffboardingService {
       throw new GuardFailedError('ALREADY_OPEN', 'an offboarding is already in progress');
     }
 
-    return this.transact(async (s) => {
-      const offboarding = await s.offboardings.create({
+    const offboarding = await this.transact(async (s) => {
+      const row = await s.offboardings.create({
         employeeId,
         reason,
         requestedById: actor.id ?? '',
@@ -108,16 +111,23 @@ export class OffboardingService {
       });
       await s.audit.append({
         entity: 'OFFBOARDING',
-        entityId: offboarding.id,
+        entityId: row.id,
         action: 'CREATE',
-        toStatus: offboarding.status,
+        toStatus: row.status,
         actorType: actor.type,
         ...(actor.id ? { actorId: actor.id } : {}),
         employeeId,
         metadata: { reason },
       });
-      return offboarding;
+      return row;
     });
+
+    // Business rule: ending the relationship stops every open action on the
+    // file — undecided custody forms, live links, in-progress GOSI/medical
+    // cards — whatever stage they reached. Approved custody stays, because
+    // the asset-return step below still needs it. Nothing is deleted.
+    if (this.halter) await this.halter.halt(employeeId, 'OFFBOARDING', actor);
+    return offboarding;
   }
 
   async get(id: string, actor: Actor) {

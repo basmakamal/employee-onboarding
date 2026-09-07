@@ -48,6 +48,7 @@ staffApi.use(
     container.repos.slaRules,
     container.ownershipService,
     container.repos.holidays,
+    container.responsibilityService,
   ),
 );
 staffApi.use('/users', usersRouter(container.repos.users));

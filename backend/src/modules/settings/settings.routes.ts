@@ -5,6 +5,10 @@ import { requireRole } from '../../auth/require-auth.middleware.js';
 import { calendarSchema, mailSettingsSchema, type SettingsService } from './settings.service.js';
 import type { SlaRuleRepository, HolidayRepository } from '../../workflow/sla-rule.repository.js';
 import type { OwnershipService } from '../../workflow/ownership.service.js';
+import {
+  RESPONSIBILITY_KEYS,
+  type ResponsibilityService,
+} from '../../workflow/responsibility.service.js';
 import { generateSaudiHolidays } from '../../workflow/saudi-holidays.js';
 
 const holidaySchema = z.object({
@@ -29,6 +33,10 @@ const ruleUpdateSchema = z.object({
 
 const ownershipSchema = z.object({
   roles: z.array(z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN'])).min(1),
+});
+
+const responsibilitySchema = z.object({
+  userIds: z.array(z.string().min(1)).max(20),
 });
 
 /** Only machines with a registered scheduler watcher may be watched. */
@@ -60,6 +68,7 @@ export function settingsRouter(
   slaRules: SlaRuleRepository,
   ownership: OwnershipService,
   holidays: HolidayRepository,
+  responsibility: ResponsibilityService,
 ): Router {
   const router = Router();
   router.use(requireRole('ADMIN'));
@@ -130,6 +139,25 @@ export function settingsRouter(
     asyncHandler(async (req, res) => {
       const { roles } = req.body as z.infer<typeof ownershipSchema>;
       res.json(await ownership.update(req.params['id'] as string, roles));
+    }),
+  );
+
+  // ---- Primary follow-up owners per process (notifications only) ----
+  router.get(
+    '/responsibility',
+    asyncHandler(async (_req, res) => {
+      res.json(await responsibility.all());
+    }),
+  );
+
+  router.put(
+    '/responsibility/:processKey',
+    validate(responsibilitySchema),
+    asyncHandler(async (req, res) => {
+      const key = z.enum(RESPONSIBILITY_KEYS).parse(req.params['processKey']);
+      const { userIds } = req.body as z.infer<typeof responsibilitySchema>;
+      await responsibility.set(key, userIds);
+      res.json(await responsibility.all());
     }),
   );
 

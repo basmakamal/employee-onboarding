@@ -45,6 +45,8 @@ import { TemplateService } from './notifications/template.service.js';
 import { TriggerService } from './notifications/trigger.service.js';
 import { onTransition } from './workflow/engine.js';
 import { withAfterCommit } from './common/after-commit.js';
+import { OpenWorkHalter, type HaltScope } from './workflow/halt-open-work.js';
+import { ResponsibilityService } from './workflow/responsibility.service.js';
 
 /**
  * Composition root — the ONLY place where concrete implementations are
@@ -154,12 +156,33 @@ export function buildContainer() {
     markLinkUsed: markLinkUsedWith(db),
   });
 
+  // "Stop everything open on this file" — withdrawal and offboarding share it.
+  const haltScope = (db: Db): HaltScope => ({
+    linkTokens: new LinkTokenRepository(db),
+    assetForms: new AssetFormRepository(db),
+    gosi: new GosiRepository(db),
+    medical: new MedicalInsuranceRepository(db),
+    audit: new AuditLogRepository(db),
+  });
+  const openWorkHalter = new OpenWorkHalter(unitOfWork(haltScope));
+
+  // Named primary owners per process — steer reminders, never permissions.
+  const responsibilityService = new ResponsibilityService(prisma);
+
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
   const slaFirings = new SlaFiringRepository(prisma);
   const slaScheduler = new SlaScheduler(
-    { rules: slaRules, holidays, firings: slaFirings, audit, notifications, calendar: settingsService },
+    {
+      rules: slaRules,
+      holidays,
+      firings: slaFirings,
+      audit,
+      notifications,
+      calendar: settingsService,
+      responsibility: responsibilityService,
+    },
     [
-      onboardingWatcher(employees, onboardingWorkflow),
+      onboardingWatcher(employees, onboardingWorkflow, contracts),
       offboardingWatcher(new OffboardingRepository(prisma)),
       processWatcher('GOSI', gosi),
       processWatcher('MEDICAL_INSURANCE', medical),
@@ -184,6 +207,7 @@ export function buildContainer() {
     linkTokenService,
     notifications,
     unitOfWork(onboardingScope),
+    openWorkHalter,
   );
 
   const employeeService = new EmployeeService(
@@ -210,6 +234,7 @@ export function buildContainer() {
     notifications,
     unitOfWork(offboardingScope),
     ownershipService,
+    openWorkHalter,
   );
 
   return {
@@ -248,6 +273,8 @@ export function buildContainer() {
     reportsService,
     aiService,
     ownershipService,
+    responsibilityService,
+    openWorkHalter,
   };
 }
 

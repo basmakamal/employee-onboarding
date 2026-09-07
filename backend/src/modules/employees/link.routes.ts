@@ -120,13 +120,5 @@ export function linkRouter(
     }),
   );
 
-  /** Contract e-approval: one click, one transition, one activated employee. */
-  router.post(
-    '/:token/approve-contract',
-    asyncHandler(async (req, res) => {
-      res.json(await service.approveContract(req.params['token'] as string));
-    }),
-  );
-
   return router;
 }

@@ -17,6 +17,12 @@ export class UserRepository {
     return this.db.user.findMany({ where: { role, active: true } });
   }
 
+  /** Named primary owners of a process — only the ones still active. */
+  listActiveByIds(ids: string[]) {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.db.user.findMany({ where: { id: { in: ids }, active: true } });
+  }
+
   /** Server-side page of staff accounts (search across name/email). */
   async listPaged(query: { q?: string; page: number; limit: number }) {
     const q = query.q?.trim();

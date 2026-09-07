@@ -69,7 +69,8 @@ const SLA_RULES: Array<{
     afterValue: 5,
     afterUnit: SlaUnit.WORKING_DAYS,
     action: SlaAction.REMIND_DAILY,
-    notifySubject: true,
+    // Approval happens on the external platform — nothing for the hire to click.
+    notifySubject: false,
     notifyHr: true,
   },
   {
@@ -206,13 +207,15 @@ const OWNERSHIP: Array<{ processKey: string; status: string; roles: string[] }> 
   ...['CREATED', 'AWAITING_FORM', 'FORM_RECEIVED', 'CONTRACT_CREATION', 'AWAITING_CONTRACT_APPROVAL', 'EXPIRED'].map(
     (status) => ({ processKey: 'EMPLOYEE', status, roles: ['HR'] }),
   ),
-  { processKey: 'GOSI', status: 'PENDING', roles: ['INSURANCE'] },
-  { processKey: 'GOSI', status: 'ON_HOLD', roles: ['INSURANCE'] },
-  { processKey: 'MEDICAL_INSURANCE', status: 'PENDING', roles: ['INSURANCE'] },
-  { processKey: 'MEDICAL_INSURANCE', status: 'ON_HOLD', roles: ['INSURANCE'] },
-  { processKey: 'CRIMINAL_RECORD', status: 'TRAINING', roles: ['HR'] },
-  { processKey: 'CRIMINAL_RECORD', status: 'REQUEST_SENT', roles: ['HR'] },
-  { processKey: 'CRIMINAL_RECORD', status: 'PENDING', roles: ['HR'] },
+  // Any authorised teammate may act on the Stage-2 cards; the named primary
+  // owners (Responsibility settings) only steer the notifications.
+  { processKey: 'GOSI', status: 'PENDING', roles: ['HR', 'INSURANCE'] },
+  { processKey: 'GOSI', status: 'ON_HOLD', roles: ['HR', 'INSURANCE'] },
+  { processKey: 'MEDICAL_INSURANCE', status: 'PENDING', roles: ['HR', 'INSURANCE'] },
+  { processKey: 'MEDICAL_INSURANCE', status: 'ON_HOLD', roles: ['HR', 'INSURANCE'] },
+  { processKey: 'CRIMINAL_RECORD', status: 'TRAINING', roles: ['HR', 'INSURANCE'] },
+  { processKey: 'CRIMINAL_RECORD', status: 'REQUEST_SENT', roles: ['HR', 'INSURANCE'] },
+  { processKey: 'CRIMINAL_RECORD', status: 'PENDING', roles: ['HR', 'INSURANCE'] },
   { processKey: 'ASSET_FORM', status: 'DRAFT', roles: ['IT'] },
   { processKey: 'ASSET_FORM', status: 'SENT', roles: ['IT'] },
   { processKey: 'ASSET_FORM', status: 'PENDING_EMPLOYEE_APPROVAL', roles: ['IT'] },

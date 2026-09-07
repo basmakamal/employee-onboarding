@@ -100,6 +100,29 @@ export class NotificationService {
     locale: Locale = 'ar',
   ): Promise<void> {
     const staff = await this.users.listActiveByRole(role as never);
+    await this.fanOut(staff, templateKey, params, ref, locale);
+  }
+
+  /** Notify specific people (the named primary owners of a process). */
+  async notifyUsers(
+    userIds: string[],
+    templateKey: string,
+    params: TemplateParams,
+    ref?: EntityRef,
+    locale: Locale = 'ar',
+  ): Promise<void> {
+    const staff = await this.users.listActiveByIds(userIds);
+    await this.fanOut(staff, templateKey, params, ref, locale);
+  }
+
+  private async fanOut(
+    staff: Array<{ id: string; email: string }>,
+    templateKey: string,
+    params: TemplateParams,
+    ref: EntityRef | undefined,
+    locale: Locale,
+  ): Promise<void> {
+    if (staff.length === 0) return;
     const message = await this.render(templateKey, locale, params);
     const stamp = {
       templateKey: message.templateKey ?? templateKey,

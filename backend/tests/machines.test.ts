@@ -54,11 +54,11 @@ describe('onboarding machine (the pipeline half of the employee lifecycle)', () 
     expect((await wf.transition(employee('FORM_RECEIVED'), 'ACCEPT_DOCUMENTS', HR)).to).toBe(
       'CONTRACT_CREATION',
     );
-    expect((await wf.transition(employee('CONTRACT_CREATION'), 'SEND_CONTRACT', HR)).to).toBe(
+    expect((await wf.transition(employee('CONTRACT_CREATION'), 'SUBMIT_CONTRACT', HR)).to).toBe(
       'AWAITING_CONTRACT_APPROVAL',
     );
     expect(
-      (await wf.transition(employee('AWAITING_CONTRACT_APPROVAL'), 'APPROVE_CONTRACT', LINK)).to,
+      (await wf.transition(employee('AWAITING_CONTRACT_APPROVAL'), 'APPROVE_CONTRACT', HR)).to,
     ).toBe('ACTIVE');
   });
 
@@ -80,7 +80,7 @@ describe('onboarding machine (the pipeline half of the employee lifecycle)', () 
     );
 
     await expect(
-      wf.transition(employee('CONTRACT_CREATION'), 'SEND_CONTRACT', HR),
+      wf.transition(employee('CONTRACT_CREATION'), 'SUBMIT_CONTRACT', HR),
     ).rejects.toBeInstanceOf(GuardFailedError);
   });
 
@@ -128,8 +128,8 @@ describe('employee-file process machines (Stage 2)', () => {
     await expect(wf.transition(rec('DONE'), 'HOLD', INSURANCE)).rejects.toBeInstanceOf(
       IllegalTransitionError,
     );
-    // Status ownership: HR may not act on the insurance group's card.
-    await expect(wf.transition(rec('PENDING'), 'HOLD', HR)).rejects.toThrow(/role HR/);
+    // Status ownership: HR and Insurance may both act; IT may not.
+    await expect(wf.transition(rec('PENDING'), 'HOLD', IT)).rejects.toThrow(/role IT/);
   });
 
   it('criminal record: strictly forward, no skipping', async () => {

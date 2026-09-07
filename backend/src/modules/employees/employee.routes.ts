@@ -59,15 +59,24 @@ const createEmployeeSchema = z.object({
 
 const contractSchema = z.object({
   details: z.record(z.string(), z.unknown()).default({}),
+  /** Reference on the external contracting platform (optional). */
+  externalRef: z.string().max(120).nullable().optional(),
 });
+
+/** HR records the contract's fate on the external platform. */
+const contractStatusSchema = z.object({
+  status: z.enum(['PENDING_APPROVAL', 'ACTIVE', 'REJECTED', 'EXPIRED']),
+  reason: z.string().max(1000).optional(),
+});
+
+const withdrawSchema = z.object({ reason: z.string().min(1).max(1000) });
 
 const notesSchema = z.object({ notes: z.string().optional() });
 
-const ONBOARDING_ACTIONS: Record<string, 'sendForm' | 'requestMissing' | 'acceptDocuments' | 'sendContract' | 'reopen'> = {
+const ONBOARDING_ACTIONS: Record<string, 'sendForm' | 'requestMissing' | 'acceptDocuments' | 'reopen'> = {
   'send-form': 'sendForm',
   'request-missing': 'requestMissing',
   'accept-documents': 'acceptDocuments',
-  'send-contract': 'sendContract',
   reopen: 'reopen',
 };
 
@@ -123,6 +132,7 @@ const EMPLOYEE_STATUSES = [
   'EXPIRED',
   'ACTIVE',
   'INACTIVE',
+  'WITHDRAWN',
 ] as const;
 
 /** List query: everything optional, everything clamped server-side. */
@@ -236,8 +246,48 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     requireRole('HR', 'ADMIN'),
     validate(contractSchema),
     asyncHandler(async (req, res) => {
-      const { details } = req.body as z.infer<typeof contractSchema>;
-      res.json(await onboarding.upsertContract(req.params['id'] as string, details as never, actor(req)));
+      const { details, externalRef } = req.body as z.infer<typeof contractSchema>;
+      res.json(
+        await onboarding.upsertContract(
+          req.params['id'] as string,
+          details as never,
+          actor(req),
+          externalRef,
+        ),
+      );
+    }),
+  );
+
+  /**
+   * Contract status, recorded by hand (the contract lives on an external
+   * platform): PENDING_APPROVAL / ACTIVE / REJECTED / EXPIRED. ACTIVE is the
+   * trainee → employee conversion.
+   */
+  router.put(
+    '/:id/contract/status',
+    requireRole('HR', 'ADMIN'),
+    validate(contractStatusSchema),
+    asyncHandler(async (req, res) => {
+      const { status, reason } = req.body as z.infer<typeof contractStatusSchema>;
+      res.json(
+        await onboarding.setContractStatus(
+          req.params['id'] as string,
+          status,
+          actor(req),
+          reason ? { reason } : {},
+        ),
+      );
+    }),
+  );
+
+  /** The trainee withdrew before activation — stops every open action on the file. */
+  router.post(
+    '/:id/withdraw',
+    requireRole('HR', 'ADMIN'),
+    validate(withdrawSchema),
+    asyncHandler(async (req, res) => {
+      const { reason } = req.body as z.infer<typeof withdrawSchema>;
+      res.json(await onboarding.withdraw(req.params['id'] as string, actor(req), reason));
     }),
   );
 
