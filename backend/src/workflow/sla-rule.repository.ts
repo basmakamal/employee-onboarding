@@ -27,6 +27,8 @@ export class SlaRuleRepository {
     notifySubject: boolean;
     notifyRole: string;
     escalateToRole?: string | null;
+    subjectTemplateKey?: string | null;
+    staffTemplateKey?: string | null;
     active?: boolean;
   }) {
     return this.db.slaRule.create({ data });
@@ -41,6 +43,8 @@ export class SlaRuleRepository {
       notifyHr?: boolean;
       notifyRole?: string;
       escalateToRole?: string | null;
+      subjectTemplateKey?: string | null;
+      staffTemplateKey?: string | null;
       active?: boolean;
     },
   ) {

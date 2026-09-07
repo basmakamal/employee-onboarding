@@ -41,6 +41,10 @@ import { AuthService } from './auth/auth.service.js';
 import { RedisRefreshTokenStore } from './auth/refresh-token.store.js';
 import { getMailQueue, getSharedRedis, redisEnabled } from './common/queue.js';
 import { publishNotify } from './notifications/realtime.js';
+import { TemplateService } from './notifications/template.service.js';
+import { TriggerService } from './notifications/trigger.service.js';
+import { onTransition } from './workflow/engine.js';
+import { withAfterCommit } from './common/after-commit.js';
 
 /**
  * Composition root — the ONLY place where concrete implementations are
@@ -67,13 +71,21 @@ export function buildContainer() {
   const notifier = new DynamicNotifier(settingsService);
   // With Redis, emails are queued and the worker delivers them (with
   // retries); without it they send inline exactly as before.
+  // Admin-editable templates override the code defaults per key; the
+  // notification service renders everything through this so the override
+  // is honoured no matter who is sending.
+  const templateService = new TemplateService(prisma, config.APP_URL);
   const notifications = new NotificationService(
     notificationRepo,
     users,
     notifier,
     redisEnabled ? (job) => getMailQueue().add('send', job) : undefined,
     publishNotify,
+    (key, locale, params) => templateService.render(key, locale, params),
   );
+  // "When X enters status Y, email Z" — fires after each transition commits.
+  const triggerService = new TriggerService(prisma, notifications);
+  onTransition((event) => triggerService.handle(event));
   const dashboardService = new DashboardService(prisma);
   const reportsService = new ReportsService(prisma);
   const aiService = new AiService(
@@ -95,10 +107,12 @@ export function buildContainer() {
   // so a transition, its audit row, its stamps and the consumed link all
   // commit — or roll back — together. Repositories are stateless, so
   // constructing them per transaction costs nothing.
+  // withAfterCommit holds transition listeners (email triggers) until the
+  // transaction has actually committed.
   const unitOfWork =
     <S>(scope: (db: Db) => S): UnitOfWork<S> =>
     (fn) =>
-      prisma.$transaction((tx) => fn(scope(tx)));
+      withAfterCommit(() => prisma.$transaction((tx) => fn(scope(tx))));
 
   const markLinkUsedWith = (db: Db) => (tokenId: string, at: Date) =>
     new LinkTokenRepository(db).markUsed(tokenId, at);
@@ -219,6 +233,8 @@ export function buildContainer() {
     },
     notifications,
     notifier,
+    templateService,
+    triggerService,
     onboardingWorkflow,
     slaScheduler,
     linkTokenService,

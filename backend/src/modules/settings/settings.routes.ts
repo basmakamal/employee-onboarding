@@ -21,6 +21,9 @@ const ruleUpdateSchema = z.object({
   notifyHr: z.boolean().optional(),
   notifyRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).optional(),
   escalateToRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).nullable().optional(),
+  // null = back to the watcher's built-in template
+  subjectTemplateKey: z.string().max(80).nullable().optional(),
+  staffTemplateKey: z.string().max(80).nullable().optional(),
   active: z.boolean().optional(),
 });
 
@@ -46,6 +49,8 @@ const ruleCreateSchema = z.object({
   notifySubject: z.boolean().default(false),
   notifyRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).default('HR'),
   escalateToRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).nullable().optional(),
+  subjectTemplateKey: z.string().max(80).nullable().optional(),
+  staffTemplateKey: z.string().max(80).nullable().optional(),
   active: z.boolean().default(true),
 });
 
@@ -152,6 +157,8 @@ export function settingsRouter(
           notifySubject: body.notifySubject,
           notifyRole: body.notifyRole,
           escalateToRole: body.escalateToRole ?? null,
+          subjectTemplateKey: body.subjectTemplateKey ?? null,
+          staffTemplateKey: body.staffTemplateKey ?? null,
           active: body.active,
         }),
       );

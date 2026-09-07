@@ -14,6 +14,7 @@ import { usersRouter } from './auth/users.routes.js';
 import { employeeDocumentRouter } from './modules/employees/employee-document.routes.js';
 import { reportsRouter } from './modules/reports/reports.routes.js';
 import { notificationRouter } from './notifications/notification.routes.js';
+import { emailTemplatesRouter, emailTriggersRouter } from './notifications/email-admin.routes.js';
 import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
 import { asyncHandler } from './common/http.js';
@@ -50,8 +51,17 @@ staffApi.use(
   ),
 );
 staffApi.use('/users', usersRouter(container.repos.users));
-staffApi.use('/notifications', notificationRouter(container.repos.notificationRepo));
+staffApi.use(
+  '/notifications',
+  notificationRouter(container.repos.notificationRepo, container.notifications),
+);
 staffApi.use('/ai', aiRouter(container.aiService));
+// Email templates, triggers (ADMIN) — the log lives under /notifications/log.
+staffApi.use(
+  '/email-templates',
+  emailTemplatesRouter(container.templateService, container.notifications, container.repos.users),
+);
+staffApi.use('/email-triggers', emailTriggersRouter(container.triggerService));
 staffApi.get(
   '/dashboard',
   asyncHandler(async (_req, res) => {

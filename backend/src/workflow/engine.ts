@@ -4,6 +4,43 @@ import {
   IllegalTransitionError,
   StaleTransitionError,
 } from './errors.js';
+import { afterCommit } from '../common/after-commit.js';
+import { logger } from '../common/logger.js';
+
+/** A committed status change, as seen by anything listening (email triggers). */
+export interface TransitionEvent {
+  entity: string;
+  entityId: string;
+  action: string;
+  from: string;
+  to: string;
+  actorType: ActorType;
+  employeeId?: string;
+}
+
+type TransitionListener = (event: TransitionEvent) => void | Promise<void>;
+const listeners = new Set<TransitionListener>();
+
+/**
+ * Subscribe to every successful transition across every machine. Listeners
+ * run after the enclosing transaction commits (see common/after-commit.ts)
+ * and are isolated from each other — one failing never blocks the rest, and
+ * none of them can fail the transition itself.
+ */
+export function onTransition(listener: TransitionListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+async function emit(event: TransitionEvent): Promise<void> {
+  await Promise.all(
+    [...listeners].map((listen) =>
+      Promise.resolve()
+        .then(() => listen(event))
+        .catch((err: unknown) => logger.error({ err, event }, 'transition listener failed')),
+    ),
+  );
+}
 
 export type ActorType = 'USER' | 'LINK' | 'SYSTEM';
 
@@ -128,6 +165,7 @@ export class Workflow<TRecord> {
     const moved = await this.deps.move(record, from, to);
     if (!moved) throw new StaleTransitionError(this.def.key, id, from, to);
 
+    const anchors = this.deps.anchors?.(record);
     await this.deps.audit({
       entity: this.def.key,
       entityId: id,
@@ -136,9 +174,21 @@ export class Workflow<TRecord> {
       toStatus: to,
       actorType: actor.type,
       ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
-      ...this.deps.anchors?.(record),
+      ...anchors,
       ...(metadata ? { metadata } : {}),
     });
+
+    // Listeners (email triggers) fire only once the transaction has committed.
+    const event: TransitionEvent = {
+      entity: this.def.key,
+      entityId: id,
+      action,
+      from,
+      to,
+      actorType: actor.type,
+      ...(anchors?.employeeId ? { employeeId: anchors.employeeId } : {}),
+    };
+    afterCommit(() => emit(event));
 
     return { from, to, action };
   }

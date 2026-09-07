@@ -129,7 +129,7 @@ export class SlaScheduler {
           record,
           now,
           rule.escalateToRole ?? 'ADMIN',
-          watcher.templates?.escalation ?? 'staff.escalation',
+          rule.staffTemplateKey ?? watcher.templates?.escalation ?? 'staff.escalation',
         );
         await this.audit(rule, record, 'SLA_ESCALATION');
       } else {
@@ -166,7 +166,8 @@ export class SlaScheduler {
   }
 
   private async remind(rule: SlaRule, record: WatchedRecord, watcher: SlaWatcher, now: Date) {
-    const subjectTemplate = watcher.subjectTemplate?.(rule.status);
+    // An admin-chosen template on the rule beats the watcher's built-in one.
+    const subjectTemplate = rule.subjectTemplateKey ?? watcher.subjectTemplate?.(rule.status);
     if (rule.notifySubject && subjectTemplate && record.email) {
       await this.deps.notifications.notifyExternal(
         record.email,
@@ -181,7 +182,7 @@ export class SlaScheduler {
         record,
         now,
         rule.notifyRole,
-        watcher.templates?.stalled ?? 'staff.record_stalled',
+        rule.staffTemplateKey ?? watcher.templates?.stalled ?? 'staff.record_stalled',
       );
     }
   }

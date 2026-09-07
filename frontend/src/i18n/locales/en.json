@@ -12,7 +12,9 @@
     "automation": "Automation",
     "settings": "Settings",
     "assistant": "AI Assistant",
-    "calendar": "Work calendar"
+    "calendar": "Work calendar",
+    "emailLog": "Email history",
+    "emailTemplates": "Email templates"
   },
   "users": {
     "title": "Staff & roles",
@@ -25,7 +27,10 @@
     "passwordHint": "At least 8 characters",
     "passwordReset": "Password updated.",
     "you": "You",
-    "editTitle": "Edit teammate", "activeHint": "Can sign in and work as normal.", "inactiveHint": "Sign-in is blocked. Their records stay untouched.", "selfHint": "You cannot deactivate or demote your own account — ask another administrator."
+    "editTitle": "Edit teammate",
+    "activeHint": "Can sign in and work as normal.",
+    "inactiveHint": "Sign-in is blocked. Their records stay untouched.",
+    "selfHint": "You cannot deactivate or demote your own account — ask another administrator."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -140,7 +145,7 @@
     "actions": {
       "send": "Send for approval",
       "cancel": "Cancel",
-    "download": "Download",
+      "download": "Download",
       "revise": "Revise"
     }
   },
@@ -245,7 +250,7 @@
     "greetMorning": "Good morning",
     "greetAfternoon": "Good afternoon",
     "greetEvening": "Good evening",
-    "emailPlaceholder": "you@riyada-ksa.com",
+    "emailPlaceholder": "you{'@'}riyada-ksa.com",
     "unreachable": "We could not reach the server. Check your connection and try again.",
     "help": "Trouble signing in? Your HR admin can reset your access.",
     "email": "Email",
@@ -411,7 +416,11 @@
     "status": "Status / document type",
     "notifySubject": "Also e-mail the employee",
     "anyType": "Any document",
-    "expireHint": "EXPIRE closes the record automatically. It only takes effect on the onboarding waiting stages (awaiting form / awaiting approval)."
+    "expireHint": "EXPIRE closes the record automatically. It only takes effect on the onboarding waiting stages (awaiting form / awaiting approval).",
+    "subjectTemplate": "Employee email template",
+    "staffTemplate": "Staff email template",
+    "builtInTemplate": "Built-in default",
+    "templates": "Templates"
   },
   "reports": {
     "title": "Reports",
@@ -671,5 +680,92 @@
     "ER": "Eritrean",
     "TR": "Turkish",
     "OTHER": "Other"
+  },
+  "emailLog": {
+    "title": "Email history",
+    "subtitle": "Every message the system sent — who, what, when, and whether it arrived.",
+    "search": "Search recipient or subject",
+    "status": "Status",
+    "channel": "Channel",
+    "template": "Template",
+    "all": "All",
+    "statuses": {
+      "PENDING": "Queued",
+      "SENT": "Sent",
+      "FAILED": "Failed"
+    },
+    "channels": {
+      "EMAIL": "Email",
+      "IN_APP": "In-app"
+    },
+    "when": "When",
+    "recipient": "Recipient",
+    "subject": "Subject",
+    "view": "View",
+    "resend": "Resend",
+    "resendConfirm": "Send this email again to {email}?",
+    "resent": "Resent — a fresh copy is on its way.",
+    "empty": "No emails yet",
+    "emptyHint": "Messages appear here the moment the system sends them.",
+    "message": "Message",
+    "created": "Created",
+    "delivered": "Delivered",
+    "notDelivered": "Not delivered",
+    "builtIn": "built-in",
+    "version": "v{n}",
+    "linkedRecord": "Linked record"
+  },
+  "emailTemplates": {
+    "title": "Email templates",
+    "subtitle": "Edit what the system says. Placeholders fill in automatically for each recipient.",
+    "audience": {
+      "employee": "To employees",
+      "staff": "To staff"
+    },
+    "audienceCol": "Audience",
+    "customized": "Customised",
+    "builtIn": "Built-in",
+    "disabledOverride": "Edit saved, built-in in use",
+    "edit": "Edit",
+    "preview": "Preview",
+    "test": "Send me a test",
+    "testSent": "Test email sent to {email}.",
+    "revert": "Revert to built-in",
+    "revertConfirm": "Discard your edits and go back to the built-in text?",
+    "reverted": "Back to the built-in template.",
+    "saved": "Template saved.",
+    "name": "Template name",
+    "subject": "Subject",
+    "body": "Body",
+    "bodyHint": "Separate paragraphs with a blank line. Click a placeholder to insert it at the cursor.",
+    "ctaLabel": "Button label",
+    "ctaHint": "Shown only when the message carries a link.",
+    "placeholders": "Placeholders",
+    "useEdited": "Use this edited version",
+    "useEditedHint": "Off keeps your edit on file but sends the built-in text.",
+    "arabic": "Arabic",
+    "english": "English",
+    "previewTitle": "Preview",
+    "previewHint": "Rendered with sample data, exactly as the recipient will see it.",
+    "triggers": {
+      "title": "Status triggers",
+      "subtitle": "Send a template automatically the moment a record enters a status.",
+      "add": "New trigger",
+      "process": "Process",
+      "status": "Status",
+      "template": "Template",
+      "recipient": "Recipient",
+      "subjectRecipient": "The employee",
+      "roleRecipient": "A staff group",
+      "role": "Group",
+      "active": "Active",
+      "empty": "No triggers yet",
+      "emptyHint": "The built-in emails (form invite, contract approval…) still go out on their own. Triggers add to them.",
+      "created": "Trigger added.",
+      "removed": "Trigger removed.",
+      "remove": "Remove",
+      "removeConfirm": "Remove this trigger?",
+      "note": "Triggers fire after the change is saved, so a failed change never sends an email."
+    }
   }
 }

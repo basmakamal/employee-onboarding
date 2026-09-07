@@ -504,6 +504,9 @@ model SlaRule {
   notifyRole    String    @default("HR")
   /** ESCALATE only: the higher group that gets the escalation. */
   escalateToRole String?
+  /// Optional template overrides; null = the watcher's built-in choice.
+  subjectTemplateKey String?
+  staffTemplateKey   String?
   active        Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
@@ -534,6 +537,49 @@ model Holiday {
   name String
 
   @@map("holidays")
+}
+
+/// Admin-editable override of a built-in email template, keyed by the same
+/// template key the code uses. No row = the code default; `active=false`
+/// keeps the edit on file but falls back to the default. `version` climbs on
+/// every save and is stamped onto each notification sent from it.
+model EmailTemplate {
+  key         String   @id
+  name        String
+  subjectAr   String
+  subjectEn   String
+  bodyAr      String   @db.Text
+  bodyEn      String   @db.Text
+  ctaLabelAr  String?
+  ctaLabelEn  String?
+  active      Boolean  @default(true)
+  version     Int      @default(1)
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@map("email_templates")
+}
+
+enum TriggerRecipient {
+  SUBJECT // the employee / new hire the record belongs to
+  ROLE // a staff group
+}
+
+/// "When <machine> enters <status>, send <template> to <recipient>." Fired
+/// after the transition's transaction commits.
+model EmailTrigger {
+  id          String           @id @default(cuid())
+  processKey  String
+  status      String
+  templateKey String
+  recipient   TriggerRecipient
+  role        String?
+  active      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  createdById String?
+
+  @@index([processKey, status, active])
+  @@map("email_triggers")
 }
 
 /// Named atomic counters. EMPLOYEE_NO backs employee-number allocation:
@@ -589,6 +635,10 @@ model Notification {
   body           String              @db.Text
   entity         String? // e.g. TRAINEE, ASSET_FORM — for deep links
   entityId       String?
+  /// Which template produced this message, and which version of it — so the
+  /// history stays truthful after an admin edits the template.
+  templateKey     String?
+  templateVersion Int?
   sentAt         DateTime?
   readAt         DateTime? // in-app read marker
   createdAt      DateTime            @default(now())
