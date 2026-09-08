@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { usePreferencesStore } from './stores/preferences';
 import { useAuthStore } from './stores/auth';
 import NotificationBell from './components/NotificationBell.vue';
+import LanguageToggle from './components/LanguageToggle.vue';
 
 const prefs = usePreferencesStore();
 const auth = useAuthStore();
@@ -72,9 +73,7 @@ onMounted(() => prefs.apply());
           {{ $t('app.title') }}
         </v-app-bar-title>
 
-        <v-btn variant="text" prepend-icon="mdi-translate" @click="prefs.toggleLocale()">
-          {{ $t('actions.language') }}
-        </v-btn>
+        <LanguageToggle class="me-2" />
         <v-btn
           :icon="prefs.dark ? 'mdi-weather-sunny' : 'mdi-weather-night'"
           :aria-label="$t('actions.toggleTheme')"

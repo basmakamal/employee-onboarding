@@ -1,10 +1,21 @@
 <script setup lang="ts">
+/**
+ * Sign-in: a split page. The photo side carries the brand and a short
+ * statement of what the system does; the form side is deliberately small.
+ *
+ * The photo is real photography of an empty workstation floor, bundled in
+ * /public/login-hero.jpg (Pexels licence, free for commercial use). No
+ * people on purpose — it stays neutral and never dates. Swap it for a photo
+ * of the Riyada office whenever one is available: same file name, nothing
+ * else to change.
+ */
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApiError } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import { usePreferencesStore } from '../stores/preferences';
+import LanguageToggle from '../components/LanguageToggle.vue';
 
 const auth = useAuthStore();
 const prefs = usePreferencesStore();
@@ -45,37 +56,62 @@ async function submit() {
 </script>
 
 <template>
-  <div class="login-page">
-    <!-- Two soft washes of colour instead of a flat field. -->
-    <div class="glow glow--one" aria-hidden="true" />
-    <div class="glow glow--two" aria-hidden="true" />
-
-    <div class="login-page__toggles">
-      <v-btn variant="text" size="small" prepend-icon="mdi-translate" @click="prefs.toggleLocale()">
-        {{ $t('actions.language') }}
-      </v-btn>
-      <v-btn
-        :icon="prefs.dark ? 'mdi-weather-sunny' : 'mdi-weather-night'"
-        :aria-label="$t('actions.theme')"
-        variant="text"
-        size="small"
-        @click="prefs.toggleTheme()"
+  <div class="login">
+    <!-- ───── Photo side ───── -->
+    <section class="hero" :aria-label="$t('login.brandSub')">
+      <img
+        class="hero__photo"
+        src="/login-hero.jpg"
+        alt=""
+        fetchpriority="high"
+        decoding="async"
       />
-    </div>
+      <div class="hero__shade" aria-hidden="true" />
 
-    <div class="login-page__inner">
-      <v-card class="login-card px-2 py-4" max-width="440" width="100%">
-        <v-card-item class="text-center pb-2">
-          <v-avatar color="primary" variant="tonal" size="60" rounded="xl" class="mb-4">
-            <v-icon icon="mdi-account-group-outline" size="32" />
-          </v-avatar>
-          <h1 class="text-h5 font-weight-bold mb-1">{{ greeting }}</h1>
-          <p class="text-body-2 text-medium-emphasis">{{ $t('login.subtitle') }}</p>
+      <header class="brand">
+        <span class="brand__logo">
+          <img src="/riyada-logo.png" alt="Riyada" />
+        </span>
+        <span class="brand__text">
+          <span class="brand__name">{{ $t('login.brand') }}</span>
+          <span class="brand__sub">{{ $t('login.brandSub') }}</span>
+        </span>
+      </header>
+
+      <div class="hero__copy">
+        <span class="hero__eyebrow"><i aria-hidden="true" />{{ $t('login.eyebrow') }}</span>
+        <h1 class="hero__headline">{{ $t('login.headline') }}</h1>
+        <p class="hero__sub">{{ $t('login.sub') }}</p>
+      </div>
+
+      <footer class="hero__foot">
+        <span>{{ $t('login.foot') }}</span>
+        <span dir="ltr">onboarding.riyada-ksa.com</span>
+      </footer>
+    </section>
+
+    <!-- ───── Form side ───── -->
+    <section class="panel">
+      <div class="panel__toggles">
+        <LanguageToggle />
+        <v-btn
+          :icon="prefs.dark ? 'mdi-weather-sunny' : 'mdi-weather-night'"
+          :aria-label="$t('actions.theme')"
+          variant="text"
+          size="small"
+          @click="prefs.toggleTheme()"
+        />
+      </div>
+
+      <v-card class="login-card" max-width="440" width="100%" rounded="xl">
+        <v-card-item class="pb-1 pt-6 px-6">
+          <h2 class="text-h5 font-weight-bold mb-1">{{ greeting }}</h2>
+          <p class="text-body-2 text-medium-emphasis mb-0">{{ $t('login.subtitle') }}</p>
         </v-card-item>
 
-        <v-card-text class="pt-4">
+        <v-card-text class="px-6 pt-5">
           <v-expand-transition>
-            <v-alert v-if="error" type="error" density="compact" class="mb-4 text-body-2">
+            <v-alert v-if="error" type="error" density="compact" variant="tonal" class="mb-4 text-body-2">
               {{ error }}
             </v-alert>
           </v-expand-transition>
@@ -99,6 +135,7 @@ async function submit() {
               prepend-inner-icon="mdi-lock-outline"
               :append-inner-icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
               autocomplete="current-password"
+              dir="ltr"
               @click:append-inner="showPassword = !showPassword"
             />
 
@@ -111,76 +148,176 @@ async function submit() {
               class="mt-5"
               :loading="loading"
               :disabled="!canSubmit"
+              append-icon="mdi-arrow-right"
             >
               {{ $t('login.signIn') }}
             </v-btn>
           </v-form>
         </v-card-text>
 
-        <v-card-text class="pt-0 text-center">
+        <v-card-text class="pt-0 px-6 pb-6 text-center">
           <p class="text-caption text-medium-emphasis mb-0">{{ $t('login.help') }}</p>
         </v-card-text>
       </v-card>
-    </div>
+
+      <p class="panel__foot text-caption text-medium-emphasis">{{ $t('login.internal') }}</p>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.login-page {
-  position: relative;
+.login {
   min-height: 100vh;
   min-height: 100dvh;
   display: grid;
-  place-items: center;
-  padding: 24px;
-  overflow: hidden;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  background: rgb(var(--v-theme-background));
 }
 
-.login-page__inner {
-  width: 100%;
-  display: grid;
-  place-items: center;
+/* ───────── hero ───────── */
+.hero {
   position: relative;
-  z-index: 1;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(24px, 4vw, 48px);
+  color: #f7f6f2;
+  background: #0b3a46;
+}
+.hero__photo {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(0.9) contrast(1.05);
+  transform: scale(1.02);
+}
+.hero__shade {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* Darker photo than before, so the shade can be lighter and let the room show. */
+  background: linear-gradient(
+    to top,
+    rgba(11, 58, 70, 0.9) 0%,
+    rgba(11, 58, 70, 0.5) 40%,
+    rgba(11, 58, 70, 0.22) 75%,
+    rgba(11, 58, 70, 0.3) 100%
+  );
 }
 
-.login-page__toggles {
-  position: absolute;
-  top: 16px;
-  inset-inline-end: 16px;
+.brand {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 12px;
+}
+/* The logo is teal on transparent — it needs a light plate to read on the photo. */
+.brand__logo {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12);
+}
+.brand__logo img {
+  display: block;
+  height: 28px;
+  width: auto;
+}
+.brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.brand__name {
+  font-weight: 700;
+  font-size: 18px;
+}
+.brand__sub {
+  font-size: 12.5px;
+  opacity: 0.85;
+}
+
+.hero__copy {
+  max-width: 520px;
+}
+.hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(6px);
+}
+.hero__eyebrow i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e0a458;
+}
+.hero__headline {
+  margin: 18px 0 10px;
+  font-size: clamp(26px, 2.6vw, 38px);
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.hero__sub {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.75;
+  opacity: 0.9;
+  max-width: 46ch;
+}
+.hero__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 12.5px;
+  opacity: 0.75;
+}
+
+/* ───────── panel ───────── */
+.panel {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: clamp(24px, 4vw, 56px);
+}
+.panel__toggles {
+  position: absolute;
+  top: 18px;
+  inset-inline-end: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   z-index: 2;
 }
-
-/* Ambient colour: large, very soft, and behind everything. */
-.glow {
+.panel__foot {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.5;
-  pointer-events: none;
+  bottom: 18px;
+  inset-inline: 0;
+  text-align: center;
+  margin: 0;
 }
-.glow--one {
-  width: 460px;
-  height: 460px;
-  top: -160px;
-  inset-inline-start: -140px;
-  background: rgba(var(--v-theme-primary), 0.18);
-}
-.glow--two {
-  width: 380px;
-  height: 380px;
-  bottom: -140px;
-  inset-inline-end: -120px;
-  background: rgba(var(--v-theme-secondary), 0.16);
-}
-
 .login-card {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 12px 32px -16px rgba(16, 24, 40, 0.18);
   animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-
 @keyframes rise {
   from {
     opacity: 0;
@@ -192,6 +329,31 @@ async function submit() {
   }
 }
 
+/* ───────── responsive ───────── */
+@media (max-width: 900px) {
+  .login {
+    grid-template-columns: 1fr;
+  }
+  .hero {
+    min-height: 280px;
+    padding: 22px;
+  }
+  .hero__sub {
+    display: none;
+  }
+  .hero__headline {
+    font-size: 24px;
+  }
+  .panel {
+    padding: 24px 18px 64px;
+  }
+  .panel__toggles {
+    position: static;
+    justify-content: flex-end;
+    width: 100%;
+    margin-bottom: 18px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .login-card {
     animation: none;
