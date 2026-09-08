@@ -3,10 +3,11 @@
  * Sign-in: a split page. The photo side carries the brand and a short
  * statement of what the system does; the form side is deliberately small.
  *
- * The photo is real office photography bundled in /public/login-hero.jpg
- * (Pexels licence, free for commercial use). Swap it for a photo of the
- * Riyada team whenever one is available — same file name, nothing else
- * to change.
+ * The photo is real photography of an empty workstation floor, bundled in
+ * /public/login-hero.jpg (Pexels licence, free for commercial use). No
+ * people on purpose — it stays neutral and never dates. Swap it for a photo
+ * of the Riyada office whenever one is available: same file name, nothing
+ * else to change.
  */
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -192,21 +193,21 @@ async function submit() {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Keep the person in frame when the panel is tall and narrow. */
-  object-position: 28% center;
-  filter: saturate(0.92) contrast(1.04);
+  object-position: center;
+  filter: saturate(0.9) contrast(1.05);
   transform: scale(1.02);
 }
 .hero__shade {
   position: absolute;
   inset: 0;
   z-index: -1;
+  /* Darker photo than before, so the shade can be lighter and let the room show. */
   background: linear-gradient(
     to top,
-    rgba(11, 58, 70, 0.92) 0%,
-    rgba(11, 58, 70, 0.58) 38%,
-    rgba(11, 58, 70, 0.18) 70%,
-    rgba(11, 58, 70, 0.38) 100%
+    rgba(11, 58, 70, 0.9) 0%,
+    rgba(11, 58, 70, 0.5) 40%,
+    rgba(11, 58, 70, 0.22) 75%,
+    rgba(11, 58, 70, 0.3) 100%
   );
 }
 
