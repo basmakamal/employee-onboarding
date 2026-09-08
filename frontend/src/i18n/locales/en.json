@@ -289,7 +289,14 @@
     "password": "Password",
     "signIn": "Sign in",
     "signOut": "Sign out",
-    "invalid": "That email and password do not match. Give it another try."
+    "invalid": "That email and password do not match. Give it another try.",
+    "brand": "Riyada",
+    "brandSub": "Human Resources",
+    "eyebrow": "One team, one file per employee",
+    "headline": "From the first day of training to the last day of work, every step in its place.",
+    "sub": "Hiring, contracts, insurance, custody and offboarding, followed from one screen, with reminders reaching the right person on time.",
+    "foot": "© Riyada · HR System",
+    "internal": "For internal use by the Riyada team only."
   },
   "roles": {
     "HR": "Human Resources",
