@@ -46,8 +46,11 @@ const LINK_NOTE: Record<Locale, string> = {
   en: 'This link is valid for a limited time and is personal to you — please do not share it.',
 };
 
-interface TemplateParams {
+export interface TemplateParams {
   name?: string;
+  employeeNo?: string;
+  department?: string;
+  jobTitle?: string;
   status?: string;
   daysWaiting?: number;
   daysLeft?: number;

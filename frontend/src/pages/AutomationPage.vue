@@ -13,7 +13,16 @@ interface SlaRuleRow {
   notifySubject: boolean;
   notifyRole: string;
   escalateToRole: string | null;
+  subjectTemplateKey: string | null;
+  staffTemplateKey: string | null;
   active: boolean;
+}
+
+interface TemplateOption {
+  key: string;
+  nameAr: string;
+  nameEn: string;
+  audience: 'employee' | 'staff';
 }
 
 const ROLES = ['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN'];
@@ -46,9 +55,23 @@ const newRule = ref({
   notifySubject: false,
   notifyRole: 'HR',
   escalateToRole: 'ADMIN',
+  subjectTemplateKey: null as string | null,
+  staffTemplateKey: null as string | null,
 });
 
 const statusOptions = computed(() => WATCHABLE[newRule.value.processKey] ?? []);
+
+/** Admin-editable templates a rule may send instead of the watcher's default. */
+const templates = ref<TemplateOption[]>([]);
+const { locale } = useI18n();
+function templateItems(audience: TemplateOption['audience']) {
+  return [
+    { title: t('sla.builtInTemplate'), value: null },
+    ...templates.value
+      .filter((tpl) => tpl.audience === audience)
+      .map((tpl) => ({ title: locale.value === 'ar' ? tpl.nameAr : tpl.nameEn, value: tpl.key })),
+  ];
+}
 
 function statusLabel(processKey: string, status: string): string {
   if (processKey === 'DOCUMENT_EXPIRY') {
@@ -69,7 +92,10 @@ function notify(text: string, color = 'success') {
 }
 
 async function load() {
-  rules.value = await api.get<SlaRuleRow[]>('/api/settings/sla');
+  [rules.value, templates.value] = await Promise.all([
+    api.get<SlaRuleRow[]>('/api/settings/sla'),
+    api.get<TemplateOption[]>('/api/email-templates'),
+  ]);
   loaded.value = true;
 }
 
@@ -128,6 +154,7 @@ onMounted(load);
             <th>{{ $t('sla.action') }}</th>
             <th style="width: 220px">{{ $t('sla.after') }}</th>
             <th>{{ $t('sla.notify') }}</th>
+            <th style="width: 220px">{{ $t('sla.templates') }}</th>
             <th>{{ $t('sla.active') }}</th>
           </tr>
         </thead>
@@ -193,6 +220,31 @@ onMounted(load);
                 style="max-width: 170px"
                 :disabled="busy === rule.id"
                 @update:model-value="(escalateToRole: string) => updateRule(rule, { escalateToRole })"
+              />
+            </td>
+            <td>
+              <!-- Which text goes out: the watcher's built-in, or an edited template. -->
+              <v-select
+                v-if="rule.notifySubject"
+                :model-value="rule.subjectTemplateKey"
+                :items="templateItems('employee')"
+                :label="$t('sla.subjectTemplate')"
+                density="compact"
+                hide-details
+                variant="plain"
+                :disabled="busy === rule.id"
+                @update:model-value="(subjectTemplateKey: string | null) => updateRule(rule, { subjectTemplateKey })"
+              />
+              <v-select
+                v-if="rule.action !== 'EXPIRE'"
+                :model-value="rule.staffTemplateKey"
+                :items="templateItems('staff')"
+                :label="$t('sla.staffTemplate')"
+                density="compact"
+                hide-details
+                variant="plain"
+                :disabled="busy === rule.id"
+                @update:model-value="(staffTemplateKey: string | null) => updateRule(rule, { staffTemplateKey })"
               />
             </td>
             <td>
@@ -274,6 +326,20 @@ onMounted(load);
                 :label="$t('sla.notifySubject')"
                 density="compact"
                 hide-details
+              />
+            </v-col>
+            <v-col v-if="newRule.notifySubject" cols="12" sm="6">
+              <v-select
+                v-model="newRule.subjectTemplateKey"
+                :items="templateItems('employee')"
+                :label="$t('sla.subjectTemplate')"
+              />
+            </v-col>
+            <v-col v-if="newRule.action !== 'EXPIRE'" cols="12" sm="6">
+              <v-select
+                v-model="newRule.staffTemplateKey"
+                :items="templateItems('staff')"
+                :label="$t('sla.staffTemplate')"
               />
             </v-col>
           </v-row>

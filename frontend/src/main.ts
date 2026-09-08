@@ -5,5 +5,7 @@ import { vuetify } from './plugins/vuetify';
 import { i18n } from './i18n';
 import { router } from './router';
 import '@mdi/font/css/materialdesignicons.css';
+// Loaded after Vuetify's stylesheet so the polish layer wins where they meet.
+import './styles/app.css';
 
 createApp(App).use(createPinia()).use(router).use(i18n).use(vuetify).mount('#app');

@@ -10,6 +10,7 @@ const COLORS: Record<string, string> = {
   EXPIRED: 'error',
   ACTIVE: 'success',
   INACTIVE: 'grey',
+  WITHDRAWN: 'error',
 };
 
 const color = COLORS[props.status] ?? 'grey';

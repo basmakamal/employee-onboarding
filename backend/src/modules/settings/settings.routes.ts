@@ -5,6 +5,10 @@ import { requireRole } from '../../auth/require-auth.middleware.js';
 import { calendarSchema, mailSettingsSchema, type SettingsService } from './settings.service.js';
 import type { SlaRuleRepository, HolidayRepository } from '../../workflow/sla-rule.repository.js';
 import type { OwnershipService } from '../../workflow/ownership.service.js';
+import {
+  RESPONSIBILITY_KEYS,
+  type ResponsibilityService,
+} from '../../workflow/responsibility.service.js';
 import { generateSaudiHolidays } from '../../workflow/saudi-holidays.js';
 
 const holidaySchema = z.object({
@@ -21,11 +25,18 @@ const ruleUpdateSchema = z.object({
   notifyHr: z.boolean().optional(),
   notifyRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).optional(),
   escalateToRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).nullable().optional(),
+  // null = back to the watcher's built-in template
+  subjectTemplateKey: z.string().max(80).nullable().optional(),
+  staffTemplateKey: z.string().max(80).nullable().optional(),
   active: z.boolean().optional(),
 });
 
 const ownershipSchema = z.object({
   roles: z.array(z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN'])).min(1),
+});
+
+const responsibilitySchema = z.object({
+  userIds: z.array(z.string().min(1)).max(20),
 });
 
 /** Only machines with a registered scheduler watcher may be watched. */
@@ -46,6 +57,8 @@ const ruleCreateSchema = z.object({
   notifySubject: z.boolean().default(false),
   notifyRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).default('HR'),
   escalateToRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).nullable().optional(),
+  subjectTemplateKey: z.string().max(80).nullable().optional(),
+  staffTemplateKey: z.string().max(80).nullable().optional(),
   active: z.boolean().default(true),
 });
 
@@ -55,6 +68,7 @@ export function settingsRouter(
   slaRules: SlaRuleRepository,
   ownership: OwnershipService,
   holidays: HolidayRepository,
+  responsibility: ResponsibilityService,
 ): Router {
   const router = Router();
   router.use(requireRole('ADMIN'));
@@ -128,6 +142,25 @@ export function settingsRouter(
     }),
   );
 
+  // ---- Primary follow-up owners per process (notifications only) ----
+  router.get(
+    '/responsibility',
+    asyncHandler(async (_req, res) => {
+      res.json(await responsibility.all());
+    }),
+  );
+
+  router.put(
+    '/responsibility/:processKey',
+    validate(responsibilitySchema),
+    asyncHandler(async (req, res) => {
+      const key = z.enum(RESPONSIBILITY_KEYS).parse(req.params['processKey']);
+      const { userIds } = req.body as z.infer<typeof responsibilitySchema>;
+      await responsibility.set(key, userIds);
+      res.json(await responsibility.all());
+    }),
+  );
+
   // ---- Automation (SLA) rules ----
   router.get(
     '/sla',
@@ -152,6 +185,8 @@ export function settingsRouter(
           notifySubject: body.notifySubject,
           notifyRole: body.notifyRole,
           escalateToRole: body.escalateToRole ?? null,
+          subjectTemplateKey: body.subjectTemplateKey ?? null,
+          staffTemplateKey: body.staffTemplateKey ?? null,
           active: body.active,
         }),
       );

@@ -15,7 +15,7 @@ const rail = ref(false);
 
 /** Public pages (signed links, login) render without the staff chrome. */
 const isPublicPage = () =>
-  ['/form/', '/approve-contract/', '/approve-assets/', '/exit-interview/', '/login'].some((p) =>
+  ['/form/', '/approve-assets/', '/exit-interview/', '/login'].some((p) =>
     route.path.startsWith(p),
   );
 
@@ -24,11 +24,13 @@ const NAV = [
   { to: '/employees', icon: 'mdi-badge-account', key: 'nav.employees', roles: [] as string[] },
   { to: '/reports', icon: 'mdi-chart-box', key: 'nav.reports', roles: ['HR'] },
   { to: '/assistant', icon: 'mdi-robot-happy-outline', key: 'nav.assistant', roles: ['HR'] },
+  { to: '/emails', icon: 'mdi-email-outline', key: 'nav.emailLog', roles: ['HR'] },
   // hasRole() lets ADMIN through on any check; listing no other role makes
   // these entries effectively admin-only.
   { to: '/users', icon: 'mdi-account-cog', key: 'nav.users', roles: ['ADMIN'] },
   { to: '/ownership', icon: 'mdi-sitemap', key: 'nav.ownership', roles: ['ADMIN'] },
   { to: '/automation', icon: 'mdi-robot', key: 'nav.automation', roles: ['ADMIN'] },
+  { to: '/email-templates', icon: 'mdi-email-edit-outline', key: 'nav.emailTemplates', roles: ['ADMIN'] },
   { to: '/calendar', icon: 'mdi-calendar-star', key: 'nav.calendar', roles: ['ADMIN'] },
   { to: '/settings', icon: 'mdi-cog', key: 'nav.settings', roles: ['ADMIN'] },
 ];
@@ -56,7 +58,11 @@ onMounted(() => prefs.apply());
 
 <template>
   <v-app>
-    <template v-if="!isPublicPage()">
+    <!-- The staff chrome (bar + menu) appears only for a signed-in user.
+         On a cold load the router is still restoring the session; drawing
+         the chrome before that answer arrives made it flash and vanish
+         when the answer was "no session" and the user was sent to login. -->
+    <template v-if="!isPublicPage() && auth.isAuthenticated">
       <v-app-bar flat border density="comfortable">
         <v-app-bar-nav-icon
           @click="$vuetify.display.mdAndUp ? (rail = !rail) : (drawer = !drawer)"

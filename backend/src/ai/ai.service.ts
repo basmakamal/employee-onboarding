@@ -164,7 +164,7 @@ export class AiService {
         status: z
           .string()
           .optional()
-          .describe(`One of: ${[...PIPELINE, 'ACTIVE', 'INACTIVE'].join(', ')}`),
+          .describe(`One of: ${[...PIPELINE, 'ACTIVE', 'INACTIVE', 'WITHDRAWN'].join(', ')}`),
         department: z.string().optional(),
       }),
       run: async ({ query, status, department }) => {

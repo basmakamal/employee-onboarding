@@ -34,6 +34,18 @@ export const router = createRouter({
       meta: { roles: ['HR'] },
     },
     {
+      path: '/emails',
+      name: 'email-log',
+      component: () => import('../pages/EmailLogPage.vue'),
+      meta: { roles: ['HR'] },
+    },
+    {
+      path: '/email-templates',
+      name: 'email-templates',
+      component: () => import('../pages/EmailTemplatesPage.vue'),
+      meta: { roles: ['ADMIN'] },
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('../pages/SettingsPage.vue'),
@@ -68,12 +80,6 @@ export const router = createRouter({
       path: '/form/:token',
       name: 'public-form',
       component: () => import('../pages/public/DataFormPage.vue'),
-      meta: { public: true },
-    },
-    {
-      path: '/approve-contract/:token',
-      name: 'public-approval',
-      component: () => import('../pages/public/ContractApprovalPage.vue'),
       meta: { public: true },
     },
     {

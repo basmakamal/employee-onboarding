@@ -11,6 +11,7 @@ interface ProcessData {
   status: string;
   holdReason?: string | null;
   holdNote?: string | null;
+  certificateStorageKey?: string | null;
 }
 
 interface AssetFormItem {
@@ -49,6 +50,8 @@ interface OffboardingRow {
   createdAt: string;
 }
 
+type ContractStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'EXPIRED';
+
 interface ContractSummary {
   startDate: string | null;
   durationMonths: number | null;
@@ -56,7 +59,20 @@ interface ContractSummary {
   salary?: number | null;
   sentAt: string | null;
   approvedAt: string | null;
+  /** Recorded by HR — the contract itself lives on an external platform. */
+  status: ContractStatus;
+  statusChangedAt: string;
+  rejectReason: string | null;
+  externalRef: string | null;
 }
+
+const CONTRACT_STATUS_COLORS: Record<ContractStatus, string> = {
+  DRAFT: 'grey',
+  PENDING_APPROVAL: 'amber',
+  ACTIVE: 'success',
+  REJECTED: 'error',
+  EXPIRED: 'error',
+};
 
 interface OnboardingDoc {
   id: string;
@@ -470,17 +486,99 @@ const PIPELINE_STAGES = [
   'AWAITING_CONTRACT_APPROVAL',
 ];
 
+// Contract actions are NOT here on purpose: they live on the contract card
+// as a status change (the contract is approved on an external platform).
 const ONBOARDING_ACTIONS: Record<string, { endpoint: string; icon: string; color: string }> = {
   SEND_FORM: { endpoint: 'send-form', icon: 'mdi-send', color: 'primary' },
   REQUEST_MISSING: { endpoint: 'request-missing', icon: 'mdi-file-alert', color: 'warning' },
   ACCEPT_DOCUMENTS: { endpoint: 'accept-documents', icon: 'mdi-file-check', color: 'success' },
-  SEND_CONTRACT: { endpoint: 'send-contract', icon: 'mdi-file-sign', color: 'primary' },
   REOPEN: { endpoint: 'reopen', icon: 'mdi-restore', color: 'secondary' },
 };
 
-const isPipeline = computed(
-  () => !!employee.value && !['ACTIVE', 'INACTIVE'].includes(employee.value.status),
+const isWithdrawn = computed(() => employee.value?.status === 'WITHDRAWN');
+/** Someone who has left: no new custody, no new actions. */
+const isClosed = computed(
+  () => !!employee.value && ['INACTIVE', 'WITHDRAWN'].includes(employee.value.status),
 );
+const isPipeline = computed(
+  () => !!employee.value && !['ACTIVE', 'INACTIVE', 'WITHDRAWN'].includes(employee.value.status),
+);
+
+// ------------------------------------------------- contract status (manual)
+/** The status changes HR may record right now, derived from the machine. */
+const contractStatusOptions = computed(() => {
+  const acts = employee.value?.availableActions ?? [];
+  const options: Array<{ status: ContractStatus; label: string; hint: string; icon: string; color: string }> = [];
+  if (acts.includes('SUBMIT_CONTRACT')) {
+    options.push({ status: 'PENDING_APPROVAL', label: t('contract.submit'), hint: t('contract.submitHint'), icon: 'mdi-send-check-outline', color: 'primary' });
+  }
+  if (acts.includes('APPROVE_CONTRACT')) {
+    options.push({ status: 'ACTIVE', label: t('contract.approve'), hint: t('contract.approveHint'), icon: 'mdi-check-decagram', color: 'success' });
+  }
+  if (acts.includes('REJECT_CONTRACT')) {
+    options.push({ status: 'REJECTED', label: t('contract.reject'), hint: t('contract.rejectHint'), icon: 'mdi-close-octagon-outline', color: 'error' });
+  }
+  if (acts.includes('EXPIRE')) {
+    options.push({ status: 'EXPIRED', label: t('contract.expire'), hint: t('contract.expireHint'), icon: 'mdi-timer-off-outline', color: 'warning' });
+  }
+  return options;
+});
+
+const rejectDialog = ref(false);
+const rejectReason = ref('');
+
+function onContractStatus(status: ContractStatus) {
+  const name = `${employee.value?.firstName ?? ''} ${employee.value?.lastName ?? ''}`.trim();
+  if (status === 'REJECTED') {
+    rejectReason.value = '';
+    rejectDialog.value = true;
+    return;
+  }
+  if (status === 'ACTIVE' && !window.confirm(t('contract.approveConfirm', { name }))) return;
+  if (status === 'EXPIRED' && !window.confirm(t('contract.expireConfirm'))) return;
+  void setContractStatus(status);
+}
+
+async function setContractStatus(status: ContractStatus, reason?: string) {
+  busy.value = 'contract-status';
+  try {
+    await api.put(`/api/employees/${id}/contract/status`, { status, ...(reason ? { reason } : {}) });
+    rejectDialog.value = false;
+    const name = `${employee.value?.firstName ?? ''} ${employee.value?.lastName ?? ''}`.trim();
+    notify(status === 'ACTIVE' ? t('contract.activated', { name }) : t('contract.statusChanged'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
+// ------------------------------------------------------------ withdrawal
+const withdrawDialog = ref(false);
+const withdrawReason = ref('');
+
+async function withdrawEmployee() {
+  busy.value = 'withdraw';
+  try {
+    const result = await api.post<{ halted: { links: number; assetForms: number; processes: string[] } | null }>(
+      `/api/employees/${id}/withdraw`,
+      { reason: withdrawReason.value.trim() },
+    );
+    withdrawDialog.value = false;
+    const h = result.halted;
+    notify(
+      h
+        ? `${t('withdraw.done')} ${t('withdraw.stopped', { links: h.links, forms: h.assetForms, processes: h.processes.length })}`
+        : t('withdraw.done'),
+    );
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
 
 const onboardingButtons = computed(
   () =>
@@ -518,26 +616,98 @@ function onOnboardingAction(action: string) {
   void runOnboardingAction(ONBOARDING_ACTIONS[action]!.endpoint);
 }
 
-/** HR reviews an uploaded checklist file — authenticated blob download. */
-async function downloadOnboardingDoc(doc: OnboardingDoc) {
-  const res = await fetch(`/api/employees/${id}/onboarding-documents/${doc.id}/download`, {
+// ------------------------------------------------------- document viewer
+// Clicking a document previews it (PDF/image render in a dialog); download
+// is a button inside the viewer rather than the click's side effect.
+const viewer = ref<{
+  show: boolean;
+  title: string;
+  url: string;
+  kind: 'pdf' | 'image' | 'other';
+  downloadName: string;
+}>({ show: false, title: '', url: '', kind: 'other', downloadName: '' });
+
+async function openViewer(fetchUrl: string, title: string, downloadName: string) {
+  const res = await fetch(fetchUrl, {
     headers: { Authorization: `Bearer ${getAccessToken()}` },
   });
   if (!res.ok) {
     notify(t('common.error'), 'error');
     return;
   }
-  const url = URL.createObjectURL(await res.blob());
+  const blob = await res.blob();
+  if (viewer.value.url) URL.revokeObjectURL(viewer.value.url);
+  const kind = blob.type.includes('pdf')
+    ? 'pdf'
+    : blob.type.startsWith('image/')
+      ? 'image'
+      : 'other';
+  viewer.value = {
+    show: true,
+    title,
+    url: URL.createObjectURL(blob),
+    kind,
+    downloadName,
+  };
+}
+
+function downloadFromViewer() {
   const a = document.createElement('a');
-  a.href = url;
-  a.download = doc.label ?? doc.type;
+  a.href = viewer.value.url;
+  a.download = viewer.value.downloadName;
   a.click();
-  URL.revokeObjectURL(url);
+}
+
+function closeViewer() {
+  if (viewer.value.url) URL.revokeObjectURL(viewer.value.url);
+  viewer.value = { show: false, title: '', url: '', kind: 'other', downloadName: '' };
+}
+
+/** HR reviews an uploaded checklist file — view first, download inside. */
+function viewOnboardingDoc(doc: OnboardingDoc) {
+  const title = doc.label ?? t(`docTypes.${doc.type}`, doc.type);
+  void openViewer(
+    `/api/employees/${id}/onboarding-documents/${doc.id}/download`,
+    title,
+    title,
+  );
+}
+
+/** A process's completion document (GOSI / medical / criminal). */
+function viewProcessDoc(kind: 'gosi' | 'medical' | 'criminal', title: string) {
+  void openViewer(`/api/employees/${id}/processes/${kind}/certificate`, title, title);
+}
+
+/** Attaching the completion document IS the COMPLETE action. */
+async function attachProcessDoc(kind: 'gosi' | 'medical' | 'criminal', file: File) {
+  busy.value = kind;
+  try {
+    const body = new FormData();
+    body.append('certificate', file);
+    const res = await fetch(`/api/employees/${id}/processes/${kind}/certificate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getAccessToken()}` },
+      body,
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      throw new Error(data?.error?.message ?? t('common.error'));
+    }
+    notify(t('common.done'));
+    await load();
+  } catch (e) {
+    notify(e instanceof Error ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
 }
 
 // Contract drafting (CONTRACT_CREATION only)
 const contractDialog = ref(false);
 const contractForm = ref({ salary: '', durationMonths: '', startDate: '', terms: '' });
+const contractExternalRef = ref('');
 
 function openContractDialog() {
   const c = employee.value?.contract;
@@ -547,6 +717,7 @@ function openContractDialog() {
     startDate: typeof c?.startDate === 'string' ? c.startDate.slice(0, 10) : '',
     terms: c?.terms ?? '',
   };
+  contractExternalRef.value = c?.externalRef ?? '';
   contractDialog.value = true;
 }
 
@@ -555,7 +726,10 @@ async function saveContract() {
   try {
     const details: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(contractForm.value)) if (v.trim()) details[k] = v.trim();
-    await api.put(`/api/employees/${id}/contract`, { details });
+    await api.put(`/api/employees/${id}/contract`, {
+      details,
+      externalRef: contractExternalRef.value.trim() || null,
+    });
     contractDialog.value = false;
     notify(t('common.saved'));
     await load();
@@ -983,7 +1157,32 @@ onMounted(load);
             {{ employee.contract ? $t('contract.edit') : $t('contract.createBtn') }}
           </v-btn>
 
-          <v-menu v-if="!isPipeline">
+          <!-- Contract status, recorded by hand (external platform) -->
+          <v-btn
+            v-for="opt in contractStatusOptions"
+            :key="opt.status"
+            :color="opt.color"
+            variant="tonal"
+            :prepend-icon="opt.icon"
+            :loading="busy === 'contract-status'"
+            :disabled="opt.status === 'PENDING_APPROVAL' && !employee.contract"
+            @click="onContractStatus(opt.status)"
+          >
+            {{ opt.label }}
+          </v-btn>
+
+          <!-- Custody can start during training (IT) -->
+          <v-btn
+            v-if="isPipeline && auth.hasRole('IT')"
+            color="secondary"
+            variant="tonal"
+            prepend-icon="mdi-laptop"
+            @click="formDialog = true"
+          >
+            {{ $t('assets.newForm') }}
+          </v-btn>
+
+          <v-menu v-if="!isPipeline && !isClosed">
             <template #activator="{ props }">
               <v-btn v-bind="props" color="primary" variant="tonal" prepend-icon="mdi-plus-circle-outline">
                 {{ $t('profile.newAction') }}
@@ -1036,6 +1235,15 @@ onMounted(load);
             @click="offboardingDialog = true"
           >
             {{ $t('profile.endContract') }}
+          </v-btn>
+          <v-btn
+            v-if="employee.availableActions.includes('WITHDRAW')"
+            color="error"
+            variant="outlined"
+            prepend-icon="mdi-account-off-outline"
+            @click="withdrawReason = ''; withdrawDialog = true"
+          >
+            {{ $t('withdraw.button') }}
           </v-btn>
           <v-tooltip
             v-if="auth.user?.role === 'ADMIN'"
@@ -1091,7 +1299,7 @@ onMounted(load);
     <v-window v-model="tab" :touch="false">
       <v-window-item value="overview">
     <!-- Onboarding pipeline progress (pre-activation) -->
-    <v-card v-if="isPipeline" class="mb-6">
+    <v-card v-if="isPipeline || isWithdrawn" class="mb-6">
       <v-card-item>
         <v-card-title class="text-subtitle-1 font-weight-bold">
           <v-icon icon="mdi-school" class="me-2" color="primary" />
@@ -1134,11 +1342,21 @@ onMounted(load);
         >
           {{ $t('status.EXPIRED') }} — {{ $t(`audit.EXPIRE`) }}
         </v-alert>
+        <v-alert
+          v-if="isWithdrawn"
+          type="warning"
+          variant="tonal"
+          density="compact"
+          icon="mdi-account-off-outline"
+          class="mt-2 mb-0"
+        >
+          {{ $t('withdraw.banner') }}
+        </v-alert>
       </v-card-text>
     </v-card>
 
     <!-- BRD Stage 2: the independent processes (عمليات الموظف) -->
-    <template v-if="!isPipeline">
+    <template v-if="!isPipeline && !isWithdrawn">
     <h2 class="text-subtitle-1 font-weight-bold mb-3">{{ $t('profile.processes') }}</h2>
     <v-row class="mb-2">
       <v-col cols="12" sm="6" md="3">
@@ -1150,6 +1368,8 @@ onMounted(load);
           :hold-reasons="GOSI_REASONS"
           :busy="busy === 'gosi'"
           @act="(a, p) => actOnProcess('gosi', a, p)"
+          @attach="(f) => attachProcessDoc('gosi', f)"
+          @view-document="viewProcessDoc('gosi', $t('processes.gosi'))"
         />
       </v-col>
       <v-col cols="12" sm="6" md="3">
@@ -1161,6 +1381,8 @@ onMounted(load);
           :hold-reasons="MEDICAL_REASONS"
           :busy="busy === 'medical'"
           @act="(a, p) => actOnProcess('medical', a, p)"
+          @attach="(f) => attachProcessDoc('medical', f)"
+          @view-document="viewProcessDoc('medical', $t('processes.medical'))"
         />
       </v-col>
       <v-col cols="12" sm="6" md="3">
@@ -1172,6 +1394,8 @@ onMounted(load);
           :hold-reasons="[]"
           :busy="busy === 'criminal'"
           @act="(a) => actOnProcess('criminal', a)"
+          @attach="(f) => attachProcessDoc('criminal', f)"
+          @view-document="viewProcessDoc('criminal', $t('processes.criminal'))"
         />
       </v-col>
       <!-- Custody at a glance (إدارة العهد) -->
@@ -1210,18 +1434,16 @@ onMounted(load);
             </v-card-title>
             <template #append>
               <v-chip
-                v-if="contractState"
-                :color="
-                  contractState === 'active'
-                    ? 'success'
-                    : contractState === 'expired'
-                      ? 'error'
-                      : 'warning'
-                "
+                v-if="employee.contract"
+                :color="CONTRACT_STATUS_COLORS[employee.contract.status]"
                 size="small"
                 variant="tonal"
+                class="font-weight-medium"
               >
-                {{ $t(`contractCard.${contractState}`) }}
+                {{ $t(`contractStatus.${employee.contract.status}`) }}
+                <template v-if="employee.contract.status === 'ACTIVE' && contractState === 'expired'">
+                  · {{ $t('contractCard.expired') }}
+                </template>
               </v-chip>
             </template>
           </v-card-item>
@@ -1229,6 +1451,21 @@ onMounted(load);
             {{ $t('contractCard.none') }}
           </v-card-text>
           <v-card-text v-else>
+            <p v-if="isPipeline" class="text-caption text-medium-emphasis mb-3">
+              {{ $t('contract.statusHint') }}
+            </p>
+            <v-alert
+              v-if="employee.contract.status === 'REJECTED'"
+              type="error"
+              variant="tonal"
+              density="compact"
+              class="mb-3"
+            >
+              {{ $t('contract.rejectedBanner') }}
+              <div v-if="employee.contract.rejectReason" class="text-body-2 mt-1">
+                {{ $t('contract.rejectReason') }}: {{ employee.contract.rejectReason }}
+              </div>
+            </v-alert>
             <v-row dense>
               <v-col
                 v-for="cell in [
@@ -1262,6 +1499,7 @@ onMounted(load);
                   ...(employee.contract.salary != null
                     ? [{ label: $t('contractCard.salary'), value: String(employee.contract.salary) }]
                     : []),
+                  { label: $t('contract.externalRef'), value: employee.contract.externalRef },
                 ]"
                 :key="cell.label"
                 cols="6"
@@ -1351,7 +1589,9 @@ onMounted(load);
             </v-list-item>
           </v-list>
         </v-card>
-        <v-card v-if="!isPipeline">
+        <!-- Custody (العهد): available from the trainee stage; the same rows
+             follow the person into the employee file on conversion. -->
+        <v-card>
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
               <v-icon icon="mdi-laptop" class="me-2" color="secondary" />
@@ -1359,7 +1599,7 @@ onMounted(load);
             </v-card-title>
             <template #append>
               <v-btn
-                v-if="auth.hasRole('IT')"
+                v-if="auth.hasRole('IT') && !isClosed"
                 color="primary"
                 size="small"
                 prepend-icon="mdi-plus"
@@ -1372,6 +1612,8 @@ onMounted(load);
 
           <v-card-text v-if="employee.assetForms.length === 0" class="text-medium-emphasis">
             {{ $t('assets.empty') }}
+            <div v-if="isPipeline" class="text-caption mt-1">{{ $t('assets.trainee') }}</div>
+            <div v-else-if="isClosed" class="text-caption mt-1">{{ $t('assets.closed') }}</div>
           </v-card-text>
 
           <v-expansion-panels v-else variant="accordion">
@@ -1516,8 +1758,8 @@ onMounted(load);
                   :prepend-icon="doc.uploaded ? 'mdi-file-check' : 'mdi-file-remove-outline'"
                   :color="doc.uploaded ? 'success' : doc.required ? 'error' : 'grey'"
                   variant="tonal"
-                  :append-icon="doc.uploaded && auth.hasRole('HR') ? 'mdi-download' : undefined"
-                  @click="doc.uploaded && auth.hasRole('HR') && downloadOnboardingDoc(doc)"
+                  :append-icon="doc.uploaded && auth.hasRole('HR') ? 'mdi-eye-outline' : undefined"
+                  @click="doc.uploaded && auth.hasRole('HR') && viewOnboardingDoc(doc)"
                 >
                   {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }}
                   <span v-if="!doc.required" class="text-caption ms-1">
@@ -1618,6 +1860,69 @@ onMounted(load);
             @click="createAssetForm"
           >
             {{ $t('common.create') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Contract rejected on the platform: record the reason -->
+    <v-dialog v-model="rejectDialog" max-width="480">
+      <v-card>
+        <div class="px-6 pt-6 pb-2">
+          <h2 class="text-subtitle-1 font-weight-bold">{{ $t('contract.rejectTitle') }}</h2>
+          <p class="text-caption text-medium-emphasis mb-0">{{ $t('contract.rejectHint') }}</p>
+        </div>
+        <v-card-text class="pt-4">
+          <v-textarea v-model="rejectReason" :label="$t('contract.rejectReason')" rows="3" auto-grow />
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5 pt-2">
+          <v-spacer />
+          <v-btn variant="text" @click="rejectDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn
+            variant="flat"
+            color="error"
+            class="px-5"
+            :loading="busy === 'contract-status'"
+            @click="setContractStatus('REJECTED', rejectReason.trim() || undefined)"
+          >
+            {{ $t('contract.reject') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Withdrawal: terminal for a trainee; stops every open item, deletes nothing -->
+    <v-dialog v-model="withdrawDialog" max-width="520">
+      <v-card>
+        <div class="d-flex align-center ga-3 px-6 pt-6 pb-2">
+          <v-avatar color="error" variant="tonal" size="42" rounded="lg">
+            <v-icon icon="mdi-account-off-outline" size="22" />
+          </v-avatar>
+          <div>
+            <h2 class="text-subtitle-1 font-weight-bold">{{ $t('withdraw.title') }}</h2>
+            <p class="text-caption text-medium-emphasis mb-0">
+              {{ employee.firstName }} {{ employee.lastName }}
+            </p>
+          </div>
+        </div>
+        <v-card-text class="pt-4">
+          <v-alert type="warning" variant="tonal" density="compact" class="mb-4">
+            {{ $t('withdraw.hint') }}
+          </v-alert>
+          <v-textarea v-model="withdrawReason" :label="$t('withdraw.reason')" rows="2" auto-grow />
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5 pt-2">
+          <v-spacer />
+          <v-btn variant="text" @click="withdrawDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn
+            variant="flat"
+            color="error"
+            class="px-5"
+            :loading="busy === 'withdraw'"
+            :disabled="!withdrawReason.trim()"
+            @click="withdrawEmployee"
+          >
+            {{ $t('withdraw.confirm') }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -1810,6 +2115,13 @@ onMounted(load);
             </v-col>
             <v-col cols="12">
               <v-textarea v-model="contractForm.terms" :label="$t('contract.terms')" rows="3" />
+              <v-text-field
+                v-model="contractExternalRef"
+                :label="$t('contract.externalRef')"
+                :hint="$t('contract.externalRefHint')"
+                persistent-hint
+                dir="ltr"
+              />
             </v-col>
           </v-row>
         </v-card-text>
@@ -1933,6 +2245,9 @@ onMounted(load);
             :items="OFFBOARDING_REASONS.map((r) => ({ title: $t(`offboardingReasons.${r}`), value: r }))"
             :label="$t('offboarding.reason')"
           />
+          <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+            {{ $t('offboarding.stopsOpenWork') }}
+          </v-alert>
           <v-textarea v-model="offboardingForm.notes" :label="$t('assets.notes')" rows="2" />
         </v-card-text>
         <v-card-actions>
@@ -1948,6 +2263,59 @@ onMounted(load);
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3500">
       {{ snackbar.text }}
     </v-snackbar>
+
+    <!-- Document viewer: preview first, download as an explicit choice. -->
+    <v-dialog
+      :model-value="viewer.show"
+      max-width="860"
+      @update:model-value="closeViewer"
+    >
+      <v-card>
+        <v-card-title class="d-flex align-center text-subtitle-1 font-weight-bold">
+          {{ viewer.title }}
+          <v-spacer />
+          <v-btn
+            prepend-icon="mdi-download"
+            variant="tonal"
+            size="small"
+            color="primary"
+            class="me-2"
+            @click="downloadFromViewer"
+          >
+            {{ $t('common.download') }}
+          </v-btn>
+          <v-btn icon="mdi-close" variant="text" size="small" @click="closeViewer" />
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-0" style="height: 70vh">
+          <iframe
+            v-if="viewer.kind === 'pdf'"
+            :src="viewer.url"
+            style="width: 100%; height: 100%; border: 0"
+            :title="viewer.title"
+          />
+          <div
+            v-else-if="viewer.kind === 'image'"
+            class="d-flex align-center justify-center h-100 pa-4"
+          >
+            <img
+              :src="viewer.url"
+              :alt="viewer.title"
+              style="max-width: 100%; max-height: 100%; object-fit: contain"
+            />
+          </div>
+          <div v-else class="d-flex flex-column align-center justify-center h-100 pa-8">
+            <v-icon icon="mdi-file-document-outline" size="56" class="mb-4 text-medium-emphasis" />
+            <p class="text-medium-emphasis text-center mb-4">
+              {{ $t('employees.previewUnavailable') }}
+            </p>
+            <v-btn color="primary" prepend-icon="mdi-download" @click="downloadFromViewer">
+              {{ $t('common.download') }}
+            </v-btn>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
   </v-container>
 
   <v-container v-else class="py-16 text-center">

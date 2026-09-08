@@ -1,4 +1,4 @@
-{
+﻿{
   "app": {
     "title": "HR System",
     "tagline": "Onboarding, employee file, and offboarding — one auditable workflow."
@@ -12,7 +12,9 @@
     "automation": "Automation",
     "settings": "Settings",
     "assistant": "AI Assistant",
-    "calendar": "Work calendar"
+    "calendar": "Work calendar",
+    "emailLog": "Email history",
+    "emailTemplates": "Email templates"
   },
   "users": {
     "title": "Staff & roles",
@@ -25,6 +27,9 @@
     "passwordHint": "At least 8 characters",
     "passwordReset": "Password updated.",
     "you": "You",
+    "editTitle": "Edit teammate",
+    "activeHint": "Can sign in and work as normal.",
+    "inactiveHint": "Sign-in is blocked. Their records stay untouched.",
     "selfHint": "You cannot deactivate or demote your own account — ask another administrator."
   },
   "dashboard": {
@@ -73,6 +78,9 @@
     "hired": "Hired",
     "holdReason": "Hold reason",
     "holdNote": "Note (optional)",
+    "attachAndComplete": "Attach document & complete",
+    "viewProcessDocument": "View document",
+    "previewUnavailable": "This file type cannot be previewed in the browser - download it to view.",
     "statuses": {
       "ACTIVE": "Active",
       "INACTIVE": "Inactive"
@@ -102,6 +110,7 @@
     "HOLD": "Put on hold",
     "RESUME": "Resume",
     "CANCEL": "Cancel",
+    "download": "Download",
     "SEND_REQUEST": "Send request",
     "MARK_PENDING": "Awaiting certificate"
   },
@@ -136,8 +145,11 @@
     "actions": {
       "send": "Send for approval",
       "cancel": "Cancel",
+      "download": "Download",
       "revise": "Revise"
-    }
+    },
+    "trainee": "Custody can be issued during training; it follows the person into their employee file.",
+    "closed": "No new custody for someone who has left."
   },
   "assetStatus": {
     "DRAFT": "Draft",
@@ -162,6 +174,7 @@
   },
   "common": {
     "cancel": "Cancel",
+    "download": "Download",
     "create": "Create",
     "edit": "Edit",
     "print": "Print",
@@ -181,7 +194,27 @@
     "edit": "Edit contract",
     "createBtn": "Create contract",
     "sentAt": "Sent",
-    "approvedAt": "Approved"
+    "approvedAt": "Approved",
+    "externalRef": "Platform reference",
+    "externalRefHint": "The contract number on the external platform, if you have it.",
+    "statusTitle": "Contract status",
+    "statusHint": "The contract is created and approved on the external platform. Record what happened there.",
+    "setStatus": "Update contract status",
+    "submit": "Submitted for approval",
+    "submitHint": "Moves the record to “Awaiting approval”.",
+    "approve": "Approved — contract active",
+    "approveHint": "Converts the trainee into an employee: number allocated, GOSI / medical / criminal-record tracks opened.",
+    "approveConfirm": "Mark the contract as active and convert {name} into an employee?",
+    "reject": "Rejected",
+    "rejectHint": "Back to drafting so the contract can be fixed and resubmitted.",
+    "rejectTitle": "Contract rejected",
+    "rejectReason": "Rejection reason",
+    "expire": "Expired without approval",
+    "expireHint": "The approval window closed. HR can reopen later.",
+    "expireConfirm": "Mark the contract as expired without approval?",
+    "rejectedBanner": "The platform rejected this contract. Fix the details and submit again.",
+    "statusChanged": "Contract status updated.",
+    "activated": "{name} is now an employee."
   },
   "status": {
     "CREATED": "Created",
@@ -191,16 +224,23 @@
     "AWAITING_CONTRACT_APPROVAL": "Awaiting approval",
     "EXPIRED": "Expired",
     "ACTIVE": "Active",
-    "INACTIVE": "Inactive"
+    "INACTIVE": "Inactive",
+    "WITHDRAWN": "Withdrawn"
   },
   "actions": {
     "toggleTheme": "Toggle dark mode",
     "language": "العربية",
+    "theme": "Switch theme",
     "SEND_FORM": "Send data form",
     "REQUEST_MISSING": "Request missing documents",
     "ACCEPT_DOCUMENTS": "Accept documents",
     "SEND_CONTRACT": "Send contract",
-    "REOPEN": "Reopen"
+    "REOPEN": "Reopen",
+    "SUBMIT_CONTRACT": "Submitted for approval",
+    "APPROVE_CONTRACT": "Contract active",
+    "REJECT_CONTRACT": "Contract rejected",
+    "WITHDRAW": "Withdraw",
+    "EXPIRE": "Expired without approval"
   },
   "audit": {
     "CREATE": "Record created",
@@ -226,7 +266,11 @@
     "WARNING": "Warning",
     "INVESTIGATION": "Investigation",
     "ACTIVATED": "Employee activated",
-    "DELETE": "Employee deleted"
+    "DELETE": "Employee deleted",
+    "SUBMIT_CONTRACT": "Contract submitted for approval",
+    "REJECT_CONTRACT": "Contract rejected",
+    "WITHDRAW": "Withdrawn",
+    "CANCEL": "Cancelled"
   },
   "actors": {
     "USER": "Staff",
@@ -234,12 +278,18 @@
     "SYSTEM": "System"
   },
   "login": {
-    "subtitle": "Sign in to your account",
+    "subtitle": "Sign in to pick up where you left off.",
+    "greetMorning": "Good morning",
+    "greetAfternoon": "Good afternoon",
+    "greetEvening": "Good evening",
+    "emailPlaceholder": "you{'@'}riyada-ksa.com",
+    "unreachable": "We could not reach the server. Check your connection and try again.",
+    "help": "Trouble signing in? Your HR admin can reset your access.",
     "email": "Email",
     "password": "Password",
     "signIn": "Sign in",
     "signOut": "Sign out",
-    "invalid": "Invalid email or password"
+    "invalid": "That email and password do not match. Give it another try."
   },
   "roles": {
     "HR": "Human Resources",
@@ -300,7 +350,8 @@
     "deductions": "Deductions",
     "entitlements": "Final entitlements",
     "closeHint": "Amounts saved — a Finance user closes the file after payout.",
-    "closedAt": "File closed on {date}. The employee is now inactive."
+    "closedAt": "File closed on {date}. The employee is now inactive.",
+    "stopsOpenWork": "Starting offboarding stops every open item on the file (undecided custody forms, live links, in-progress GOSI / medical cards). Approved custody stays for the return step."
   },
   "offboardingStatus": {
     "REQUESTED": "Requested",
@@ -398,7 +449,11 @@
     "status": "Status / document type",
     "notifySubject": "Also e-mail the employee",
     "anyType": "Any document",
-    "expireHint": "EXPIRE closes the record automatically. It only takes effect on the onboarding waiting stages (awaiting form / awaiting approval)."
+    "expireHint": "EXPIRE closes the record automatically. It only takes effect on the onboarding waiting stages (awaiting form / awaiting approval).",
+    "subjectTemplate": "Employee email template",
+    "staffTemplate": "Staff email template",
+    "builtInTemplate": "Built-in default",
+    "templates": "Templates"
   },
   "reports": {
     "title": "Reports",
@@ -658,5 +713,118 @@
     "ER": "Eritrean",
     "TR": "Turkish",
     "OTHER": "Other"
+  },
+  "emailLog": {
+    "title": "Email history",
+    "subtitle": "Every message the system sent — who, what, when, and whether it arrived.",
+    "search": "Search recipient or subject",
+    "status": "Status",
+    "channel": "Channel",
+    "template": "Template",
+    "all": "All",
+    "statuses": {
+      "PENDING": "Queued",
+      "SENT": "Sent",
+      "FAILED": "Failed"
+    },
+    "channels": {
+      "EMAIL": "Email",
+      "IN_APP": "In-app"
+    },
+    "when": "When",
+    "recipient": "Recipient",
+    "subject": "Subject",
+    "view": "View",
+    "resend": "Resend",
+    "resendConfirm": "Send this email again to {email}?",
+    "resent": "Resent — a fresh copy is on its way.",
+    "empty": "No emails yet",
+    "emptyHint": "Messages appear here the moment the system sends them.",
+    "message": "Message",
+    "created": "Created",
+    "delivered": "Delivered",
+    "notDelivered": "Not delivered",
+    "builtIn": "built-in",
+    "version": "v{n}",
+    "linkedRecord": "Linked record"
+  },
+  "emailTemplates": {
+    "title": "Email templates",
+    "subtitle": "Edit what the system says. Placeholders fill in automatically for each recipient.",
+    "audience": {
+      "employee": "To employees",
+      "staff": "To staff"
+    },
+    "audienceCol": "Audience",
+    "customized": "Customised",
+    "builtIn": "Built-in",
+    "disabledOverride": "Edit saved, built-in in use",
+    "edit": "Edit",
+    "preview": "Preview",
+    "test": "Send me a test",
+    "testSent": "Test email sent to {email}.",
+    "revert": "Revert to built-in",
+    "revertConfirm": "Discard your edits and go back to the built-in text?",
+    "reverted": "Back to the built-in template.",
+    "saved": "Template saved.",
+    "name": "Template name",
+    "subject": "Subject",
+    "body": "Body",
+    "bodyHint": "Separate paragraphs with a blank line. Click a placeholder to insert it at the cursor.",
+    "ctaLabel": "Button label",
+    "ctaHint": "Shown only when the message carries a link.",
+    "placeholders": "Placeholders",
+    "useEdited": "Use this edited version",
+    "useEditedHint": "Off keeps your edit on file but sends the built-in text.",
+    "arabic": "Arabic",
+    "english": "English",
+    "previewTitle": "Preview",
+    "previewHint": "Rendered with sample data, exactly as the recipient will see it.",
+    "triggers": {
+      "title": "Status triggers",
+      "subtitle": "Send a template automatically the moment a record enters a status.",
+      "add": "New trigger",
+      "process": "Process",
+      "status": "Status",
+      "template": "Template",
+      "recipient": "Recipient",
+      "subjectRecipient": "The employee",
+      "roleRecipient": "A staff group",
+      "role": "Group",
+      "active": "Active",
+      "empty": "No triggers yet",
+      "emptyHint": "The built-in emails (form invite, contract approval…) still go out on their own. Triggers add to them.",
+      "created": "Trigger added.",
+      "removed": "Trigger removed.",
+      "remove": "Remove",
+      "removeConfirm": "Remove this trigger?",
+      "note": "Triggers fire after the change is saved, so a failed change never sends an email."
+    }
+  },
+  "contractStatus": {
+    "DRAFT": "Draft",
+    "PENDING_APPROVAL": "Pending approval",
+    "ACTIVE": "Active",
+    "REJECTED": "Rejected",
+    "EXPIRED": "Expired"
+  },
+  "withdraw": {
+    "button": "Withdraw",
+    "title": "Withdraw this trainee",
+    "hint": "Every open item on this file stops: pending links, undecided custody forms, GOSI / medical cards in progress. Nothing is deleted — the history stays.",
+    "reason": "Reason",
+    "confirm": "Withdraw",
+    "done": "Withdrawn. Open items were stopped.",
+    "banner": "This trainee withdrew. The record is kept for reference; nothing further will happen on it.",
+    "stopped": "Stopped: {links} link(s), {forms} custody form(s), {processes} process card(s)."
+  },
+  "responsibility": {
+    "title": "Primary follow-up owners",
+    "subtitle": "The people who receive the reminders for each process. This never limits who may act — any authorised teammate can complete a step.",
+    "process": "Process",
+    "owners": "Responsible people",
+    "none": "Whole group (default)",
+    "hint": "Leave empty to notify the whole role group. Escalations always go to the escalation group.",
+    "EMPLOYEE": "Onboarding & contract follow-up"
   }
 }

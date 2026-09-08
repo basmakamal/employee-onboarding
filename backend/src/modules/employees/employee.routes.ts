@@ -7,6 +7,7 @@ import {
 } from './employee.repository.js';
 import {
   discardUploads,
+  documentUpload,
   employeeSubdir,
   photoUpload,
   removeStoredFile,
@@ -58,15 +59,24 @@ const createEmployeeSchema = z.object({
 
 const contractSchema = z.object({
   details: z.record(z.string(), z.unknown()).default({}),
+  /** Reference on the external contracting platform (optional). */
+  externalRef: z.string().max(120).nullable().optional(),
 });
+
+/** HR records the contract's fate on the external platform. */
+const contractStatusSchema = z.object({
+  status: z.enum(['PENDING_APPROVAL', 'ACTIVE', 'REJECTED', 'EXPIRED']),
+  reason: z.string().max(1000).optional(),
+});
+
+const withdrawSchema = z.object({ reason: z.string().min(1).max(1000) });
 
 const notesSchema = z.object({ notes: z.string().optional() });
 
-const ONBOARDING_ACTIONS: Record<string, 'sendForm' | 'requestMissing' | 'acceptDocuments' | 'sendContract' | 'reopen'> = {
+const ONBOARDING_ACTIONS: Record<string, 'sendForm' | 'requestMissing' | 'acceptDocuments' | 'reopen'> = {
   'send-form': 'sendForm',
   'request-missing': 'requestMissing',
   'accept-documents': 'acceptDocuments',
-  'send-contract': 'sendContract',
   reopen: 'reopen',
 };
 
@@ -122,6 +132,7 @@ const EMPLOYEE_STATUSES = [
   'EXPIRED',
   'ACTIVE',
   'INACTIVE',
+  'WITHDRAWN',
 ] as const;
 
 /** List query: everything optional, everything clamped server-side. */
@@ -235,8 +246,48 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     requireRole('HR', 'ADMIN'),
     validate(contractSchema),
     asyncHandler(async (req, res) => {
-      const { details } = req.body as z.infer<typeof contractSchema>;
-      res.json(await onboarding.upsertContract(req.params['id'] as string, details as never, actor(req)));
+      const { details, externalRef } = req.body as z.infer<typeof contractSchema>;
+      res.json(
+        await onboarding.upsertContract(
+          req.params['id'] as string,
+          details as never,
+          actor(req),
+          externalRef,
+        ),
+      );
+    }),
+  );
+
+  /**
+   * Contract status, recorded by hand (the contract lives on an external
+   * platform): PENDING_APPROVAL / ACTIVE / REJECTED / EXPIRED. ACTIVE is the
+   * trainee → employee conversion.
+   */
+  router.put(
+    '/:id/contract/status',
+    requireRole('HR', 'ADMIN'),
+    validate(contractStatusSchema),
+    asyncHandler(async (req, res) => {
+      const { status, reason } = req.body as z.infer<typeof contractStatusSchema>;
+      res.json(
+        await onboarding.setContractStatus(
+          req.params['id'] as string,
+          status,
+          actor(req),
+          reason ? { reason } : {},
+        ),
+      );
+    }),
+  );
+
+  /** The trainee withdrew before activation — stops every open action on the file. */
+  router.post(
+    '/:id/withdraw',
+    requireRole('HR', 'ADMIN'),
+    validate(withdrawSchema),
+    asyncHandler(async (req, res) => {
+      const { reason } = req.body as z.infer<typeof withdrawSchema>;
+      res.json(await onboarding.withdraw(req.params['id'] as string, actor(req), reason));
     }),
   );
 
@@ -327,6 +378,58 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
         .json(
           await service.createRequest(req.params['id'] as string, body.type, actor(req), body.notes),
         );
+    }),
+  );
+
+  /**
+   * Attach the completion document and finish the process in one step:
+   * the file is stored, then COMPLETE runs through the state machine — so
+   * legality and ownership are still the machine's call, and an illegal
+   * completion discards the file rather than orphaning it.
+   */
+  router.post(
+    '/:id/processes/:kind/certificate',
+    (req, _res, next) => {
+      req.uploadSubdir = employeeSubdir(req.params['id'] as string);
+      next();
+    },
+    documentUpload.single('certificate'),
+    asyncHandler(async (req, res) => {
+      const kind = req.params['kind'] as (typeof KINDS)[number];
+      if (!KINDS.includes(kind)) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: `unknown process ${kind}` } });
+        return;
+      }
+      if (!req.file) throw new GuardFailedError('FILE_MISSING', 'no document uploaded');
+      try {
+        await verifyUploadedFiles([req.file]);
+        const key = storageKeyFor(req.uploadSubdir as string, req.file.filename);
+        const result = await service.actOnProcess(
+          req.params['id'] as string,
+          kind,
+          'COMPLETE',
+          actor(req),
+          { certificateStorageKey: key },
+        );
+        res.json(result);
+      } catch (err) {
+        await discardUploads([req.file]);
+        throw err;
+      }
+    }),
+  );
+
+  /** The attached completion document (any staff may review it). */
+  router.get(
+    '/:id/processes/:kind/certificate',
+    asyncHandler(async (req, res) => {
+      const kind = req.params['kind'] as (typeof KINDS)[number];
+      if (!KINDS.includes(kind)) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: `unknown process ${kind}` } });
+        return;
+      }
+      const key = await service.getProcessCertificateKey(req.params['id'] as string, kind);
+      res.sendFile(storagePath(key));
     }),
   );
 

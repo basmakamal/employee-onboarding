@@ -1,12 +1,17 @@
 /**
  * OnboardingService — the pipeline on the unified employee record.
- * Contract e-approval must activate: number allocated, Stage-2 tracks
- * opened, activation audited. Signed links expose only public fields.
+ * The contract lives on an external platform: HR records its status by
+ * hand, and recording ACTIVE converts the trainee (number allocated,
+ * Stage-2 tracks opened, activation audited). Withdrawal stops open work.
+ * Signed links expose only public fields.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { OnboardingService } from '../src/modules/employees/onboarding.service.js';
 import type { Workflow } from '../src/workflow/engine.js';
 import type { Employee } from '../src/generated/prisma/client.js';
+import { GuardFailedError } from '../src/workflow/errors.js';
+
+const HR = { type: 'USER' as const, id: 'hr1', role: 'HR' };
 
 const PIPELINE_EMPLOYEE = {
   id: 'e1',
@@ -21,8 +26,12 @@ const PIPELINE_EMPLOYEE = {
   status: 'AWAITING_CONTRACT_APPROVAL',
 } as unknown as Employee;
 
-function makeService(overrides: { employee?: Partial<Employee> } = {}) {
+function makeService(overrides: { employee?: Partial<Employee>; contract?: unknown } = {}) {
   const employee = { ...PIPELINE_EMPLOYEE, ...overrides.employee };
+  const contract =
+    'contract' in overrides
+      ? overrides.contract
+      : { id: 'c1', status: 'PENDING_APPROVAL', details: { salary: 1 }, sentAt: new Date() };
   const repos = {
     employees: {
       findById: vi.fn().mockResolvedValue(employee),
@@ -39,25 +48,24 @@ function makeService(overrides: { employee?: Partial<Employee> } = {}) {
       attachUpload: vi.fn().mockResolvedValue({}),
     },
     contracts: {
-      findByEmployee: vi.fn().mockResolvedValue({ id: 'c1', details: { salary: 1 }, sentAt: new Date() }),
-      markApproved: vi.fn().mockResolvedValue(true),
+      findByEmployee: vi.fn().mockResolvedValue(contract),
+      setStatus: vi.fn().mockResolvedValue({}),
+      setStatusByEmployee: vi.fn().mockResolvedValue({ count: 1 }),
+      updateDetails: vi.fn().mockResolvedValue({}),
+      create: vi.fn().mockResolvedValue({}),
     },
     audit: { append: vi.fn().mockResolvedValue({}) },
   };
   const workflow = {
-    transition: vi.fn().mockResolvedValue({
-      from: 'AWAITING_CONTRACT_APPROVAL',
-      to: 'ACTIVE',
-      action: 'APPROVE_CONTRACT',
-    }),
+    transition: vi
+      .fn()
+      .mockImplementation((_e: Employee, action: string) =>
+        Promise.resolve({ from: employee.status, to: 'ACTIVE', action }),
+      ),
     availableActions: vi.fn().mockReturnValue([]),
   } as unknown as Workflow<Employee>;
   const links = {
-    verify: vi.fn().mockResolvedValue({
-      id: 'tok1',
-      purpose: 'CONTRACT_APPROVAL',
-      employee,
-    }),
+    verify: vi.fn().mockResolvedValue({ id: 'tok1', purpose: 'DATA_FORM', employee }),
     issue: vi.fn().mockResolvedValue({ url: 'http://x/l', expiresAt: new Date() }),
     markUsed: vi.fn().mockResolvedValue({}),
   };
@@ -65,6 +73,7 @@ function makeService(overrides: { employee?: Partial<Employee> } = {}) {
     notifyExternal: vi.fn().mockResolvedValue(undefined),
     notifyHr: vi.fn().mockResolvedValue(undefined),
   };
+  const halter = { halt: vi.fn().mockResolvedValue({ links: 1, assetForms: 1, processes: [] }) };
   // Unit of work under test = the same fakes; the consumed link's stamp
   // delegates to the fake links service so assertions stay in one place.
   const scope = { ...repos, workflow, markLinkUsed: links.markUsed };
@@ -75,60 +84,140 @@ function makeService(overrides: { employee?: Partial<Employee> } = {}) {
     links as never,
     notifications as never,
     transact as never,
+    halter as never,
   );
-  return { service, repos, workflow, links, notifications };
+  return { service, repos, workflow, links, notifications, halter };
 }
 
-describe('OnboardingService.approveContract (activation)', () => {
-  it('activates: number allocated, tracks opened, activation audited', async () => {
-    const { service, repos, links, notifications } = makeService();
+describe('OnboardingService.setContractStatus', () => {
+  it('ACTIVE converts the trainee: number allocated, contract active, activation audited', async () => {
+    const { service, repos, workflow, links, notifications } = makeService();
 
-    const result = await service.approveContract('raw-token');
+    const result = await service.setContractStatus('e1', 'ACTIVE', HR);
 
-    expect(result).toMatchObject({ to: 'ACTIVE', employeeId: 'e1', employeeNo: 'EMP-0042' });
+    expect(result).toMatchObject({ to: 'ACTIVE', contractStatus: 'ACTIVE', employeeNo: 'EMP-0042' });
+    expect(workflow.transition).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'e1' }),
+      'APPROVE_CONTRACT',
+      HR,
+    );
+    expect(repos.contracts.setStatus).toHaveBeenCalledWith('c1', 'ACTIVE', {
+      approvedAt: expect.any(Date),
+      rejectReason: null,
+    });
     expect(repos.employees.completeActivation).toHaveBeenCalledWith(
       'e1',
       'EMP-0042',
       expect.any(Date),
     );
-    expect(repos.contracts.markApproved).toHaveBeenCalledWith('c1', expect.any(Date));
     expect(repos.audit.append).toHaveBeenCalledWith(
       expect.objectContaining({
         entity: 'EMPLOYEE',
         action: 'ACTIVATED',
+        actorId: 'hr1',
         employeeId: 'e1',
-        metadata: { employeeNo: 'EMP-0042', from: 'contract-approval' },
+        metadata: { employeeNo: 'EMP-0042', from: 'contract-active' },
       }),
     );
-    expect(links.markUsed).toHaveBeenCalledWith('tok1', expect.any(Date));
-    expect(notifications.notifyHr).toHaveBeenCalledWith(
-      'hr.contract_approved',
-      { name: 'Nora Khalid' },
-      { entity: 'EMPLOYEE', entityId: 'e1' },
-    );
+    // No e-approval link exists any more: nothing is issued or emailed.
+    expect(links.issue).not.toHaveBeenCalled();
+    expect(notifications.notifyExternal).not.toHaveBeenCalled();
   });
 
-  it('rejects a token of the wrong purpose', async () => {
-    const { service, links, repos } = makeService();
-    (links.verify as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 'tok1',
-      purpose: 'DATA_FORM',
-      employee: PIPELINE_EMPLOYEE,
+  it('PENDING_APPROVAL records the submission and stamps sentAt', async () => {
+    const { service, repos, workflow } = makeService({
+      employee: { status: 'CONTRACT_CREATION' } as Partial<Employee>,
     });
 
-    await expect(service.approveContract('raw')).rejects.toThrow(/not found/);
+    await service.setContractStatus('e1', 'PENDING_APPROVAL', HR);
+
+    expect(workflow.transition).toHaveBeenCalledWith(expect.anything(), 'SUBMIT_CONTRACT', HR);
+    expect(repos.contracts.setStatus).toHaveBeenCalledWith('c1', 'PENDING_APPROVAL', {
+      sentAt: expect.any(Date),
+      rejectReason: null,
+    });
     expect(repos.employees.completeActivation).not.toHaveBeenCalled();
+  });
+
+  it('REJECTED sends the record back to drafting and keeps the reason', async () => {
+    const { service, repos, workflow } = makeService();
+
+    await service.setContractStatus('e1', 'REJECTED', HR, { reason: 'salary band' });
+
+    expect(workflow.transition).toHaveBeenCalledWith(expect.anything(), 'REJECT_CONTRACT', HR, {
+      reason: 'salary band',
+    });
+    expect(repos.contracts.setStatus).toHaveBeenCalledWith('c1', 'REJECTED', {
+      rejectReason: 'salary band',
+    });
+  });
+
+  it('EXPIRED is a manual expiry by HR', async () => {
+    const { service, repos, workflow } = makeService();
+
+    await service.setContractStatus('e1', 'EXPIRED', HR);
+
+    expect(workflow.transition).toHaveBeenCalledWith(expect.anything(), 'EXPIRE', HR, undefined);
+    expect(repos.contracts.setStatus).toHaveBeenCalledWith('c1', 'EXPIRED');
+  });
+
+  it('refuses when no contract has been entered yet', async () => {
+    const { service, workflow } = makeService({ contract: null });
+
+    await expect(service.setContractStatus('e1', 'PENDING_APPROVAL', HR)).rejects.toBeInstanceOf(
+      GuardFailedError,
+    );
+    expect(workflow.transition).not.toHaveBeenCalled();
+  });
+});
+
+describe('OnboardingService.withdraw', () => {
+  it('moves the trainee to WITHDRAWN, records the reason, and stops open work', async () => {
+    const { service, workflow, halter } = makeService({
+      employee: { status: 'AWAITING_FORM' } as Partial<Employee>,
+    });
+
+    const result = await service.withdraw('e1', HR, 'took another offer');
+
+    expect(workflow.transition).toHaveBeenCalledWith(expect.anything(), 'WITHDRAW', HR, {
+      reason: 'took another offer',
+    });
+    expect(halter.halt).toHaveBeenCalledWith('e1', 'WITHDRAWN', HR);
+    expect(result.halted).toEqual({ links: 1, assetForms: 1, processes: [] });
+  });
+
+  it('does not sweep anything when the transition itself is refused', async () => {
+    const { service, workflow, halter } = makeService({
+      employee: { status: 'ACTIVE' } as Partial<Employee>,
+    });
+    (workflow.transition as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('illegal'));
+
+    await expect(service.withdraw('e1', HR, 'x')).rejects.toThrow('illegal');
+    expect(halter.halt).not.toHaveBeenCalled();
+  });
+});
+
+describe('OnboardingService.reopen', () => {
+  it('puts the contract back to pending when the record returns to approval', async () => {
+    const { service, repos, workflow, links } = makeService({
+      employee: { status: 'EXPIRED' } as Partial<Employee>,
+    });
+    (workflow.transition as ReturnType<typeof vi.fn>).mockResolvedValue({
+      from: 'EXPIRED',
+      to: 'AWAITING_CONTRACT_APPROVAL',
+      action: 'REOPEN',
+    });
+
+    await service.reopen('e1', HR);
+
+    expect(repos.contracts.setStatusByEmployee).toHaveBeenCalledWith('e1', 'PENDING_APPROVAL');
+    expect(links.issue).not.toHaveBeenCalled();
   });
 });
 
 describe('OnboardingService signed-link surface', () => {
   it('linkContext exposes only public fields plus the checklist', async () => {
-    const { service, links } = makeService();
-    (links.verify as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 'tok1',
-      purpose: 'DATA_FORM',
-      employee: PIPELINE_EMPLOYEE,
-    });
+    const { service } = makeService();
 
     const ctx = (await service.linkContext('raw')) as {
       employee: Record<string, unknown>;
@@ -143,13 +232,19 @@ describe('OnboardingService signed-link surface', () => {
     ]);
   });
 
-  it('submitForm attaches known uploads, skips unknown field names', async () => {
-    const { service, repos, links, workflow } = makeService();
+  it('linkContext no longer serves contract-approval links', async () => {
+    const { service, links } = makeService();
     (links.verify as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 'tok1',
-      purpose: 'DATA_FORM',
+      purpose: 'CONTRACT_APPROVAL',
       employee: PIPELINE_EMPLOYEE,
     });
+
+    await expect(service.linkContext('raw')).rejects.toThrow(/not found/);
+  });
+
+  it('submitForm attaches known uploads, skips unknown field names', async () => {
+    const { service, repos, links, workflow } = makeService();
 
     await service.submitForm(
       'raw',
@@ -173,11 +268,6 @@ describe('OnboardingService signed-link surface', () => {
 
   it('submitForm refuses to advance the record without both attachments', async () => {
     const { service, repos, links, workflow } = makeService();
-    (links.verify as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 'tok1',
-      purpose: 'DATA_FORM',
-      employee: PIPELINE_EMPLOYEE,
-    });
 
     // Only the ID copy — the IBAN letter is missing.
     await expect(
@@ -194,12 +284,7 @@ describe('OnboardingService signed-link surface', () => {
   });
 
   it('submitForm accepts a resubmission that only fixes a text field', async () => {
-    const { service, repos, links, workflow } = makeService();
-    (links.verify as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 'tok1',
-      purpose: 'DATA_FORM',
-      employee: PIPELINE_EMPLOYEE,
-    });
+    const { service, repos, workflow } = makeService();
     // Both files already on record from an earlier attempt.
     (repos.documents.listByEmployee as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: 'd1', type: 'NATIONAL_ID', label: null, required: true, storageKey: 'a.pdf' },

@@ -257,6 +257,10 @@ export class EmployeeService {
           ...(seesSalary ? { salary: details?.['salary'] ?? null } : {}),
           sentAt: contractRow.sentAt,
           approvedAt: contractRow.approvedAt,
+          status: contractRow.status,
+          statusChangedAt: contractRow.statusChangedAt,
+          rejectReason: contractRow.rejectReason,
+          externalRef: contractRow.externalRef,
         }
       : null;
 
@@ -286,6 +290,15 @@ export class EmployeeService {
           : [],
       },
     };
+  }
+
+  /** Storage key of a process's completion document, for viewing. */
+  async getProcessCertificateKey(employeeId: string, kind: ProcessKind): Promise<string> {
+    const repo =
+      kind === 'gosi' ? this.repos.gosi : kind === 'medical' ? this.repos.medical : this.repos.criminal;
+    const row = await repo.findByEmployee(employeeId);
+    if (!row?.certificateStorageKey) throw new NotFoundError(`${kind} certificate`, employeeId);
+    return row.certificateStorageKey;
   }
 
   /** One entry point for all three process cards. */
@@ -336,6 +349,7 @@ export class EmployeeService {
             from as ProcessStatus,
             to as ProcessStatus,
             hold as never,
+            input.certificateStorageKey,
           ),
         audit: (entry) => s.audit.append(entry),
         anchors: () => ({ employeeId }),

@@ -66,6 +66,8 @@ export class SlaScheduler {
       notifications: NotificationService;
       /** System calendar: which weekdays are the weekend (admin-configured). */
       calendar?: { getCalendar(): Promise<{ weekendDays: number[] }> };
+      /** Named primary owners per process — when set, reminders go to them, not the whole group. */
+      responsibility?: { get(processKey: string): Promise<string[]> };
     },
     watchers: SlaWatcher[],
   ) {
@@ -124,12 +126,15 @@ export class SlaScheduler {
         await watcher.expire(record, rule.id);
         await this.notifyStaff(rule, record, now, rule.notifyRole, 'staff.record_expired');
       } else if (rule.action === 'ESCALATE') {
+        // Escalation deliberately goes to the higher GROUP, never the owners
+        // who were already reminded.
         await this.notifyStaff(
           rule,
           record,
           now,
           rule.escalateToRole ?? 'ADMIN',
-          watcher.templates?.escalation ?? 'staff.escalation',
+          rule.staffTemplateKey ?? watcher.templates?.escalation ?? 'staff.escalation',
+          false,
         );
         await this.audit(rule, record, 'SLA_ESCALATION');
       } else {
@@ -166,7 +171,8 @@ export class SlaScheduler {
   }
 
   private async remind(rule: SlaRule, record: WatchedRecord, watcher: SlaWatcher, now: Date) {
-    const subjectTemplate = watcher.subjectTemplate?.(rule.status);
+    // An admin-chosen template on the rule beats the watcher's built-in one.
+    const subjectTemplate = rule.subjectTemplateKey ?? watcher.subjectTemplate?.(rule.status);
     if (rule.notifySubject && subjectTemplate && record.email) {
       await this.deps.notifications.notifyExternal(
         record.email,
@@ -181,29 +187,37 @@ export class SlaScheduler {
         record,
         now,
         rule.notifyRole,
-        watcher.templates?.stalled ?? 'staff.record_stalled',
+        rule.staffTemplateKey ?? watcher.templates?.stalled ?? 'staff.record_stalled',
       );
     }
   }
 
-  private notifyStaff(
+  /**
+   * Staff-side message. Business rule: the named primary owners of a process
+   * (e.g. GOSI → two specific people) receive the reminders; when none are
+   * named, the whole role group does. Owners never restrict who may act.
+   */
+  private async notifyStaff(
     rule: SlaRule,
     record: WatchedRecord,
     now: Date,
     role: string,
     template: string,
+    preferOwners = true,
   ) {
-    return this.deps.notifications.notifyRole(
-      role,
-      template,
-      {
-        name: record.name,
-        status: rule.status,
-        daysWaiting: Math.floor((now.getTime() - record.anchorAt.getTime()) / 86_400_000),
-        ...record.meta,
-      },
-      this.ref(rule, record),
-    );
+    const params = {
+      name: record.name,
+      status: rule.status,
+      daysWaiting: Math.floor((now.getTime() - record.anchorAt.getTime()) / 86_400_000),
+      ...record.meta,
+    };
+    const ref = this.ref(rule, record);
+    const owners = preferOwners ? await this.deps.responsibility?.get(rule.processKey) : undefined;
+    if (owners && owners.length > 0) {
+      await this.deps.notifications.notifyUsers(owners, template, params, ref);
+      return;
+    }
+    await this.deps.notifications.notifyRole(role, template, params, ref);
   }
 
   private audit(rule: SlaRule, record: WatchedRecord, action: string) {
