@@ -58,7 +58,11 @@ onMounted(() => prefs.apply());
 
 <template>
   <v-app>
-    <template v-if="!isPublicPage()">
+    <!-- The staff chrome (bar + menu) appears only for a signed-in user.
+         On a cold load the router is still restoring the session; drawing
+         the chrome before that answer arrives made it flash and vanish
+         when the answer was "no session" and the user was sent to login. -->
+    <template v-if="!isPublicPage() && auth.isAuthenticated">
       <v-app-bar flat border density="comfortable">
         <v-app-bar-nav-icon
           @click="$vuetify.display.mdAndUp ? (rail = !rail) : (drawer = !drawer)"
