@@ -18,6 +18,8 @@ type Lang = 'ar' | 'en';
 
 interface TemplateRow {
   key: string;
+  /** Admin-created (exists only in the database) vs. a built-in from the catalogue. */
+  custom: boolean;
   audience: Audience;
   nameAr: string;
   nameEn: string;
@@ -48,6 +50,7 @@ interface Draft {
 
 interface TemplateDetail {
   key: string;
+  custom: boolean;
   meta: { audience: Audience; nameAr: string; nameEn: string; hasCta: boolean };
   row: (Partial<Draft> & { version: number; ctaLabelAr: string | null; ctaLabelEn: string | null }) | null;
   defaults: { subjectAr: string; subjectEn: string; bodyAr: string; bodyEn: string };
@@ -253,6 +256,49 @@ async function sendTest() {
   }
 }
 
+// ── new template ─────────────────────────────────────────────────────────────
+const newDialog = ref(false);
+const creating = ref(false);
+const newTemplate = ref({ name: '', audience: 'staff' as Audience });
+
+/** Create with placeholder text, then open the editor so the admin writes the real wording. */
+async function createTemplate() {
+  creating.value = true;
+  try {
+    const name = newTemplate.value.name.trim();
+    const created = await api.post<{ key: string }>('/api/email-templates', {
+      name,
+      audience: newTemplate.value.audience,
+      subjectAr: `${name} — {{name}}`,
+      subjectEn: `${name} — {{name}}`,
+      bodyAr: 'مرحبًا {{name}}،\n\n…',
+      bodyEn: 'Hello {{name}},\n\n…',
+      active: true,
+    });
+    newDialog.value = false;
+    newTemplate.value = { name: '', audience: 'staff' };
+    notify(t('emailTemplates.created'));
+    await load();
+    await openEditor(created.key);
+  } catch (e) {
+    fail(e);
+  } finally {
+    creating.value = false;
+  }
+}
+
+async function deleteTemplate(key: string) {
+  if (!(await confirm({ title: t('emailTemplates.deleteTemplate'), message: t('emailTemplates.deleteConfirm'), color: 'error', confirmText: t('emailTemplates.deleteTemplate') }))) return;
+  try {
+    await api.delete(`/api/email-templates/${key}`);
+    notify(t('emailTemplates.deleted'));
+    editor.value.show = false;
+    await load();
+  } catch (e) {
+    fail(e);
+  }
+}
+
 async function revert(key: string) {
   if (!(await confirm({ title: t('emailTemplates.revert'), message: t('emailTemplates.revertConfirm'), color: 'error', confirmText: t('emailTemplates.revert') }))) return;
   try {
@@ -366,7 +412,10 @@ async function removeTrigger(trigger: Trigger) {
         <p class="text-medium-emphasis mt-1 mb-0">{{ $t('emailTemplates.subtitle') }}</p>
       </div>
       <v-spacer />
-      <!-- The most frequent action lives up here, not under the templates list. -->
+      <!-- The frequent actions live up here, not under the templates list. -->
+      <v-btn variant="tonal" prepend-icon="file-plus" @click="newDialog = true">
+        {{ $t('emailTemplates.newTemplate') }}
+      </v-btn>
       <v-btn color="primary" prepend-icon="plus" @click="triggerDialog = true">
         {{ $t('emailTemplates.triggers.add') }}
       </v-btn>
@@ -394,6 +443,7 @@ async function removeTrigger(trigger: Trigger) {
                 <v-chip size="x-small" variant="tonal" :color="tpl.audience === 'employee' ? 'primary' : 'secondary'">
                   {{ $t(`emailTemplates.audience.${tpl.audience}`) }}
                 </v-chip>
+                <v-chip v-if="tpl.custom" size="x-small" variant="tonal" class="ms-1">{{ $t('emailTemplates.custom') }}</v-chip>
               </td>
               <td>
                 <v-chip
@@ -659,7 +709,16 @@ async function removeTrigger(trigger: Trigger) {
 
         <v-card-actions class="px-6 pb-5 pt-2 flex-wrap ga-2">
           <v-btn
-            v-if="editor.detail.row"
+            v-if="editor.detail.custom"
+            variant="text"
+            color="error"
+            prepend-icon="trash-2"
+            @click="deleteTemplate(editor.key)"
+          >
+            {{ $t('emailTemplates.deleteTemplate') }}
+          </v-btn>
+          <v-btn
+            v-else-if="editor.detail.row"
             variant="text"
             color="error"
             prepend-icon="rotate-ccw"
@@ -674,6 +733,34 @@ async function removeTrigger(trigger: Trigger) {
           <v-btn variant="text" @click="editor.show = false">{{ $t('common.cancel') }}</v-btn>
           <v-btn variant="flat" color="primary" class="px-5" :loading="editor.saving" :disabled="!canSave" @click="save">
             {{ $t('common.save') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ── New template ────────────────────────────────────────────────── -->
+    <v-dialog v-model="newDialog" max-width="480">
+      <v-card>
+        <div class="px-6 pt-6 pb-2">
+          <h2 class="text-subtitle-1 font-weight-bold">{{ $t('emailTemplates.newTemplate') }}</h2>
+          <p class="text-caption text-medium-emphasis mb-0">{{ $t('emailTemplates.newTemplateHint') }}</p>
+        </div>
+        <v-card-text class="pt-4">
+          <v-text-field v-model="newTemplate.name" :label="$t('emailTemplates.name')" autofocus class="mb-2" />
+          <v-select
+            v-model="newTemplate.audience"
+            :items="[
+              { title: $t('emailTemplates.audience.staff'), value: 'staff' },
+              { title: $t('emailTemplates.audience.employee'), value: 'employee' },
+            ]"
+            :label="$t('emailTemplates.audienceLabel')"
+          />
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5 pt-2">
+          <v-spacer />
+          <v-btn variant="text" @click="newDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn variant="flat" color="primary" class="px-5" :loading="creating" :disabled="!newTemplate.name.trim()" @click="createTemplate">
+            {{ $t('common.create') }}
           </v-btn>
         </v-card-actions>
       </v-card>

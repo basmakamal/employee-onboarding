@@ -81,4 +81,14 @@ export class UserRepository {
   }) {
     return this.db.user.create({ data });
   }
+
+  /**
+   * Hard delete. Optional links (audit actor, employee creator, notifications)
+   * are nulled by the database; a user who owns required history (contracts,
+   * custody forms, offboarding requests, employee requests) cannot be deleted
+   * and the caller turns that into a friendly refusal.
+   */
+  remove(id: string) {
+    return this.db.user.delete({ where: { id } });
+  }
 }

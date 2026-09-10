@@ -1,7 +1,7 @@
 import type { EmailTemplate, PrismaClient } from '../generated/prisma/client.js';
 import { GuardFailedError, NotFoundError } from '../workflow/errors.js';
 import { renderEmail } from './email-layout.js';
-import { PLACEHOLDERS, TEMPLATE_CATALOG } from './template-catalog.js';
+import { PLACEHOLDERS, TEMPLATE_CATALOG, type TemplateMeta } from './template-catalog.js';
 import { renderTemplate, type Locale, type RenderedMessage, type TemplateParams } from './templates.js';
 
 const CACHE_MS = 30_000;
@@ -15,6 +15,11 @@ const LINK_NOTE: Record<Locale, string> = {
   en: 'This link is valid for a limited time and is personal to you — please do not share it.',
 };
 const DEFAULT_CTA: Record<Locale, string> = { ar: 'فتح الرابط', en: 'Open the link' };
+
+/** Admin-created templates live under this prefix; the catalogue never uses it for its own keys except the generic status message. */
+const CUSTOM_PREFIX = 'custom.';
+/** What a custom template can reference: whatever every trigger / reminder provides. */
+const CUSTOM_PLACEHOLDERS = ['name', 'employeeNo', 'department', 'jobTitle', 'status'];
 
 export interface TemplateDraft {
   name: string;
@@ -33,6 +38,12 @@ export interface RenderedWithMeta extends RenderedMessage {
   templateVersion: number | null;
 }
 
+/** Where a template's key may be referenced, for the delete guard. */
+export interface TemplateUsage {
+  triggers: number;
+  rules: number;
+}
+
 /**
  * Replace `{{placeholder}}` tokens. Only catalogued names are honoured; an
  * unknown or misspelled token renders as nothing rather than leaking the
@@ -46,9 +57,21 @@ function fill(text: string, params: TemplateParams): string {
   );
 }
 
+/** "Contract active (IT)" → "contract-active-it" */
+function slugify(name: string): string {
+  const ascii = name
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return ascii || 'template';
+}
+
 /**
  * Email templates: the built-in set in `templates.ts`, optionally overridden
- * per key by an admin-edited row. Rendering always goes through here so the
+ * per key by an admin-edited row, plus admin-created templates (`custom.*`)
+ * that exist only in the database. Rendering always goes through here so the
  * override is honoured everywhere a template key is used.
  */
 export class TemplateService {
@@ -71,6 +94,34 @@ export class TemplateService {
     this.cache = null;
   }
 
+  /** A DB-only template — never in the catalogue. */
+  private isCustom(key: string, row: EmailTemplate | undefined): row is EmailTemplate {
+    return !!row && !TEMPLATE_CATALOG[key] && key.startsWith(CUSTOM_PREFIX);
+  }
+
+  private customMeta(row: EmailTemplate): TemplateMeta {
+    return {
+      audience: row.audience === 'employee' ? 'employee' : 'staff',
+      nameAr: row.name,
+      nameEn: row.name,
+      placeholders: CUSTOM_PLACEHOLDERS,
+      hasCta: false,
+    };
+  }
+
+  /** Catalogue meta or, for an admin-created template, meta derived from its row. */
+  async metaOf(key: string): Promise<TemplateMeta | null> {
+    const fromCatalog = TEMPLATE_CATALOG[key];
+    if (fromCatalog) return fromCatalog;
+    const row = (await this.rows()).get(key);
+    return this.isCustom(key, row) ? this.customMeta(row) : null;
+  }
+
+  /** Does this key resolve to something that can be sent? (trigger / rule validation) */
+  async exists(key: string): Promise<boolean> {
+    return (await this.metaOf(key)) !== null;
+  }
+
   /** Realistic values for previews and test sends. */
   sampleParams(locale: Locale): TemplateParams {
     const s = (k: string) => PLACEHOLDERS[k]?.sample[locale] ?? '';
@@ -91,13 +142,14 @@ export class TemplateService {
     };
   }
 
-  /** The catalogue with each key's override state — the admin list view. */
+  /** The catalogue with each key's override state, then the admin-created ones — the list view. */
   async list() {
     const rows = await this.rows();
-    return Object.entries(TEMPLATE_CATALOG).map(([key, meta]) => {
+    const builtIn = Object.entries(TEMPLATE_CATALOG).map(([key, meta]) => {
       const row = rows.get(key);
       return {
         key,
+        custom: false,
         audience: meta.audience,
         nameAr: meta.nameAr,
         nameEn: meta.nameEn,
@@ -108,15 +160,35 @@ export class TemplateService {
         updatedAt: row?.updatedAt ?? null,
       };
     });
+    const custom = [...rows.values()]
+      .filter((row) => this.isCustom(row.key, row))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((row) => {
+        const meta = this.customMeta(row);
+        return {
+          key: row.key,
+          custom: true,
+          audience: meta.audience,
+          nameAr: row.name,
+          nameEn: row.name,
+          hasCta: false,
+          customized: true,
+          active: row.active,
+          version: row.version,
+          updatedAt: row.updatedAt,
+        };
+      });
+    return [...builtIn, ...custom];
   }
 
   /** One template for the editor: override row (if any) + code defaults + placeholders. */
   async get(key: string) {
-    const meta = TEMPLATE_CATALOG[key];
+    const meta = await this.metaOf(key);
     if (!meta) throw new NotFoundError('template', key);
     const row = (await this.rows()).get(key) ?? null;
     return {
       key,
+      custom: this.isCustom(key, row ?? undefined),
       meta,
       row,
       defaults: this.defaults(key),
@@ -150,7 +222,7 @@ export class TemplateService {
       try {
         return renderTemplate(key, locale, tokens);
       } catch {
-        return null; // custom.* keys have no code default
+        return null; // admin-created keys have no code default
       }
     };
     const ar = safe('ar');
@@ -168,13 +240,15 @@ export class TemplateService {
     };
   }
 
-  async upsert(key: string, draft: TemplateDraft, userId?: string): Promise<EmailTemplate> {
-    if (!TEMPLATE_CATALOG[key]) throw new NotFoundError('template', key);
+  private assertComplete(draft: TemplateDraft): void {
     if (!draft.subjectAr.trim() || !draft.subjectEn.trim() || !draft.bodyAr.trim() || !draft.bodyEn.trim()) {
       throw new GuardFailedError('TEMPLATE_INCOMPLETE', 'subject and body are required in both languages');
     }
-    const data = {
-      name: draft.name.trim() || TEMPLATE_CATALOG[key].nameEn,
+  }
+
+  private rowData(draft: TemplateDraft, fallbackName: string, userId?: string) {
+    return {
+      name: draft.name.trim() || fallbackName,
       subjectAr: draft.subjectAr.trim(),
       subjectEn: draft.subjectEn.trim(),
       bodyAr: draft.bodyAr.trim(),
@@ -184,6 +258,33 @@ export class TemplateService {
       active: draft.active ?? true,
       updatedById: userId ?? null,
     };
+  }
+
+  /**
+   * Admin creates a brand-new template. The key is derived from the name and
+   * kept unique; it can then be picked by triggers and automation rules.
+   */
+  async create(
+    draft: TemplateDraft & { audience: 'employee' | 'staff' },
+    userId?: string,
+  ): Promise<EmailTemplate> {
+    this.assertComplete(draft);
+    const rows = await this.rows();
+    const base = `${CUSTOM_PREFIX}${slugify(draft.name)}`;
+    let key = base;
+    for (let n = 2; rows.has(key) || TEMPLATE_CATALOG[key]; n += 1) key = `${base}-${n}`;
+    const row = await this.prisma.emailTemplate.create({
+      data: { key, audience: draft.audience, ...this.rowData(draft, draft.name.trim(), userId) },
+    });
+    this.invalidate();
+    return row;
+  }
+
+  async upsert(key: string, draft: TemplateDraft, userId?: string): Promise<EmailTemplate> {
+    const meta = await this.metaOf(key);
+    if (!meta) throw new NotFoundError('template', key);
+    this.assertComplete(draft);
+    const data = this.rowData(draft, meta.nameEn, userId);
     const row = await this.prisma.emailTemplate.upsert({
       where: { key },
       create: { key, ...data },
@@ -193,8 +294,30 @@ export class TemplateService {
     return row;
   }
 
-  /** Back to the code default. */
+  /** Where a key is referenced — deleting a template in use would break those senders. */
+  async usage(key: string): Promise<TemplateUsage> {
+    const [triggers, rules] = await Promise.all([
+      this.prisma.emailTrigger.count({ where: { templateKey: key } }),
+      this.prisma.slaRule.count({ where: { OR: [{ subjectTemplateKey: key }, { staffTemplateKey: key }] } }),
+    ]);
+    return { triggers, rules };
+  }
+
+  /**
+   * Built-in key: back to the code default. Admin-created key: the template
+   * is removed — refused while a trigger or rule still points at it.
+   */
   async revert(key: string): Promise<void> {
+    const row = (await this.rows()).get(key);
+    if (this.isCustom(key, row)) {
+      const used = await this.usage(key);
+      if (used.triggers + used.rules > 0) {
+        throw new GuardFailedError(
+          'TEMPLATE_IN_USE',
+          `this template is used by ${used.triggers} trigger(s) and ${used.rules} automation rule(s)`,
+        );
+      }
+    }
     await this.prisma.emailTemplate.deleteMany({ where: { key } });
     this.invalidate();
   }
@@ -205,14 +328,21 @@ export class TemplateService {
     if (row?.active) {
       return { ...this.renderDraft(row, locale, params), templateKey: key, templateVersion: row.version };
     }
+    if (this.isCustom(key, row)) {
+      // Switched off by the admin: send nothing rather than a code fallback that does not exist.
+      throw new GuardFailedError('TEMPLATE_INACTIVE', `template ${key} is switched off`);
+    }
     return { ...renderTemplate(key, locale, params), templateKey: key, templateVersion: null };
   }
 
   /** Preview: the saved/default version, or an unsaved draft from the editor. */
   async preview(key: string, locale: Locale, draft?: Partial<TemplateDraft>): Promise<RenderedMessage> {
     const params = this.sampleParams(locale);
-    if (!draft) return this.render(key, locale, params);
     const base = (await this.rows()).get(key);
+    if (!draft) {
+      if (base) return this.renderDraft(base, locale, params);
+      return this.render(key, locale, params);
+    }
     const merged: TemplateDraft = {
       name: draft.name ?? base?.name ?? key,
       subjectAr: draft.subjectAr ?? base?.subjectAr ?? '',

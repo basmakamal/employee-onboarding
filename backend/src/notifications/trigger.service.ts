@@ -8,6 +8,14 @@ import { localeOf } from './locale.js';
 
 const CACHE_MS = 30_000;
 
+/** One row of the template picker. */
+export interface TemplateOption {
+  key: string;
+  nameAr: string;
+  nameEn: string;
+  audience: 'employee' | 'staff';
+}
+
 export interface TriggerInput {
   processKey: string;
   status: string;
@@ -42,6 +50,8 @@ export class TriggerService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly notifications: NotificationService,
+    /** Knows every sendable key: built-ins plus admin-created templates. Absent = catalogue only. */
+    private readonly templates?: { exists(key: string): Promise<boolean>; list(): Promise<TemplateOption[]> },
   ) {}
 
   list() {
@@ -51,26 +61,33 @@ export class TriggerService {
   }
 
   /** What the UI's selects can offer. */
-  options() {
-    return {
-      processes: MACHINE_STATUSES,
-      roles: STAFF_ROLES,
-      templates: Object.entries(TEMPLATE_CATALOG).map(([key, m]) => ({
-        key,
-        nameAr: m.nameAr,
-        nameEn: m.nameEn,
-        audience: m.audience,
-      })),
-    };
+  async options() {
+    const templates = this.templates
+      ? (await this.templates.list()).map((m) => ({
+          key: m.key,
+          nameAr: m.nameAr,
+          nameEn: m.nameEn,
+          audience: m.audience,
+        }))
+      : Object.entries(TEMPLATE_CATALOG).map(([key, m]) => ({
+          key,
+          nameAr: m.nameAr,
+          nameEn: m.nameEn,
+          audience: m.audience,
+        }));
+    return { processes: MACHINE_STATUSES, roles: STAFF_ROLES, templates };
   }
 
-  private validate(input: TriggerInput): void {
+  private async validate(input: TriggerInput): Promise<void> {
     const statuses = MACHINE_STATUSES[input.processKey];
     if (!statuses) throw new GuardFailedError('BAD_PROCESS', `unknown process ${input.processKey}`);
     if (!statuses.includes(input.status)) {
       throw new GuardFailedError('BAD_STATUS', `${input.status} is not a status of ${input.processKey}`);
     }
-    if (!TEMPLATE_CATALOG[input.templateKey]) {
+    const known = this.templates
+      ? await this.templates.exists(input.templateKey)
+      : !!TEMPLATE_CATALOG[input.templateKey];
+    if (!known) {
       throw new GuardFailedError('BAD_TEMPLATE', `unknown template ${input.templateKey}`);
     }
     if (input.recipient === 'ROLE' && !(STAFF_ROLES as readonly string[]).includes(input.role ?? '')) {
@@ -79,7 +96,7 @@ export class TriggerService {
   }
 
   async create(input: TriggerInput, userId?: string): Promise<EmailTrigger> {
-    this.validate(input);
+    await this.validate(input);
     const row = await this.prisma.emailTrigger.create({
       data: {
         processKey: input.processKey,
@@ -108,7 +125,7 @@ export class TriggerService {
       ccEmails: changes.ccEmails !== undefined ? changes.ccEmails : splitCc(existing.ccEmails),
       active: changes.active ?? existing.active,
     };
-    this.validate(merged);
+    await this.validate(merged);
     const row = await this.prisma.emailTrigger.update({
       where: { id },
       data: {
@@ -164,25 +181,36 @@ export class TriggerService {
     };
     const ref = { entity: event.entity, entityId: event.entityId };
 
-    for (const trigger of matching) {
+    // Every send is isolated: a failure for the group, the employee or one
+    // copy address is logged and the rest still go out.
+    const attempt = async (what: string, triggerId: string, send: () => Promise<void>) => {
       try {
-        if (trigger.recipient === 'SUBJECT') {
-          if (!employee?.email) {
-            logger.warn({ triggerId: trigger.id, event }, 'trigger has no employee email to send to');
-          } else {
-            await this.notifications.notifyExternal(employee.email, trigger.templateKey, params, ref, localeOf(employee));
-          }
-        } else {
-          await this.notifications.notifyRole(trigger.role ?? 'HR', trigger.templateKey, params, ref);
-        }
-        // Copies: each address gets its own row in the email history, so the
-        // person checking can see exactly what went out and remove themselves later.
-        for (const cc of splitCc(trigger.ccEmails)) {
-          await this.notifications.notifyExternal(cc, trigger.templateKey, params, ref);
-        }
+        await send();
       } catch (err) {
-        // One bad trigger must not stop the others.
-        logger.error({ err, triggerId: trigger.id }, 'email trigger failed');
+        logger.error({ err, triggerId, what }, 'email trigger send failed');
+      }
+    };
+
+    for (const trigger of matching) {
+      if (trigger.recipient === 'SUBJECT') {
+        if (!employee?.email) {
+          logger.warn({ triggerId: trigger.id, event }, 'trigger has no employee email to send to');
+        } else {
+          await attempt('subject', trigger.id, () =>
+            this.notifications.notifyExternal(employee.email, trigger.templateKey, params, ref, localeOf(employee)),
+          );
+        }
+      } else {
+        await attempt('role', trigger.id, () =>
+          this.notifications.notifyRole(trigger.role ?? 'HR', trigger.templateKey, params, ref),
+        );
+      }
+      // Copies: each address gets its own row in the email history, so the
+      // person checking can see exactly what went out and remove themselves later.
+      for (const cc of splitCc(trigger.ccEmails)) {
+        await attempt(`cc:${cc}`, trigger.id, () =>
+          this.notifications.notifyExternal(cc, trigger.templateKey, params, ref),
+        );
       }
     }
   }

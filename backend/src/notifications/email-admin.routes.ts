@@ -42,6 +42,16 @@ export function emailTemplatesRouter(
     }),
   );
 
+  /** Admin creates a brand-new template (key derived from the name). */
+  router.post(
+    '/',
+    validate(draftSchema.extend({ audience: z.enum(['employee', 'staff']) })),
+    asyncHandler(async (req, res) => {
+      const body = req.body as z.infer<typeof draftSchema> & { audience: 'employee' | 'staff' };
+      res.status(201).json(await templates.create(compact(body), req.actor?.id));
+    }),
+  );
+
   router.get(
     '/:key',
     asyncHandler(async (req, res) => {
@@ -120,9 +130,12 @@ export function emailTriggersRouter(triggers: TriggerService): Router {
     }),
   );
 
-  router.get('/options', (_req, res) => {
-    res.json(triggers.options());
-  });
+  router.get(
+    '/options',
+    asyncHandler(async (_req, res) => {
+      res.json(await triggers.options());
+    }),
+  );
 
   router.post(
     '/',

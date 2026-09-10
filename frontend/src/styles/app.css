@@ -140,9 +140,11 @@ body {
   outline-offset: 2px;
   border-radius: 6px;
 }
-
-.v-field--focused {
-  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.12);
+/* Inside a field the outline already shows focus — a second ring reads as a double border. */
+.v-field :focus-visible,
+.v-field__input:focus-visible,
+.v-field__field:focus-visible {
+  outline: none;
 }
 
 /* Tables: quieter headers, roomier rows, a hover that guides the eye. */
