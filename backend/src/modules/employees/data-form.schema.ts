@@ -59,8 +59,9 @@ const requiredText = (max = 100) =>
 export const dataFormSchema = z.object({
   // ── البيانات الشخصية ──────────────────────────────────────────────────
   firstName: requiredText(60),
-  fatherName: requiredText(60),
-  grandfatherName: requiredText(60),
+  /** Optional since Sept 2026: HR dropped the father/grandfather parts from the form. */
+  fatherName: z.string().trim().max(60, 'TOO_LONG').optional(),
+  grandfatherName: z.string().trim().max(60, 'TOO_LONG').optional(),
   lastName: requiredText(60),
 
   nationalId: z

@@ -65,6 +65,8 @@ interface ContractSummary {
   statusChangedAt: string;
   rejectReason: string | null;
   externalRef: string | null;
+  /** Uploaded scan / photo / PDF of the contract, if any. */
+  storageKey?: string | null;
 }
 
 const CONTRACT_STATUS_COLORS: Record<ContractStatus, string> = {
@@ -715,6 +717,31 @@ async function attachProcessDoc(kind: 'gosi' | 'medical' | 'criminal', file: Fil
 const contractDialog = ref(false);
 const contractForm = ref({ salary: '', durationMonths: '', startDate: '', terms: '' });
 const contractExternalRef = ref('');
+const contractFile = ref<File | null>(null);
+const contractFileInput = ref<HTMLInputElement | null>(null);
+
+function onContractFilePicked(event: Event) {
+  contractFile.value = (event.target as HTMLInputElement).files?.[0] ?? null;
+}
+
+function viewContractFile() {
+  void openViewer(`/api/employees/${id}/contract/file`, t('contractCard.title'), t('contractCard.title'));
+}
+
+/** Uploads the picked document; the typed terms stay optional. */
+async function uploadContractFile(file: File) {
+  const body = new FormData();
+  body.append('file', file);
+  const res = await fetch(`/api/employees/${id}/contract/file`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getAccessToken()}` },
+    body,
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+    throw new Error(data?.error?.message ?? t('common.error'));
+  }
+}
 
 function openContractDialog() {
   const c = employee.value?.contract;
@@ -725,12 +752,14 @@ function openContractDialog() {
     terms: c?.terms ?? '',
   };
   contractExternalRef.value = c?.externalRef ?? '';
+  contractFile.value = null;
   contractDialog.value = true;
 }
 
 async function saveContract() {
   busy.value = 'contract';
   try {
+    if (contractFile.value) await uploadContractFile(contractFile.value);
     const details: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(contractForm.value)) if (v.trim()) details[k] = v.trim();
     await api.put(`/api/employees/${id}/contract`, {
@@ -741,7 +770,7 @@ async function saveContract() {
     notify(t('common.saved'));
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(e instanceof Error ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
   }
@@ -1492,6 +1521,17 @@ onMounted(load);
                 <div class="text-body-2 font-weight-medium">{{ cell.value ?? '—' }}</div>
               </v-col>
             </v-row>
+            <v-btn
+              v-if="employee.contract.storageKey"
+              size="small"
+              variant="tonal"
+              color="primary"
+              prepend-icon="file-signature"
+              class="me-2"
+              @click="viewContractFile"
+            >
+              {{ $t('contract.viewFile') }}
+            </v-btn>
             <template v-if="employee.contract.terms">
               <v-btn
                 size="small"
@@ -2087,6 +2127,37 @@ onMounted(load);
     <v-dialog v-model="contractDialog" max-width="560">
       <v-card :title="$t('contractCard.title')" class="pa-2">
         <v-card-text>
+          <p class="text-caption text-medium-emphasis mt-0 mb-4">{{ $t('contract.optionalHint') }}</p>
+          <div class="contract-file mb-4">
+            <div class="d-flex align-center ga-3 flex-wrap">
+              <v-icon icon="file-signature" color="primary" />
+              <div class="flex-grow-1 min-w-0">
+                <div class="text-body-2 font-weight-medium">{{ $t('contract.file') }}</div>
+                <div class="text-caption text-medium-emphasis">
+                  {{ contractFile ? contractFile.name : employee?.contract?.storageKey ? $t('contract.fileOnFile') : $t('contract.fileHint') }}
+                </div>
+              </div>
+              <v-btn
+                v-if="employee?.contract?.storageKey && !contractFile"
+                size="small"
+                variant="text"
+                prepend-icon="eye"
+                @click="viewContractFile"
+              >
+                {{ $t('contract.viewFile') }}
+              </v-btn>
+              <v-btn size="small" variant="tonal" prepend-icon="upload" @click="contractFileInput?.click()">
+                {{ employee?.contract?.storageKey || contractFile ? $t('contract.replaceFile') : $t('contract.chooseFile') }}
+              </v-btn>
+              <input
+                ref="contractFileInput"
+                type="file"
+                accept="image/jpeg,image/png,application/pdf"
+                class="d-none"
+                @change="onContractFilePicked"
+              />
+            </div>
+          </div>
           <v-row dense>
             <v-col cols="6"><v-text-field v-model="contractForm.salary" :label="$t('contract.salary')" /></v-col>
             <v-col cols="6">
@@ -2378,5 +2449,10 @@ onMounted(load);
 @media (max-width: 700px) {
   .profile-head__actions { width: 100%; }
   .profile-head__actions .v-btn:first-child { flex: 1; }
+}
+.contract-file {
+  border: 1px dashed rgba(var(--v-theme-on-surface), 0.2);
+  border-radius: 12px;
+  padding: 12px 14px;
 }
 </style>

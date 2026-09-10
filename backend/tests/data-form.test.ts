@@ -73,12 +73,12 @@ describe('dataFormSchema', () => {
     expect(parsed.splAddress).toBe('RRRD2929');
   });
 
-  it('rejects every field being absent — all 17 are mandatory', () => {
+  it('rejects every field being absent — all 15 are mandatory', () => {
     const result = dataFormSchema.safeParse({});
     expect(result.success).toBe(false);
     if (!result.success) {
-      // birthDateHijri is the only optional field; the other 17 must complain.
-      expect(result.error.issues.length).toBeGreaterThanOrEqual(17);
+      // birthDateHijri, fatherName and grandfatherName are optional; the other 15 must complain.
+      expect(result.error.issues.length).toBeGreaterThanOrEqual(15);
     }
   });
 
@@ -102,8 +102,8 @@ describe('dataFormSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it.each(['firstName', 'fatherName', 'grandfatherName', 'lastName'])(
-    'requires the %s part of the four-part name',
+  it.each(['firstName', 'lastName'])(
+    'requires the %s part of the name',
     (part) => {
       const result = dataFormSchema.safeParse({ ...VALID, [part]: '   ' });
       expect(result.success).toBe(false);

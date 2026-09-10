@@ -6,13 +6,16 @@
  * HR asked for rather than one long field list, because a new hire filling
  * this on a phone needs to know how much is left.
  *
- * Every field is mandatory (HR: the whole set is required for employment
- * contracts), so each carries an asterisk and the submit button stays disabled
- * until the form is genuinely complete. The rules below mirror the server's
- * data-form.schema.ts — the server remains the authority, this is just fast
- * feedback.
+ * Layout rule: the label sits above the field with a red asterisk, the example
+ * lives inside the field as a placeholder, and the line under the field is
+ * reserved for the reason something is wrong (or a short description). A
+ * filled-in field shows its problem at once; an empty one is flagged only
+ * after the first submit attempt, so the page does not open covered in red.
+ *
+ * The rules mirror the server's data-form.schema.ts — the server remains the
+ * authority, this is just fast feedback.
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api/client';
@@ -53,8 +56,6 @@ const showErrors = ref(false);
 
 const fields = ref({
   firstName: '',
-  fatherName: '',
-  grandfatherName: '',
   lastName: '',
   nationalId: '',
   birthDate: '',
@@ -70,8 +71,18 @@ const fields = ref({
   emergencyContactName: '',
   emergencyContactPhone: '',
 });
+type FieldKey = keyof typeof fields.value;
 
 const files = ref<Record<string, File | null>>({});
+
+/** Examples shown inside the fields; formats, so they are not translated. */
+const EXAMPLE = {
+  nationalId: '1234567890',
+  phone: '0551234567',
+  email: 'name@example.com',
+  splAddress: 'RRRD2929',
+  iban: 'SA0380000000608010167519',
+};
 
 // ── Option lists ────────────────────────────────────────────────────────────
 // Values are the Prisma enums; labels come from i18n so they follow the
@@ -125,39 +136,49 @@ function ibanValid(raw: string): boolean {
   return remainder === 1;
 }
 
-const required = (v: unknown) => (String(v ?? '').trim() ? true : t('validation.required'));
-const rules = {
-  required: [required],
-  nationalId: [required, (v: string) => SAUDI_ID.test(String(v).trim()) || t('validation.nationalId')],
-  phone: [required, (v: string) => SAUDI_MOBILE.test(String(v).trim()) || t('validation.phone')],
-  email: [required, (v: string) => EMAIL.test(String(v).trim()) || t('validation.email')],
-  spl: [required, (v: string) => SPL_ADDRESS.test(String(v).trim()) || t('validation.spl')],
-  iban: [required, (v: string) => ibanValid(String(v)) || t('validation.iban')],
-};
+const REQUIRED_TEXT: FieldKey[] = [
+  'firstName', 'lastName', 'nationality', 'major', 'emergencyContactName',
+  'birthDate', 'gender', 'maritalStatus', 'qualification',
+];
+
+/**
+ * One reason per field that is not yet acceptable. Empty → "required";
+ * filled but in the wrong shape → the format message.
+ */
+const problems = computed<Partial<Record<FieldKey, string>>>(() => {
+  const f = fields.value;
+  const out: Partial<Record<FieldKey, string>> = {};
+  const value = (k: FieldKey) => String(f[k] ?? '').trim();
+  for (const k of REQUIRED_TEXT) if (!value(k)) out[k] = t('validation.required');
+  const check = (k: FieldKey, ok: (v: string) => boolean, message: string) => {
+    const v = value(k);
+    if (!v) out[k] = t('validation.required');
+    else if (!ok(v)) out[k] = message;
+  };
+  check('nationalId', (v) => SAUDI_ID.test(v), t('validation.nationalId'));
+  check('phone', (v) => SAUDI_MOBILE.test(v), t('validation.phone'));
+  check('emergencyContactPhone', (v) => SAUDI_MOBILE.test(v), t('validation.phone'));
+  check('email', (v) => EMAIL.test(v), t('validation.email'));
+  check('splAddress', (v) => SPL_ADDRESS.test(v), t('validation.spl'));
+  check('iban', (v) => ibanValid(v), t('validation.iban'));
+  return out;
+});
+
+/** What the field shows under itself right now. */
+function errorsFor(key: FieldKey): string[] {
+  const message = problems.value[key];
+  if (!message) return [];
+  const filled = String(fields.value[key] ?? '').trim() !== '';
+  return showErrors.value || filled ? [message] : [];
+}
 
 /** Which required attachments are still missing. */
 const missingDocs = computed(() =>
   (ctx.value?.documents ?? []).filter((d) => d.required && !d.uploaded && !files.value[d.id]),
 );
 
-const invalidFields = computed(() => {
-  const f = fields.value;
-  const bad: string[] = [];
-  const text: Array<keyof typeof f> = [
-    'firstName', 'fatherName', 'grandfatherName', 'lastName', 'nationality',
-    'major', 'emergencyContactName', 'birthDate', 'gender', 'maritalStatus', 'qualification',
-  ];
-  for (const key of text) if (!String(f[key] ?? '').trim()) bad.push(key);
-  if (!SAUDI_ID.test(f.nationalId.trim())) bad.push('nationalId');
-  if (!SAUDI_MOBILE.test(f.phone.trim())) bad.push('phone');
-  if (!SAUDI_MOBILE.test(f.emergencyContactPhone.trim())) bad.push('emergencyContactPhone');
-  if (!EMAIL.test(f.email.trim())) bad.push('email');
-  if (!SPL_ADDRESS.test(f.splAddress.trim())) bad.push('splAddress');
-  if (!ibanValid(f.iban)) bad.push('iban');
-  return bad;
-});
-
-const canSubmit = computed(() => invalidFields.value.length === 0 && missingDocs.value.length === 0);
+const invalidCount = computed(() => Object.keys(problems.value).length + missingDocs.value.length);
+const canSubmit = computed(() => invalidCount.value === 0);
 
 /** Latest sensible birth date — nobody is hired at under 15. */
 const maxBirthDate = computed(() => {
@@ -198,6 +219,9 @@ async function submit() {
   showErrors.value = true;
   if (!canSubmit.value) {
     error.value = t('publicForm.fixErrors');
+    // Take the person to the first problem instead of leaving them at the button.
+    await nextTick();
+    document.querySelector('.v-input--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
@@ -244,7 +268,7 @@ async function submit() {
     </v-card>
 
     <template v-else-if="ctx">
-      <v-card>
+      <v-card class="data-form">
         <!-- Brand header: logo, company, bilingual title -->
         <div class="form-head">
           <img src="/riyada-logo.png" alt="Riyada HR" class="form-logo" />
@@ -255,147 +279,208 @@ async function submit() {
         </div>
         <div class="brand-rule"><span></span><i></i></div>
 
-        <v-card-text class="pt-5">
-          <p class="text-body-2 mb-1">
+        <v-card-text class="pt-5 px-5 px-sm-7">
+          <p class="text-body-1 mb-1">
             {{ $t('publicForm.greeting', { name: `${ctx.employee.firstName} ${ctx.employee.lastName}` }) }}
           </p>
-          <p class="text-caption text-medium-emphasis mb-5">{{ $t('publicForm.allRequired') }}</p>
+          <p class="text-body-2 text-medium-emphasis mb-6">
+            {{ $t('publicForm.allRequired') }}
+            <span class="req-legend"><span class="req">*</span> {{ $t('publicForm.requiredLegend') }}</span>
+          </p>
 
           <v-alert v-if="error" type="error" variant="tonal" class="mb-5">{{ error }}</v-alert>
 
           <!-- 1 · البيانات الشخصية -->
           <h3 class="sec">{{ $t('publicForm.secPersonal') }}</h3>
-          <v-row dense>
-            <v-col cols="12" sm="6" md="3">
-              <v-text-field v-model="fields.firstName" :label="$t('fields.firstName') + ' *'"
-                :rules="rules.required" :error="showErrors && !fields.firstName.trim()" />
+          <v-row>
+            <v-col cols="12" sm="6">
+              <label class="fld-label" for="f-firstName">{{ $t('fields.firstName') }}<span class="req">*</span></label>
+              <v-text-field id="f-firstName" v-model="fields.firstName" :error-messages="errorsFor('firstName')" />
             </v-col>
-            <v-col cols="12" sm="6" md="3">
-              <v-text-field v-model="fields.fatherName" :label="$t('fields.fatherName') + ' *'"
-                :rules="rules.required" :error="showErrors && !fields.fatherName.trim()" />
-            </v-col>
-            <v-col cols="12" sm="6" md="3">
-              <v-text-field v-model="fields.grandfatherName" :label="$t('fields.grandfatherName') + ' *'"
-                :rules="rules.required" :error="showErrors && !fields.grandfatherName.trim()" />
-            </v-col>
-            <v-col cols="12" sm="6" md="3">
-              <v-text-field v-model="fields.lastName" :label="$t('fields.lastName') + ' *'"
-                :rules="rules.required" :error="showErrors && !fields.lastName.trim()" />
+            <v-col cols="12" sm="6">
+              <label class="fld-label" for="f-lastName">{{ $t('fields.lastName') }}<span class="req">*</span></label>
+              <v-text-field id="f-lastName" v-model="fields.lastName" :error-messages="errorsFor('lastName')" />
             </v-col>
 
             <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.nationalId" :label="$t('fields.nationalId') + ' *'"
-                :rules="rules.nationalId" :hint="$t('hints.nationalId')" persistent-hint
-                inputmode="numeric" maxlength="10" />
+              <label class="fld-label" for="f-nationalId">{{ $t('fields.nationalId') }}<span class="req">*</span></label>
+              <v-text-field
+                id="f-nationalId"
+                v-model="fields.nationalId"
+                :placeholder="EXAMPLE.nationalId"
+                :hint="$t('hints.nationalId')"
+                persistent-hint
+                :error-messages="errorsFor('nationalId')"
+                inputmode="numeric"
+                maxlength="10"
+                dir="ltr"
+              />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.birthDate" type="date" :max="maxBirthDate"
-                :label="$t('fields.birthDate') + ' *'" :rules="rules.required"
-                :hint="$t('hints.birthDate')" persistent-hint />
-            </v-col>
-
-            <v-col cols="12" sm="6">
-              <v-select v-model="fields.gender" :items="genderOptions"
-                :label="$t('fields.gender') + ' *'" :rules="rules.required" />
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-select v-model="fields.nationality" :items="nationalityOptions"
-                :label="$t('fields.nationality') + ' *'" :rules="rules.required" />
-            </v-col>
-
-            <v-col cols="12" sm="6">
-              <v-select v-model="fields.maritalStatus" :items="maritalOptions"
-                :label="$t('fields.maritalStatus') + ' *'" :rules="rules.required" />
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.phone" :label="$t('fields.phone') + ' *'"
-                :rules="rules.phone" :hint="$t('hints.phone')" persistent-hint
-                inputmode="tel" dir="ltr" />
+              <label class="fld-label" for="f-birthDate">{{ $t('fields.birthDate') }}<span class="req">*</span></label>
+              <v-text-field
+                id="f-birthDate"
+                v-model="fields.birthDate"
+                type="date"
+                :max="maxBirthDate"
+                :hint="$t('hints.birthDate')"
+                persistent-hint
+                :error-messages="errorsFor('birthDate')"
+              />
             </v-col>
 
             <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.email" :label="$t('fields.email') + ' *'"
-                :rules="rules.email" inputmode="email" dir="ltr" />
+              <label class="fld-label" for="f-gender">{{ $t('fields.gender') }}<span class="req">*</span></label>
+              <v-select id="f-gender" v-model="fields.gender" :items="genderOptions" :placeholder="$t('publicForm.choose')" :error-messages="errorsFor('gender')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.splAddress" :label="$t('fields.splAddress') + ' *'"
-                :rules="rules.spl" :hint="$t('hints.spl')" persistent-hint
-                maxlength="8" dir="ltr" class="upper" />
+              <label class="fld-label" for="f-nationality">{{ $t('fields.nationality') }}<span class="req">*</span></label>
+              <v-select id="f-nationality" v-model="fields.nationality" :items="nationalityOptions" :placeholder="$t('publicForm.choose')" :error-messages="errorsFor('nationality')" />
+            </v-col>
+
+            <v-col cols="12" sm="6">
+              <label class="fld-label" for="f-maritalStatus">{{ $t('fields.maritalStatus') }}<span class="req">*</span></label>
+              <v-select id="f-maritalStatus" v-model="fields.maritalStatus" :items="maritalOptions" :placeholder="$t('publicForm.choose')" :error-messages="errorsFor('maritalStatus')" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <label class="fld-label" for="f-phone">{{ $t('fields.phone') }}<span class="req">*</span></label>
+              <v-text-field
+                id="f-phone"
+                v-model="fields.phone"
+                :placeholder="EXAMPLE.phone"
+                :error-messages="errorsFor('phone')"
+                inputmode="tel"
+                dir="ltr"
+              />
+            </v-col>
+
+            <v-col cols="12" sm="6">
+              <label class="fld-label" for="f-email">{{ $t('fields.email') }}<span class="req">*</span></label>
+              <v-text-field
+                id="f-email"
+                v-model="fields.email"
+                :placeholder="EXAMPLE.email"
+                :error-messages="errorsFor('email')"
+                inputmode="email"
+                dir="ltr"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <label class="fld-label" for="f-splAddress">{{ $t('fields.splAddress') }}<span class="req">*</span></label>
+              <v-text-field
+                id="f-splAddress"
+                v-model="fields.splAddress"
+                :placeholder="EXAMPLE.splAddress"
+                :hint="$t('hints.splFormat')"
+                persistent-hint
+                :error-messages="errorsFor('splAddress')"
+                maxlength="8"
+                dir="ltr"
+                class="upper"
+              />
             </v-col>
           </v-row>
 
           <!-- 2 · المؤهلات -->
           <h3 class="sec">{{ $t('publicForm.secQualifications') }}</h3>
-          <v-row dense>
+          <v-row>
             <v-col cols="12" sm="6">
-              <v-select v-model="fields.qualification" :items="qualificationOptions"
-                :label="$t('fields.qualification') + ' *'" :rules="rules.required" />
+              <label class="fld-label" for="f-qualification">{{ $t('fields.qualification') }}<span class="req">*</span></label>
+              <v-select id="f-qualification" v-model="fields.qualification" :items="qualificationOptions" :placeholder="$t('publicForm.choose')" :error-messages="errorsFor('qualification')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.major" :label="$t('fields.major') + ' *'"
-                :rules="rules.required" />
+              <label class="fld-label" for="f-major">{{ $t('fields.major') }}<span class="req">*</span></label>
+              <v-text-field id="f-major" v-model="fields.major" :error-messages="errorsFor('major')" />
             </v-col>
           </v-row>
 
           <!-- 3 · البيانات البنكية -->
           <h3 class="sec">{{ $t('publicForm.secBank') }}</h3>
-          <v-row dense>
+          <v-row>
             <v-col cols="12">
-              <v-text-field v-model="fields.iban" :label="$t('fields.iban') + ' *'"
-                :rules="rules.iban" :hint="$t('hints.iban')" persistent-hint
-                maxlength="24" dir="ltr" class="upper" />
+              <label class="fld-label" for="f-iban">{{ $t('fields.iban') }}<span class="req">*</span></label>
+              <v-text-field
+                id="f-iban"
+                v-model="fields.iban"
+                :placeholder="EXAMPLE.iban"
+                :hint="$t('hints.ibanFormat')"
+                persistent-hint
+                :error-messages="errorsFor('iban')"
+                maxlength="24"
+                dir="ltr"
+                class="upper"
+              />
             </v-col>
           </v-row>
 
           <!-- 4 · جهة الاتصال في الطوارئ -->
           <h3 class="sec">{{ $t('publicForm.secEmergency') }}</h3>
-          <v-row dense>
+          <v-row>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.emergencyContactName"
-                :label="$t('fields.emergencyContactName') + ' *'" :rules="rules.required" />
+              <label class="fld-label" for="f-emergencyContactName">{{ $t('fields.emergencyContactName') }}<span class="req">*</span></label>
+              <v-text-field id="f-emergencyContactName" v-model="fields.emergencyContactName" :error-messages="errorsFor('emergencyContactName')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="fields.emergencyContactPhone"
-                :label="$t('fields.emergencyContactPhone') + ' *'" :rules="rules.phone"
-                :hint="$t('hints.phone')" persistent-hint inputmode="tel" dir="ltr" />
+              <label class="fld-label" for="f-emergencyContactPhone">{{ $t('fields.emergencyContactPhone') }}<span class="req">*</span></label>
+              <v-text-field
+                id="f-emergencyContactPhone"
+                v-model="fields.emergencyContactPhone"
+                :placeholder="EXAMPLE.phone"
+                :error-messages="errorsFor('emergencyContactPhone')"
+                inputmode="tel"
+                dir="ltr"
+              />
             </v-col>
           </v-row>
 
           <!-- 5 · بيانات المشروع — set by HR, shown read-only -->
           <h3 class="sec">{{ $t('publicForm.secProject') }}</h3>
-          <v-row dense>
+          <v-row>
             <v-col cols="12">
-              <v-text-field :model-value="ctx.employee.project || $t('publicForm.projectPending')"
-                :label="$t('fields.project')" readonly variant="filled"
-                :hint="$t('hints.project')" persistent-hint />
+              <label class="fld-label" for="f-project">{{ $t('fields.project') }}</label>
+              <v-text-field
+                id="f-project"
+                :model-value="ctx.employee.project || $t('publicForm.projectPending')"
+                readonly
+                variant="filled"
+                :hint="$t('hints.project')"
+                persistent-hint
+              />
             </v-col>
           </v-row>
 
           <!-- 6 · المرفقات -->
           <h3 class="sec">{{ $t('publicForm.secAttachments') }}</h3>
-          <div v-for="doc in ctx.documents" :key="doc.id" class="mb-3">
-            <v-file-input
-              v-if="!doc.uploaded"
-              :label="docLabel(doc) + (doc.required ? ' *' : '')"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-              prepend-icon="paperclip"
-              density="comfortable"
-              :error="showErrors && doc.required && !files[doc.id]"
-              @update:model-value="onFile(doc.id, $event)"
-            />
-            <v-alert v-else type="success" variant="tonal" density="compact">
-              {{ docLabel(doc) }} — {{ $t('onboarding.uploaded') }}
-            </v-alert>
-          </div>
-          <p class="text-caption text-medium-emphasis">{{ $t('publicForm.fileHint') }}</p>
+          <p class="text-caption text-medium-emphasis mb-4">{{ $t('publicForm.fileHint') }}</p>
+          <v-row>
+            <v-col v-for="doc in ctx.documents" :key="doc.id" cols="12" sm="6">
+              <label class="fld-label" :for="`f-doc-${doc.id}`">
+                {{ docLabel(doc) }}<span v-if="doc.required" class="req">*</span>
+              </label>
+              <v-file-input
+                v-if="!doc.uploaded"
+                :id="`f-doc-${doc.id}`"
+                :placeholder="$t('publicForm.chooseFile')"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                prepend-icon=""
+                prepend-inner-icon="paperclip"
+                :error-messages="showErrors && doc.required && !files[doc.id] ? [$t('validation.required')] : []"
+                @update:model-value="onFile(doc.id, $event)"
+              />
+              <v-alert v-else type="success" variant="tonal" density="compact">
+                {{ $t('onboarding.uploaded') }}
+              </v-alert>
+            </v-col>
+          </v-row>
         </v-card-text>
 
-        <v-card-actions class="pa-4">
-          <span v-if="showErrors && !canSubmit" class="text-caption text-error">
-            {{ $t('publicForm.remaining', { n: invalidFields.length + missingDocs.length }) }}
+        <v-divider />
+        <v-card-actions class="pa-4 px-sm-7 flex-wrap ga-2">
+          <span v-if="showErrors && !canSubmit" class="text-body-2 text-error">
+            {{ $t('publicForm.remaining', { n: invalidCount }) }}
           </span>
           <v-spacer />
-          <v-btn color="primary" size="large" variant="flat"
+          <v-btn color="primary" size="large" variant="flat" class="px-8"
             :loading="state === 'submitting'" @click="submit">
             {{ $t('common.submit') }}
           </v-btn>
@@ -453,15 +538,50 @@ async function submit() {
 }
 
 .sec {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
-  margin: 26px 0 10px;
+  margin: 30px 0 14px;
   padding-inline-start: 10px;
   border-inline-start: 3px solid #35708f;
   line-height: 1.4;
 }
 .sec:first-of-type {
   margin-top: 6px;
+}
+
+/* Label above the field: the title gets its own line, the example lives inside
+   the field, and the line under the field is for the reason something is wrong. */
+.fld-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  color: rgba(var(--v-theme-on-surface), 0.85);
+}
+.req {
+  color: rgb(var(--v-theme-error));
+  margin-inline-start: 4px;
+  font-weight: 700;
+}
+.req-legend {
+  display: inline-block;
+  margin-inline-start: 8px;
+}
+.req-legend .req {
+  margin-inline-start: 0;
+}
+.data-form :deep(.v-input__details) {
+  padding-inline: 4px;
+  padding-top: 4px;
+}
+.data-form :deep(.v-messages) {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  opacity: 1;
+}
+.data-form :deep(.v-field input::placeholder) {
+  opacity: 0.45;
 }
 
 /* IBAN and SPL are stored uppercase; show them that way as they are typed. */

@@ -51,7 +51,15 @@ export class TriggerService {
     private readonly prisma: PrismaClient,
     private readonly notifications: NotificationService,
     /** Knows every sendable key: built-ins plus admin-created templates. Absent = catalogue only. */
-    private readonly templates?: { exists(key: string): Promise<boolean>; list(): Promise<TemplateOption[]> },
+    private readonly templates?: {
+      exists(key: string): Promise<boolean>;
+      list(): Promise<TemplateOption[]>;
+      usesFormLink?(key: string): Promise<boolean>;
+    },
+    /** Issues the employee's data-form link when a template asks for {{formLink}}. */
+    private readonly links?: {
+      issue(purpose: 'DATA_FORM', anchors: { employeeId: string }): Promise<{ url: string }>;
+    },
   ) {}
 
   list() {
@@ -172,12 +180,16 @@ export class TriggerService {
         })
       : null;
 
+    // {{formLink}}: one fresh link per event, shared by every recipient of it —
+    // it is the employee's link either way, and copies must match what they got.
+    const formLink = await this.formLinkFor(matching, employeeId);
     const params = {
       name: employee ? `${employee.firstName} ${employee.lastName}`.trim() : '—',
       ...(employee?.employeeNo ? { employeeNo: employee.employeeNo } : {}),
       ...(employee?.department ? { department: employee.department } : {}),
       ...(employee?.jobTitle ? { jobTitle: employee.jobTitle } : {}),
       status: event.to,
+      ...(formLink ? { formLink, linkUrl: formLink } : {}),
     };
     const ref = { entity: event.entity, entityId: event.entityId };
 
@@ -214,4 +226,19 @@ export class TriggerService {
       }
     }
   }
+  /** The data-form URL when any matching trigger's template asks for it; otherwise nothing is issued. */
+  private async formLinkFor(triggers: EmailTrigger[], employeeId: string | undefined): Promise<string | undefined> {
+    if (!employeeId || !this.links || !this.templates?.usesFormLink) return undefined;
+    for (const trigger of triggers) {
+      if (!(await this.templates.usesFormLink(trigger.templateKey))) continue;
+      try {
+        return (await this.links.issue('DATA_FORM', { employeeId })).url;
+      } catch (err) {
+        logger.error({ err, employeeId, triggerId: trigger.id }, 'could not issue the form link for a trigger');
+        return undefined;
+      }
+    }
+    return undefined;
+  }
+
 }

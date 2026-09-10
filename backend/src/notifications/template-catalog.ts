@@ -24,6 +24,11 @@ export const PLACEHOLDERS: Record<string, PlaceholderMeta> = {
   docNumber: { ar: 'رقم المستند', en: 'Document number', sample: { ar: '2382910044', en: '2382910044' } },
   expiryDate: { ar: 'تاريخ الانتهاء', en: 'Expiry date', sample: { ar: '2026-08-25', en: '2026-08-25' } },
   linkUrl: { ar: 'رابط الإجراء', en: 'Action link', sample: { ar: 'https://…/form/…', en: 'https://…/form/…' } },
+  formLink: {
+    ar: 'رابط نموذج بيانات الموظف',
+    en: 'Employee data-form link',
+    sample: { ar: 'https://…/form/…', en: 'https://…/form/…' },
+  },
   email: { ar: 'البريد الإلكتروني', en: 'Email', sample: { ar: 'nora@riyada-ksa.com', en: 'nora@riyada-ksa.com' } },
   tempPassword: { ar: 'كلمة المرور المؤقتة', en: 'Temporary password', sample: { ar: 'Kq7mXp29TzRw', en: 'Kq7mXp29TzRw' } },
 };
