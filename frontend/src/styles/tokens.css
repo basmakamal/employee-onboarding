@@ -73,8 +73,8 @@
 .v-field--variant-outlined:hover .v-field__outline { --v-field-border-opacity: 0.32; }
 .v-field--variant-outlined.v-field--focused .v-field__outline { --v-field-border-opacity: 1; --v-field-border-width: 1px; }
 /* Floating labels sit above the field; never let a stepper or window clip them. */
-.v-window, .v-window__container, .v-window-item { overflow: visible !important; }
-.v-window-item { padding-top: 6px; }
+.v-dialog .v-window, .v-dialog .v-window__container, .v-dialog .v-window-item { overflow: visible !important; }
+.v-dialog .v-window-item { padding-top: 6px; }
 
 /* Tables: sticky header, quieter header text, soft row hover. */
 .v-table thead th,
