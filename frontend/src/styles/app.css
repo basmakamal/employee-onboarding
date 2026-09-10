@@ -147,6 +147,27 @@ body {
   outline: none;
 }
 
+/*
+ * Autofilled inputs. Chrome paints its own pale blue over a remembered
+ * value, which breaks the field styling and ignores the dark theme. There
+ * is no property to switch it off, so the two documented escapes are used
+ * together: clip the background to the text, and push the background-colour
+ * transition so far out that the paint never arrives. The text and caret
+ * colours have to be restated because the browser sets those too.
+ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: rgb(var(--v-theme-on-surface));
+  caret-color: rgb(var(--v-theme-on-surface));
+  transition: background-color 100000s ease-in-out 0s;
+}
+
 /* Tables: quieter headers, roomier rows, a hover that guides the eye. */
 .v-data-table thead th {
   font-weight: 600 !important;

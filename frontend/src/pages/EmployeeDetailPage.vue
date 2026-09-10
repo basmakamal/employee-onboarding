@@ -988,17 +988,46 @@ async function onScanPicked(event: Event) {
 // ------------------------------------------------------------- contract card
 const showTerms = ref(false);
 
+/**
+ * The last day of the term, not the first day after it: a 12-month contract
+ * starting 1 Oct 2026 runs to 30 Sep 2027. The same arithmetic produces the
+ * end date in the contract email and on the employee's contract page.
+ */
 const contractEnd = computed(() => {
   const c = employee.value?.contract;
   if (!c?.startDate || !c.durationMonths) return null;
   const end = new Date(c.startDate);
   end.setMonth(end.getMonth() + Number(c.durationMonths));
+  end.setDate(end.getDate() - 1);
   return end;
 });
 
+/**
+ * Whole months still to run. Counted on the calendar rather than in average
+ * 30.44-day months, and never rounded up: a term that has not started yet
+ * has exactly its own duration left, never more.
+ */
 const contractRemainingMonths = computed(() => {
-  if (!contractEnd.value) return null;
-  return Math.max(0, Math.ceil((contractEnd.value.getTime() - Date.now()) / (30.44 * 86_400_000)));
+  const c = employee.value?.contract;
+  const end = contractEnd.value;
+  if (!c || !end) return null;
+
+  const now = new Date();
+  const start = c.startDate ? new Date(c.startDate) : null;
+  if (start && now < start) return c.durationMonths != null ? Number(c.durationMonths) : null;
+  if (end <= now) return 0;
+
+  let months = (end.getFullYear() - now.getFullYear()) * 12 + (end.getMonth() - now.getMonth());
+  if (end.getDate() < now.getDate()) months -= 1;
+
+  // Round the leftover part-month to the nearest whole one, so day one of a
+  // twelve-month term reads 12 rather than 11.
+  const anchor = new Date(now);
+  anchor.setMonth(anchor.getMonth() + months);
+  const leftoverDays = Math.round((end.getTime() - anchor.getTime()) / 86_400_000);
+  if (leftoverDays >= 15) months += 1;
+
+  return Math.max(0, months);
 });
 
 const contractState = computed<'active' | 'expired' | 'awaiting' | null>(() => {
