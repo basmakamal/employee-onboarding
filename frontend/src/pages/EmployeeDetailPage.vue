@@ -34,14 +34,22 @@ interface AssetFormRow {
   items: AssetFormItem[];
 }
 
+/** One timeline line: something that happened, or an email that went out. */
 interface AuditRow {
   id: string;
-  entity: string;
-  action: string;
-  fromStatus: string | null;
-  toStatus: string | null;
-  actorType: string;
+  kind: 'AUDIT' | 'EMAIL';
   at: string;
+  entity?: string;
+  action?: string;
+  fromStatus?: string | null;
+  toStatus?: string | null;
+  actorType?: string;
+  actorName?: string | null;
+  subject?: string | null;
+  templateKey?: string | null;
+  deliveryStatus?: string;
+  recipientName?: string | null;
+  recipientEmail?: string | null;
 }
 
 interface OffboardingRow {
@@ -206,6 +214,29 @@ async function load() {
 }
 
 // -------------------------------------------------------------- timeline
+
+/** The staff member's own name; a link or the scheduler has none, so say what it was. */
+function actorOf(log: AuditRow): string {
+  if (log.actorName) return log.actorName;
+  return t(`actors.${log.actorType}`);
+}
+
+/** Who the email reached: their name when we know it, otherwise the address. */
+function recipientOf(log: AuditRow): string {
+  return log.recipientName ?? log.recipientEmail ?? '—';
+}
+
+function timelineEmailTitle(log: AuditRow): string {
+  if (log.deliveryStatus === 'FAILED') return t('timeline.emailFailed');
+  if (log.deliveryStatus === 'PENDING') return t('timeline.emailQueued');
+  return t('timeline.emailSent');
+}
+
+function timelineColor(log: AuditRow): string {
+  if (log.kind !== 'EMAIL') return 'secondary';
+  return log.deliveryStatus === 'FAILED' ? 'error' : 'info';
+}
+
 const timelineLogs = ref<AuditRow[]>([]);
 const timelinePage = ref(1);
 const timelineBusy = ref(false);
@@ -1805,15 +1836,30 @@ onMounted(load);
                 v-for="log in timelineLogs"
                 :key="log.id"
                 size="small"
-                dot-color="secondary"
+                :dot-color="timelineColor(log)"
+                :icon="log.kind === 'EMAIL' ? 'mail' : undefined"
               >
-                <div class="text-body-2 font-weight-medium">
-                  {{ $t(`entities.${log.entity}`, log.entity) }} —
-                  {{ $t(`audit.${log.action}`, log.action) }}
-                </div>
-                <div class="text-caption text-medium-emphasis">
-                  {{ new Date(log.at).toLocaleString() }} · {{ $t(`actors.${log.actorType}`) }}
-                </div>
+                <template v-if="log.kind === 'EMAIL'">
+                  <div class="text-body-2 font-weight-medium">
+                    {{ timelineEmailTitle(log) }}
+                    <span v-if="log.subject" class="text-medium-emphasis font-weight-regular">
+                      — {{ log.subject }}
+                    </span>
+                  </div>
+                  <div class="text-caption text-medium-emphasis">
+                    {{ new Date(log.at).toLocaleString() }} ·
+                    {{ $t('timeline.to', { name: recipientOf(log) }) }}
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ $t(`entities.${log.entity}`, log.entity ?? '') }} —
+                    {{ $t(`audit.${log.action}`, log.action ?? '') }}
+                  </div>
+                  <div class="text-caption text-medium-emphasis">
+                    {{ new Date(log.at).toLocaleString() }} · {{ actorOf(log) }}
+                  </div>
+                </template>
               </v-timeline-item>
             </v-timeline>
             <div v-if="timelineLogs.length < employee.auditTotal" class="text-center mt-2">

@@ -12,6 +12,30 @@ export const PIPELINE_STATUSES = [
   'EXPIRED',
 ] as const;
 
+/**
+ * One line of an employee's timeline: something that happened (AUDIT) or
+ * something that was sent (EMAIL).
+ */
+export interface TimelineEntry {
+  id: string;
+  kind: 'AUDIT' | 'EMAIL';
+  at: Date;
+  entity?: string;
+  action?: string;
+  fromStatus?: string | null;
+  toStatus?: string | null;
+  actorType?: string;
+  /** Who did it, when a staff member did. */
+  actorName?: string | null;
+  subject?: string | null;
+  templateKey?: string | null;
+  /** PENDING | SENT | FAILED, straight from the notification row. */
+  deliveryStatus?: string;
+  /** Who the email reached: their name when they are staff, else the address. */
+  recipientName?: string | null;
+  recipientEmail?: string | null;
+}
+
 export const EMPLOYEE_SORT_FIELDS = [
   'createdAt',
   'firstName',
@@ -270,9 +294,6 @@ export class EmployeeRepository {
         },
         assetForms: { include: { items: true }, orderBy: { createdAt: 'desc' } },
         offboardings: { orderBy: { createdAt: 'desc' } },
-        // Latest page only — the timeline grows forever; the rest is served
-        // by auditPage() on demand.
-        auditLogs: { orderBy: { at: 'desc' }, take: 20 },
         _count: { select: { auditLogs: true } },
       },
     });
@@ -365,18 +386,68 @@ export class EmployeeRepository {
     };
   }
 
-  /** One page of the employee's audit timeline, newest first. */
-  async auditPage(employeeId: string, page: number, limit: number) {
-    const [items, total] = await Promise.all([
+  /**
+   * One page of the employee's timeline, newest first.
+   *
+   * Two sources are woven together: what happened (audit rows, carrying the
+   * name of the staff member who did it) and what was sent (email rows,
+   * carrying who received it). Both are fetched down to the requested page
+   * and merged in memory — a profile page reads a handful of pages at most,
+   * and a UNION across two tables would not survive Prisma's typing.
+   *
+   * In-app copies are left out on purpose: every staff email also writes an
+   * IN_APP row, and showing both would double every line.
+   */
+  async timelinePage(employeeId: string, page: number, limit: number): Promise<{
+    items: TimelineEntry[];
+    total: number;
+  }> {
+    const take = page * limit;
+    const emails = { entity: 'EMPLOYEE', entityId: employeeId, channel: 'EMAIL' as const };
+    const [audits, sent, auditTotal, sentTotal] = await Promise.all([
       this.db.auditLog.findMany({
         where: { employeeId },
         orderBy: { at: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        take,
+        include: { actor: { select: { name: true } } },
+      }),
+      this.db.notification.findMany({
+        where: emails,
+        orderBy: { createdAt: 'desc' },
+        take,
+        include: { recipient: { select: { name: true } } },
       }),
       this.db.auditLog.count({ where: { employeeId } }),
+      this.db.notification.count({ where: emails }),
     ]);
-    return { items, total };
+
+    const items: TimelineEntry[] = [
+      ...audits.map((a) => ({
+        id: a.id,
+        kind: 'AUDIT' as const,
+        at: a.at,
+        entity: a.entity,
+        action: a.action,
+        fromStatus: a.fromStatus,
+        toStatus: a.toStatus,
+        actorType: a.actorType,
+        actorName: a.actor?.name ?? null,
+      })),
+      ...sent.map((n) => ({
+        id: n.id,
+        kind: 'EMAIL' as const,
+        at: n.sentAt ?? n.createdAt,
+        subject: n.subject,
+        templateKey: n.templateKey,
+        deliveryStatus: n.status,
+        recipientName: n.recipient?.name ?? null,
+        recipientEmail: n.recipientEmail,
+      })),
+    ]
+      .sort((a, b) => b.at.getTime() - a.at.getTime())
+      .slice((page - 1) * limit, page * limit);
+
+    return { items, total: auditTotal + sentTotal };
   }
 
   /** SLA scan input — statusChangedAt is the elapsed-time anchor. */
