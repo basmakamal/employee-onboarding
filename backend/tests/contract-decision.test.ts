@@ -113,3 +113,20 @@ describe('OnboardingService.decideContract', () => {
     await expect(service.decideContract('raw', 'APPROVE')).rejects.toThrow(/not found/);
   });
 });
+
+describe('the audit row for a link decision', () => {
+  it('records the actor type but never a user id — a token id is not a user', async () => {
+    const { service, repos } = makeService();
+
+    await service.decideContract('raw', 'APPROVE');
+
+    const entry = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ action: 'ACTIVATED', actorType: 'LINK' });
+    // Writing the token id here violates the audit_logs → users foreign key,
+    // which is what made accepting a contract fail with a 500.
+    expect(entry).not.toHaveProperty('actorId');
+  });
+});

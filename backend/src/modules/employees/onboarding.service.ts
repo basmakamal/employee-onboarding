@@ -105,7 +105,7 @@ export class OnboardingService {
         action: 'CREATE',
         toStatus: employee.status,
         actorType: actor.type,
-        ...(actor.id ? { actorId: actor.id } : {}),
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId: employee.id,
       });
       return employee;
@@ -226,7 +226,7 @@ export class OnboardingService {
           entityId: employee.id,
           action: 'ACTIVATED',
           actorType: actor.type,
-          ...(actor.id ? { actorId: actor.id } : {}),
+          ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
           employeeId: employee.id,
           metadata: { employeeNo, from: 'contract-active' },
         });

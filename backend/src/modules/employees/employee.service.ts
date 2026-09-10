@@ -124,7 +124,7 @@ export class EmployeeService {
         action: 'CREATE',
         toStatus: 'ACTIVE',
         actorType: actor.type,
-        ...(actor.id ? { actorId: actor.id } : {}),
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId: employee.id,
         metadata: { employeeNo, from: 'direct' },
       });
@@ -147,7 +147,7 @@ export class EmployeeService {
         entityId: id,
         action: 'UPDATE_PROFILE',
         actorType: actor.type,
-        ...(actor.id ? { actorId: actor.id } : {}),
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId: id,
         metadata: { fields: Object.keys(input) },
       });
@@ -173,7 +173,7 @@ export class EmployeeService {
         entityId: id,
         action: 'DELETE',
         actorType: actor.type,
-        ...(actor.id ? { actorId: actor.id } : {}),
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         metadata: {
           employeeNo: existing.employeeNo,
           name: `${existing.firstName} ${existing.lastName}`,
@@ -196,7 +196,7 @@ export class EmployeeService {
         entityId: id,
         action: 'UPDATE_PHOTO',
         actorType: actor.type,
-        ...(actor.id ? { actorId: actor.id } : {}),
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId: id,
       });
     });
@@ -231,7 +231,7 @@ export class EmployeeService {
         entityId: request.id,
         action: type,
         actorType: actor.type,
-        ...(actor.id ? { actorId: actor.id } : {}),
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId,
       });
       return request;
