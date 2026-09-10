@@ -34,15 +34,32 @@ export function employeeProcessMachine(key: 'GOSI' | 'MEDICAL_INSURANCE'): Machi
   };
 }
 
-/** Stage 2 — Criminal Record Certificate: strictly forward (BRD). */
+/**
+ * Stage 2 — Criminal Record Certificate: strictly forward (BRD).
+ *
+ * The stages still move one at a time, but the certificate is what actually
+ * closes the track, and it does not always arrive in step: a trainee may
+ * hand one over before anything was requested. So COMPLETE (which IS the
+ * upload) is legal from every open stage, while skipping forward without
+ * the document is not.
+ */
 export function criminalRecordMachine(): MachineDef<ProcessLike> {
+  const complete = (from: string) => ({
+    action: 'COMPLETE',
+    from,
+    to: 'DONE',
+    actors: ['USER' as const],
+    roles: STAGE2_ROLES,
+  });
   return {
     key: 'CRIMINAL_RECORD',
     transitions: [
       { action: 'SEND_REQUEST', from: 'TRAINING', to: 'REQUEST_SENT', actors: ['USER'], roles: STAGE2_ROLES },
       { action: 'MARK_PENDING', from: 'REQUEST_SENT', to: 'PENDING', actors: ['USER'], roles: STAGE2_ROLES },
-      // Certificate received & attached — repository stamps the storage key.
-      { action: 'COMPLETE', from: 'PENDING', to: 'DONE', actors: ['USER'], roles: STAGE2_ROLES },
+      // Certificate received & attached — the repository stamps the storage key.
+      complete('PENDING'),
+      complete('REQUEST_SENT'),
+      complete('TRAINING'),
     ],
   };
 }
