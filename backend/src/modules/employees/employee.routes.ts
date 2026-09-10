@@ -261,6 +261,42 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     }),
   );
 
+  /** The contract document (scan / photo / PDF); typed terms stay optional. */
+  router.post(
+    '/:id/contract/file',
+    requireRole('HR', 'ADMIN'),
+    (req, _res, next) => {
+      req.uploadSubdir = employeeSubdir(req.params['id'] as string);
+      next();
+    },
+    documentUpload.single('file'),
+    asyncHandler(async (req, res) => {
+      if (!req.file) throw new GuardFailedError('FILE_MISSING', 'no document uploaded');
+      try {
+        await verifyUploadedFiles([req.file]);
+        const key = storageKeyFor(req.uploadSubdir as string, req.file.filename);
+        const { contract, previousKey } = await onboarding.setContractFile(
+          req.params['id'] as string,
+          key,
+          actor(req),
+        );
+        if (previousKey && previousKey !== key) await removeStoredFiles([previousKey]);
+        res.json(contract);
+      } catch (err) {
+        await discardUploads([req.file]);
+        throw err;
+      }
+    }),
+  );
+
+  /** The uploaded contract document (any staff may review it). */
+  router.get(
+    '/:id/contract/file',
+    asyncHandler(async (req, res) => {
+      res.sendFile(storagePath(await onboarding.contractFileKey(req.params['id'] as string)));
+    }),
+  );
+
   /**
    * Contract status, recorded by hand (the contract lives on an external
    * platform): PENDING_APPROVAL / ACTIVE / REJECTED / EXPIRED. ACTIVE is the

@@ -53,6 +53,7 @@ function makeService(overrides: { employee?: Partial<Employee>; contract?: unkno
       setStatusByEmployee: vi.fn().mockResolvedValue({ count: 1 }),
       updateDetails: vi.fn().mockResolvedValue({}),
       create: vi.fn().mockResolvedValue({}),
+      setStorageKey: vi.fn().mockResolvedValue({ id: 'c1', storageKey: 'new' }),
     },
     audit: { append: vi.fn().mockResolvedValue({}) },
   };
@@ -295,5 +296,34 @@ describe('OnboardingService signed-link surface', () => {
 
     expect(repos.documents.attachUpload).not.toHaveBeenCalled();
     expect(workflow.transition).toHaveBeenCalled();
+  });
+});
+
+describe('OnboardingService.setContractFile', () => {
+  it('attaches the document to an existing contract and hands back the old file key', async () => {
+    const { service, repos } = makeService({
+      employee: { status: 'CONTRACT_CREATION' },
+      contract: { id: 'c1', status: 'DRAFT', storageKey: 'old/key.pdf' },
+    });
+    const result = await service.setContractFile('e1', 'new/key.pdf', HR);
+    expect(repos.contracts.setStorageKey).toHaveBeenCalledWith('c1', 'new/key.pdf');
+    expect(result.previousKey).toBe('old/key.pdf');
+  });
+
+  it('creates the contract from the document alone — typed terms are optional', async () => {
+    const { service, repos } = makeService({ employee: { status: 'CONTRACT_CREATION' }, contract: null });
+    const result = await service.setContractFile('e1', 'scan.jpg', HR);
+    expect(repos.contracts.create).toHaveBeenCalledWith({
+      employeeId: 'e1',
+      createdById: 'hr1',
+      details: {},
+      storageKey: 'scan.jpg',
+    });
+    expect(result.previousKey).toBeNull();
+  });
+
+  it('refuses outside contract creation, like editing the terms', async () => {
+    const { service } = makeService({ employee: { status: 'AWAITING_CONTRACT_APPROVAL' } });
+    await expect(service.setContractFile('e1', 'scan.jpg', HR)).rejects.toBeInstanceOf(GuardFailedError);
   });
 });

@@ -141,6 +141,40 @@ export class OnboardingService {
   }
 
   /**
+   * Attach the contract itself (scan, photo or PDF). Typed terms are optional:
+   * a contract may consist of nothing but the uploaded document. Returns the
+   * previous file key so the caller can delete it from storage.
+   */
+  async setContractFile(id: string, storageKey: string, actor: Actor) {
+    const employee = await this.mustFind(id);
+    if (employee.status !== 'CONTRACT_CREATION') {
+      throw new GuardFailedError(
+        'WRONG_STATUS',
+        'the contract can only be edited during contract creation',
+      );
+    }
+    const existing = await this.repos.contracts.findByEmployee(id);
+    if (existing) {
+      const contract = await this.repos.contracts.setStorageKey(existing.id, storageKey);
+      return { contract, previousKey: existing.storageKey ?? null };
+    }
+    const contract = await this.repos.contracts.create({
+      employeeId: id,
+      createdById: actor.id ?? '',
+      details: {},
+      storageKey,
+    });
+    return { contract, previousKey: null };
+  }
+
+  /** Storage key of the uploaded contract document, if any. */
+  async contractFileKey(id: string): Promise<string> {
+    const contract = await this.repos.contracts.findByEmployee(id);
+    if (!contract?.storageKey) throw new NotFoundError('contract file', id);
+    return contract.storageKey;
+  }
+
+  /**
    * HR records what happened to the contract on the external platform.
    *
    *   PENDING_APPROVAL  submitted for approval     → AWAITING_CONTRACT_APPROVAL

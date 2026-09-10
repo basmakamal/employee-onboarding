@@ -295,7 +295,14 @@
     "expireConfirm": "Mark the contract as expired without approval?",
     "rejectedBanner": "The platform rejected this contract. Fix the details and submit again.",
     "statusChanged": "Contract status updated.",
-    "activated": "{name} is now an employee."
+    "activated": "{name} is now an employee.",
+    "optionalHint": "All fields are optional. You can type the terms, upload the signed contract, or both.",
+    "file": "Contract document",
+    "fileHint": "Photo, scan or PDF of the contract (JPEG, PNG or PDF, up to 10 MB).",
+    "fileOnFile": "A document is attached.",
+    "chooseFile": "Choose file",
+    "replaceFile": "Replace file",
+    "viewFile": "View document"
   },
   "status": {
     "CREATED": "Created",

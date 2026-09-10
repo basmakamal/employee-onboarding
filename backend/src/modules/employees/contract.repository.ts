@@ -31,6 +31,11 @@ export class ContractRepository {
     });
   }
 
+  /** Attach (or replace) the uploaded contract document. */
+  setStorageKey(id: string, storageKey: string) {
+    return this.db.contract.update({ where: { id }, data: { storageKey } });
+  }
+
   /**
    * Record the status HR read off the external platform. Timestamps travel
    * with the status so the card can show when it was submitted / approved.
