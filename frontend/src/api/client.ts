@@ -24,6 +24,8 @@ export interface SessionUser {
   name: string;
   email: string;
   role: string;
+  /** A profile picture exists at /api/auth/me/photo. */
+  hasPhoto?: boolean;
   /** Still on a temporary password — the app forces a change before anything else. */
   mustChangePassword?: boolean;
 }

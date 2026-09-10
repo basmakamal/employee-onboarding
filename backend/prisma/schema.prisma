@@ -201,6 +201,8 @@ model User {
   invitedAt          DateTime?
   passwordChangedAt  DateTime?
   lastLoginAt        DateTime?
+  /// Storage key of the staff member's own profile picture.
+  photoKey           String?
   createdAt    DateTime @default(now())
 
   employeesCreated    Employee[]    @relation("EmployeeCreatedBy")

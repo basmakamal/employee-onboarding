@@ -45,7 +45,7 @@ describe('AuthService', () => {
     const auth = new AuthService(makeUsers(), SECRETS);
     const result = await auth.login('HR@example.com', 'Passw0rd!');
 
-    expect(result.user).toEqual({ id: 'u1', name: 'HR Officer', email: 'hr@example.com', role: 'HR', mustChangePassword: false });
+    expect(result.user).toEqual({ id: 'u1', name: 'HR Officer', email: 'hr@example.com', role: 'HR', mustChangePassword: false, hasPhoto: false });
     expect(result.accessToken).toBeTruthy();
     expect(result.refreshToken).toBeTruthy();
   });

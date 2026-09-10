@@ -958,5 +958,14 @@
   "languages": {
     "AR": "Arabic",
     "EN": "English"
+  },
+  "account": {
+    "title": "My profile",
+    "subtitle": "Your picture and display name, shown across the system.",
+    "photo": "Profile picture",
+    "photoHint": "JPEG or PNG, up to 5 MB. A square photo looks best.",
+    "upload": "Upload picture",
+    "adminOnly": "Email and role are managed by an administrator.",
+    "menu": "Account"
   }
 }

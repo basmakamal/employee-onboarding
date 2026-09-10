@@ -66,6 +66,7 @@ export class UserRepository {
       invitedAt?: Date | null;
       passwordChangedAt?: Date | null;
       lastLoginAt?: Date | null;
+      photoKey?: string | null;
     },
   ) {
     return this.db.user.update({ where: { id }, data });
