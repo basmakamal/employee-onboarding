@@ -104,6 +104,7 @@ const triggerSchema = z.object({
   templateKey: z.string().min(1),
   recipient: z.enum(['SUBJECT', 'ROLE']),
   role: z.string().nullable().optional(),
+  ccEmails: z.array(z.string().email()).max(10).nullable().optional(),
   active: z.boolean().optional(),
 });
 

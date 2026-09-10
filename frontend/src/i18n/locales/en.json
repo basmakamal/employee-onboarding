@@ -474,7 +474,9 @@
     "subjectTemplate": "Employee email template",
     "staffTemplate": "Staff email template",
     "builtInTemplate": "Built-in default",
-    "templates": "Templates"
+    "templates": "Templates",
+    "cc": "Copy to",
+    "ccHint": "Extra addresses that receive every staff message from this rule."
   },
   "reports": {
     "title": "Reports",
@@ -819,7 +821,10 @@
       "removed": "Trigger removed.",
       "remove": "Remove",
       "removeConfirm": "Remove this trigger?",
-      "note": "Triggers fire after the change is saved, so a failed change never sends an email."
+      "note": "Triggers fire after the change is saved, so a failed change never sends an email.",
+      "cc": "Also send a copy to",
+      "ccHint": "Type an address and press Enter. Each address gets its own copy; remove yourself here when you are done checking.",
+      "ccNone": "No copies"
     }
   },
   "contractStatus": {

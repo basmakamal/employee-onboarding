@@ -60,7 +60,13 @@ interface Trigger {
   templateKey: string;
   recipient: 'SUBJECT' | 'ROLE';
   role: string | null;
+  /** Comma-separated extra recipients (server storage format). */
+  ccEmails: string | null;
   active: boolean;
+}
+
+function ccList(value: string | null): string[] {
+  return (value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 }
 
 interface TriggerOptions {
@@ -272,6 +278,7 @@ const newTrigger = ref({
   templateKey: 'custom.status_change',
   recipient: 'SUBJECT' as 'SUBJECT' | 'ROLE',
   role: 'HR',
+  ccEmails: [] as string[],
 });
 
 const triggerStatuses = computed(() => options.value.processes[newTrigger.value.processKey] ?? []);
@@ -295,6 +302,7 @@ async function createTrigger() {
       templateKey: n.templateKey,
       recipient: n.recipient,
       role: n.recipient === 'ROLE' ? n.role : null,
+      ccEmails: n.ccEmails,
     });
     triggerDialog.value = false;
     notify(t('emailTemplates.triggers.created'));
@@ -303,6 +311,21 @@ async function createTrigger() {
     fail(e);
   } finally {
     savingTrigger.value = false;
+  }
+}
+
+/** Add or remove copy recipients inline — e.g. yourself while checking the wording. */
+async function updateTriggerCc(trigger: Trigger, ccEmails: string[]) {
+  busyTrigger.value = trigger.id;
+  try {
+    await api.put(`/api/email-triggers/${trigger.id}`, { ccEmails });
+    notify(t('common.saved'));
+    await load();
+  } catch (e) {
+    fail(e);
+    await load();
+  } finally {
+    busyTrigger.value = '';
   }
 }
 
@@ -408,6 +431,7 @@ async function removeTrigger(trigger: Trigger) {
               <th>{{ $t('emailTemplates.triggers.status') }}</th>
               <th>{{ $t('emailTemplates.triggers.template') }}</th>
               <th>{{ $t('emailTemplates.triggers.recipient') }}</th>
+              <th style="width: 260px">{{ $t('emailTemplates.triggers.cc') }}</th>
               <th>{{ $t('emailTemplates.triggers.active') }}</th>
               <th></th>
             </tr>
@@ -420,6 +444,22 @@ async function removeTrigger(trigger: Trigger) {
               <td>
                 <template v-if="tr.recipient === 'SUBJECT'">{{ $t('emailTemplates.triggers.subjectRecipient') }}</template>
                 <template v-else>{{ $t(`roles.${tr.role}`, tr.role ?? '') }}</template>
+              </td>
+              <td>
+                <!-- Type an address + Enter to add; click the × on a chip to remove. -->
+                <v-combobox
+                  :model-value="ccList(tr.ccEmails)"
+                  :placeholder="$t('emailTemplates.triggers.ccNone')"
+                  multiple
+                  chips
+                  closable-chips
+                  density="compact"
+                  hide-details
+                  variant="plain"
+                  dir="ltr"
+                  :disabled="busyTrigger === tr.id"
+                  @update:model-value="(v: string[]) => updateTriggerCc(tr, v)"
+                />
               </td>
               <td>
                 <v-switch
@@ -680,6 +720,19 @@ async function removeTrigger(trigger: Trigger) {
                 v-model="newTrigger.role"
                 :items="options.roles.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
                 :label="$t('emailTemplates.triggers.role')"
+              />
+            </v-col>
+            <v-col cols="12">
+              <v-combobox
+                v-model="newTrigger.ccEmails"
+                :label="$t('emailTemplates.triggers.cc')"
+                :hint="$t('emailTemplates.triggers.ccHint')"
+                persistent-hint
+                multiple
+                chips
+                closable-chips
+                dir="ltr"
+                prepend-inner-icon="mdi-email-plus-outline"
               />
             </v-col>
           </v-row>
