@@ -30,6 +30,8 @@ export interface EmployeeListQuery {
   filter: 'all' | 'onboarding' | 'active' | 'inactive';
   /** Exact status (reports drill-down) — takes precedence over `filter`. */
   status?: EmployeeStatus;
+  /** Exact department (list filter). */
+  department?: string;
   /** Inclusive date range applied to `basis` (reports duration filter). */
   from?: Date;
   to?: Date;
@@ -58,6 +60,7 @@ export interface EmployeeListItem {
 function employeeListWhere(query: EmployeeListQuery): Prisma.EmployeeWhereInput {
   const where: Prisma.EmployeeWhereInput = {};
   if (query.status) where.status = query.status;
+  if (query.department) where.department = query.department;
   else if (query.filter === 'onboarding') where.status = { in: [...PIPELINE_STATUSES] };
   else if (query.filter === 'active') where.status = 'ACTIVE';
   else if (query.filter === 'inactive') where.status = { in: ['INACTIVE', 'WITHDRAWN'] };

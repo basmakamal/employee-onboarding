@@ -142,6 +142,7 @@ const listQuerySchema = z.object({
   q: z.string().max(200).optional(),
   filter: z.enum(['all', 'onboarding', 'active', 'inactive']).default('all'),
   status: z.enum(EMPLOYEE_STATUSES).optional(),
+  department: z.string().max(120).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   basis: z.enum(['hireDate', 'createdAt']).default('hireDate'),
