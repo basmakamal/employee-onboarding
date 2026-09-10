@@ -358,9 +358,16 @@ async function removeTrigger(trigger: Trigger) {
 
 <template>
   <v-container class="py-8" style="max-width: 1200px">
-    <div class="mb-6">
-      <h1 class="text-h4 font-weight-bold">{{ $t('emailTemplates.title') }}</h1>
-      <p class="text-medium-emphasis mt-1 mb-0">{{ $t('emailTemplates.subtitle') }}</p>
+    <div class="d-flex align-center flex-wrap ga-3 mb-6">
+      <div>
+        <h1 class="text-h4 font-weight-bold">{{ $t('emailTemplates.title') }}</h1>
+        <p class="text-medium-emphasis mt-1 mb-0">{{ $t('emailTemplates.subtitle') }}</p>
+      </div>
+      <v-spacer />
+      <!-- The most frequent action lives up here, not under the templates list. -->
+      <v-btn color="primary" prepend-icon="mdi-plus" @click="triggerDialog = true">
+        {{ $t('emailTemplates.triggers.add') }}
+      </v-btn>
     </div>
 
     <template v-if="loaded">
@@ -417,10 +424,6 @@ async function removeTrigger(trigger: Trigger) {
           <h2 class="text-h6 font-weight-bold">{{ $t('emailTemplates.triggers.title') }}</h2>
           <p class="text-body-2 text-medium-emphasis mb-0">{{ $t('emailTemplates.triggers.subtitle') }}</p>
         </div>
-        <v-spacer />
-        <v-btn color="primary" prepend-icon="mdi-plus" @click="triggerDialog = true">
-          {{ $t('emailTemplates.triggers.add') }}
-        </v-btn>
       </div>
 
       <v-card>
