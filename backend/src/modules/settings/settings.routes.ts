@@ -28,6 +28,7 @@ const ruleUpdateSchema = z.object({
   // null = back to the watcher's built-in template
   subjectTemplateKey: z.string().max(80).nullable().optional(),
   staffTemplateKey: z.string().max(80).nullable().optional(),
+  ccEmails: z.array(z.string().email()).max(10).nullable().optional(),
   active: z.boolean().optional(),
 });
 
@@ -59,6 +60,7 @@ const ruleCreateSchema = z.object({
   escalateToRole: z.enum(['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN']).nullable().optional(),
   subjectTemplateKey: z.string().max(80).nullable().optional(),
   staffTemplateKey: z.string().max(80).nullable().optional(),
+  ccEmails: z.array(z.string().email()).max(10).nullable().optional(),
   active: z.boolean().default(true),
 });
 
@@ -187,6 +189,7 @@ export function settingsRouter(
           escalateToRole: body.escalateToRole ?? null,
           subjectTemplateKey: body.subjectTemplateKey ?? null,
           staffTemplateKey: body.staffTemplateKey ?? null,
+          ccEmails: body.ccEmails?.length ? body.ccEmails.join(',') : null,
           active: body.active,
         }),
       );
@@ -200,9 +203,12 @@ export function settingsRouter(
       const changes = req.body as z.infer<typeof ruleUpdateSchema>;
       res.json(
         await slaRules.update(req.params['id'] as string, {
-          ...compact(changes),
-          // nullable escalateToRole must survive compact()
+          ...compact({ ...changes, ccEmails: undefined }),
+          // nullable fields must survive compact(); cc list is stored comma-separated
           ...(changes.escalateToRole === null ? { escalateToRole: null } : {}),
+          ...(changes.ccEmails !== undefined
+            ? { ccEmails: changes.ccEmails?.length ? changes.ccEmails.join(',') : null }
+            : {}),
         }),
       );
     }),

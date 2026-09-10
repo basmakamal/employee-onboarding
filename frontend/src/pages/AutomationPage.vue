@@ -15,7 +15,13 @@ interface SlaRuleRow {
   escalateToRole: string | null;
   subjectTemplateKey: string | null;
   staffTemplateKey: string | null;
+  /** Comma-separated extra recipients (server storage format). */
+  ccEmails: string | null;
   active: boolean;
+}
+
+function ccList(value: string | null): string[] {
+  return (value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 }
 
 interface TemplateOption {
@@ -57,6 +63,7 @@ const newRule = ref({
   escalateToRole: 'ADMIN',
   subjectTemplateKey: null as string | null,
   staffTemplateKey: null as string | null,
+  ccEmails: [] as string[],
 });
 
 const statusOptions = computed(() => WATCHABLE[newRule.value.processKey] ?? []);
@@ -117,7 +124,7 @@ async function createRule() {
   }
 }
 
-async function updateRule(rule: SlaRuleRow, changes: Partial<SlaRuleRow>) {
+async function updateRule(rule: SlaRuleRow, changes: Record<string, unknown>) {
   busy.value = rule.id;
   try {
     await api.put(`/api/settings/sla/${rule.id}`, changes);
@@ -220,6 +227,21 @@ onMounted(load);
                 style="max-width: 170px"
                 :disabled="busy === rule.id"
                 @update:model-value="(escalateToRole: string) => updateRule(rule, { escalateToRole })"
+              />
+              <!-- Extra copies (e.g. yourself while checking). Type + Enter to add, × to remove. -->
+              <v-combobox
+                :model-value="ccList(rule.ccEmails)"
+                :placeholder="$t('sla.cc')"
+                multiple
+                chips
+                closable-chips
+                density="compact"
+                hide-details
+                variant="plain"
+                dir="ltr"
+                style="max-width: 260px"
+                :disabled="busy === rule.id"
+                @update:model-value="(ccEmails: string[]) => updateRule(rule, { ccEmails })"
               />
             </td>
             <td>
@@ -340,6 +362,19 @@ onMounted(load);
                 v-model="newRule.staffTemplateKey"
                 :items="templateItems('staff')"
                 :label="$t('sla.staffTemplate')"
+              />
+            </v-col>
+            <v-col cols="12">
+              <v-combobox
+                v-model="newRule.ccEmails"
+                :label="$t('sla.cc')"
+                :hint="$t('sla.ccHint')"
+                persistent-hint
+                multiple
+                chips
+                closable-chips
+                dir="ltr"
+                prepend-inner-icon="mdi-email-plus-outline"
               />
             </v-col>
           </v-row>

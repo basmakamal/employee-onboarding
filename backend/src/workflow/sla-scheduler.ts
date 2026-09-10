@@ -216,9 +216,13 @@ export class SlaScheduler {
     const owners = preferOwners ? await this.deps.responsibility?.get(rule.processKey) : undefined;
     if (owners && owners.length > 0) {
       await this.deps.notifications.notifyRoleAndUsers(role, owners, template, params, ref);
-      return;
+    } else {
+      await this.deps.notifications.notifyRole(role, template, params, ref);
     }
-    await this.deps.notifications.notifyRole(role, template, params, ref);
+    // Extra copies configured on the rule (e.g. an admin checking the wording).
+    for (const cc of (rule.ccEmails ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
+      await this.deps.notifications.notifyExternal(cc, template, params, ref);
+    }
   }
 
   private audit(rule: SlaRule, record: WatchedRecord, action: string) {

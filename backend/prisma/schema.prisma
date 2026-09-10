@@ -527,6 +527,8 @@ model SlaRule {
   /// Optional template overrides; null = the watcher's built-in choice.
   subjectTemplateKey String?
   staffTemplateKey   String?
+  /// Extra recipients (comma-separated) who get a copy of every staff message from this rule.
+  ccEmails      String?
   active        Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
@@ -597,6 +599,8 @@ model EmailTrigger {
   active      Boolean          @default(true)
   createdAt   DateTime         @default(now())
   createdById String?
+  /// Extra recipients (comma-separated) — e.g. an admin checking the wording. Each gets its own copy.
+  ccEmails    String?
 
   @@index([processKey, status, active])
   @@map("email_triggers")

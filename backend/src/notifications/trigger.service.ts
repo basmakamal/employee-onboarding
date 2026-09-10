@@ -13,7 +13,21 @@ export interface TriggerInput {
   templateKey: string;
   recipient: 'SUBJECT' | 'ROLE';
   role?: string | null;
+  /** Extra addresses that get their own copy — e.g. an admin checking the wording. */
+  ccEmails?: string[] | null;
   active?: boolean;
+}
+
+/** Comma-separated column ↔ list. */
+export function splitCc(value: string | null | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+function joinCc(list: string[] | null | undefined): string | null {
+  const clean = [...new Set((list ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean))];
+  return clean.length ? clean.join(',') : null;
 }
 
 /**
@@ -72,6 +86,7 @@ export class TriggerService {
         templateKey: input.templateKey,
         recipient: input.recipient,
         role: input.recipient === 'ROLE' ? input.role ?? null : null,
+        ccEmails: joinCc(input.ccEmails),
         active: input.active ?? true,
         createdById: userId ?? null,
       },
@@ -89,6 +104,7 @@ export class TriggerService {
       templateKey: changes.templateKey ?? existing.templateKey,
       recipient: changes.recipient ?? existing.recipient,
       role: changes.role !== undefined ? changes.role : existing.role,
+      ccEmails: changes.ccEmails !== undefined ? changes.ccEmails : splitCc(existing.ccEmails),
       active: changes.active ?? existing.active,
     };
     this.validate(merged);
@@ -100,6 +116,7 @@ export class TriggerService {
         templateKey: merged.templateKey,
         recipient: merged.recipient,
         role: merged.recipient === 'ROLE' ? merged.role ?? null : null,
+        ccEmails: joinCc(merged.ccEmails),
         active: merged.active ?? true,
       },
     });
@@ -151,11 +168,16 @@ export class TriggerService {
         if (trigger.recipient === 'SUBJECT') {
           if (!employee?.email) {
             logger.warn({ triggerId: trigger.id, event }, 'trigger has no employee email to send to');
-            continue;
+          } else {
+            await this.notifications.notifyExternal(employee.email, trigger.templateKey, params, ref);
           }
-          await this.notifications.notifyExternal(employee.email, trigger.templateKey, params, ref);
         } else {
           await this.notifications.notifyRole(trigger.role ?? 'HR', trigger.templateKey, params, ref);
+        }
+        // Copies: each address gets its own row in the email history, so the
+        // person checking can see exactly what went out and remove themselves later.
+        for (const cc of splitCc(trigger.ccEmails)) {
+          await this.notifications.notifyExternal(cc, trigger.templateKey, params, ref);
         }
       } catch (err) {
         // One bad trigger must not stop the others.
