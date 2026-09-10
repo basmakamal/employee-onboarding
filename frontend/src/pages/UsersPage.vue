@@ -114,6 +114,27 @@ async function createUser() {
   }
 }
 
+async function removeUser(user: UserRow) {
+  const ok = await confirm({
+    title: t('users.delete'),
+    message: t('users.deleteConfirm', { name: user.name }),
+    color: 'error',
+    confirmText: t('users.delete'),
+    icon: 'trash-2',
+  });
+  if (!ok) return;
+  busy.value = user.id;
+  try {
+    await api.delete(`/api/users/${user.id}`);
+    notify(t('users.deleted'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
 async function resendInvitation(user: UserRow) {
   if (!(await confirm({ title: t('users.resendInvitation'), message: t('users.resendConfirm', { name: user.name }), confirmText: t('users.resendInvitation') }))) return;
   busy.value = user.id;
@@ -273,6 +294,17 @@ onMounted(load);
           >
             {{ $t('users.resendInvitation') }}
           </v-btn>
+          <v-btn
+            v-if="item.id !== auth.user?.id"
+            size="small"
+            variant="text"
+            color="error"
+            icon="trash-2"
+            class="ms-1"
+            :aria-label="$t('users.delete')"
+            :disabled="busy === item.id"
+            @click="removeUser(item)"
+          />
         </template>
       </v-data-table>
     </v-card>

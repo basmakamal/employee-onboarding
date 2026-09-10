@@ -163,6 +163,33 @@ export function usersRouter(
     }),
   );
 
+  /**
+   * Delete a staff account. Refused for yourself, and for accounts that own
+   * history the system must keep (contracts, custody forms, offboardings,
+   * requests) — deactivate those instead.
+   */
+  router.delete(
+    '/:id',
+    asyncHandler(async (req, res) => {
+      const id = req.params['id'] as string;
+      if (id === req.actor?.id) throw new GuardFailedError('SELF_LOCKOUT', 'you cannot delete your own account');
+      const user = await users.findById(id);
+      if (!user) throw new NotFoundError('user', id);
+      try {
+        await users.remove(id);
+      } catch (err) {
+        if ((err as { code?: string }).code === 'P2003') {
+          throw new GuardFailedError(
+            'USER_HAS_HISTORY',
+            'this account created records the system must keep — deactivate it instead of deleting',
+          );
+        }
+        throw err;
+      }
+      res.status(204).end();
+    }),
+  );
+
   /** Admin sets a temporary password by hand; the person must change it next time. */
   router.post(
     '/:id/reset-password',

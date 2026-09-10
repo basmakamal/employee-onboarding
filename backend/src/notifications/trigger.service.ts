@@ -8,6 +8,14 @@ import { localeOf } from './locale.js';
 
 const CACHE_MS = 30_000;
 
+/** One row of the template picker. */
+export interface TemplateOption {
+  key: string;
+  nameAr: string;
+  nameEn: string;
+  audience: 'employee' | 'staff';
+}
+
 export interface TriggerInput {
   processKey: string;
   status: string;
@@ -42,6 +50,8 @@ export class TriggerService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly notifications: NotificationService,
+    /** Knows every sendable key: built-ins plus admin-created templates. Absent = catalogue only. */
+    private readonly templates?: { exists(key: string): Promise<boolean>; list(): Promise<TemplateOption[]> },
   ) {}
 
   list() {
@@ -51,26 +61,33 @@ export class TriggerService {
   }
 
   /** What the UI's selects can offer. */
-  options() {
-    return {
-      processes: MACHINE_STATUSES,
-      roles: STAFF_ROLES,
-      templates: Object.entries(TEMPLATE_CATALOG).map(([key, m]) => ({
-        key,
-        nameAr: m.nameAr,
-        nameEn: m.nameEn,
-        audience: m.audience,
-      })),
-    };
+  async options() {
+    const templates = this.templates
+      ? (await this.templates.list()).map((m) => ({
+          key: m.key,
+          nameAr: m.nameAr,
+          nameEn: m.nameEn,
+          audience: m.audience,
+        }))
+      : Object.entries(TEMPLATE_CATALOG).map(([key, m]) => ({
+          key,
+          nameAr: m.nameAr,
+          nameEn: m.nameEn,
+          audience: m.audience,
+        }));
+    return { processes: MACHINE_STATUSES, roles: STAFF_ROLES, templates };
   }
 
-  private validate(input: TriggerInput): void {
+  private async validate(input: TriggerInput): Promise<void> {
     const statuses = MACHINE_STATUSES[input.processKey];
     if (!statuses) throw new GuardFailedError('BAD_PROCESS', `unknown process ${input.processKey}`);
     if (!statuses.includes(input.status)) {
       throw new GuardFailedError('BAD_STATUS', `${input.status} is not a status of ${input.processKey}`);
     }
-    if (!TEMPLATE_CATALOG[input.templateKey]) {
+    const known = this.templates
+      ? await this.templates.exists(input.templateKey)
+      : !!TEMPLATE_CATALOG[input.templateKey];
+    if (!known) {
       throw new GuardFailedError('BAD_TEMPLATE', `unknown template ${input.templateKey}`);
     }
     if (input.recipient === 'ROLE' && !(STAFF_ROLES as readonly string[]).includes(input.role ?? '')) {
@@ -79,7 +96,7 @@ export class TriggerService {
   }
 
   async create(input: TriggerInput, userId?: string): Promise<EmailTrigger> {
-    this.validate(input);
+    await this.validate(input);
     const row = await this.prisma.emailTrigger.create({
       data: {
         processKey: input.processKey,
@@ -108,7 +125,7 @@ export class TriggerService {
       ccEmails: changes.ccEmails !== undefined ? changes.ccEmails : splitCc(existing.ccEmails),
       active: changes.active ?? existing.active,
     };
-    this.validate(merged);
+    await this.validate(merged);
     const row = await this.prisma.emailTrigger.update({
       where: { id },
       data: {

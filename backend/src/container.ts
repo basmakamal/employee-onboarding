@@ -86,7 +86,7 @@ export function buildContainer() {
     (key, locale, params) => templateService.render(key, locale, params),
   );
   // "When X enters status Y, email Z" — fires after each transition commits.
-  const triggerService = new TriggerService(prisma, notifications);
+  const triggerService = new TriggerService(prisma, notifications, templateService);
   onTransition((event) => triggerService.handle(event));
   const dashboardService = new DashboardService(prisma);
   const reportsService = new ReportsService(prisma);

@@ -52,7 +52,10 @@
     "tempPasswordShown": "No invitation was sent, so this is the only time the password is shown. Pass it on to {name} yourself.",
     "lastLogin": "Last sign-in: {when}",
     "neverSignedIn": "Never signed in",
-    "invitedOn": "Invited {when}"
+    "invitedOn": "Invited {when}",
+    "delete": "Delete user",
+    "deleteConfirm": "Delete {name}? Accounts that created contracts, custody forms or offboardings cannot be deleted; deactivate them instead.",
+    "deleted": "User deleted."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -893,7 +896,15 @@
       "cc": "Also send a copy to",
       "ccHint": "Type an address and press Enter. Each address gets its own copy; remove yourself here when you are done checking.",
       "ccNone": "No copies"
-    }
+    },
+    "newTemplate": "New template",
+    "newTemplateHint": "Give it a name and say who it is for; then write both languages in the editor. It appears in the template list of triggers and automation rules.",
+    "audienceLabel": "Who receives it",
+    "custom": "Custom",
+    "created": "Template created — now write its text.",
+    "deleteTemplate": "Delete template",
+    "deleteConfirm": "Delete this template? Triggers and rules that use it must be changed first.",
+    "deleted": "Template deleted."
   },
   "contractStatus": {
     "DRAFT": "Draft",

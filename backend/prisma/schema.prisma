@@ -581,6 +581,8 @@ model EmailTemplate {
   bodyEn      String   @db.Text
   ctaLabelAr  String?
   ctaLabelEn  String?
+  /// Custom (admin-created) templates only: who the message is for. Built-ins take it from the catalogue.
+  audience    String?
   active      Boolean  @default(true)
   version     Int      @default(1)
   updatedAt   DateTime @updatedAt
