@@ -1010,5 +1010,12 @@
     "employeeNo": "Your employee number is {no}.",
     "rejectedTitle": "Your response has been sent",
     "rejectedHint": "HR will review your comments, correct the contract and send it to you again."
+  },
+  "timeline": {
+    "emailSent": "Email sent",
+    "emailFailed": "Email could not be sent",
+    "emailQueued": "Email queued",
+    "to": "To {name}",
+    "by": "by {name}"
   }
 }

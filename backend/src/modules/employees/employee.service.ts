@@ -81,7 +81,7 @@ export class EmployeeService {
   }
 
   auditPage(employeeId: string, page: number, limit: number) {
-    return this.repos.employees.auditPage(employeeId, page, limit);
+    return this.repos.employees.timelinePage(employeeId, page, limit);
   }
 
   fieldOptions() {
@@ -241,6 +241,8 @@ export class EmployeeService {
   async getDetails(id: string, actor: Actor) {
     const employee = await this.repos.employees.findWithDetails(id);
     if (!employee) throw new NotFoundError('employee', id);
+    // Newest page of the timeline; the rest is paged in from /audit.
+    const timeline = await this.repos.employees.timelinePage(id, 1, 20);
 
     const processMachine = new Workflow(employeeProcessMachine('GOSI'), noopDeps(this.ownership));
     const criminalMachine = new Workflow(criminalRecordMachine(), noopDeps(this.ownership));
@@ -266,8 +268,9 @@ export class EmployeeService {
 
     return {
       ...rest,
-      /** Full timeline length — auditLogs above holds only the latest page. */
-      auditTotal: _count.auditLogs,
+      auditLogs: timeline.items,
+      /** Everything on the timeline — the page above holds only the newest 20. */
+      auditTotal: timeline.total,
       contract,
       onboardingDocuments: documents.map((d) => ({
         id: d.id,
