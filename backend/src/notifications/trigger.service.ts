@@ -164,25 +164,36 @@ export class TriggerService {
     };
     const ref = { entity: event.entity, entityId: event.entityId };
 
-    for (const trigger of matching) {
+    // Every send is isolated: a failure for the group, the employee or one
+    // copy address is logged and the rest still go out.
+    const attempt = async (what: string, triggerId: string, send: () => Promise<void>) => {
       try {
-        if (trigger.recipient === 'SUBJECT') {
-          if (!employee?.email) {
-            logger.warn({ triggerId: trigger.id, event }, 'trigger has no employee email to send to');
-          } else {
-            await this.notifications.notifyExternal(employee.email, trigger.templateKey, params, ref, localeOf(employee));
-          }
-        } else {
-          await this.notifications.notifyRole(trigger.role ?? 'HR', trigger.templateKey, params, ref);
-        }
-        // Copies: each address gets its own row in the email history, so the
-        // person checking can see exactly what went out and remove themselves later.
-        for (const cc of splitCc(trigger.ccEmails)) {
-          await this.notifications.notifyExternal(cc, trigger.templateKey, params, ref);
-        }
+        await send();
       } catch (err) {
-        // One bad trigger must not stop the others.
-        logger.error({ err, triggerId: trigger.id }, 'email trigger failed');
+        logger.error({ err, triggerId, what }, 'email trigger send failed');
+      }
+    };
+
+    for (const trigger of matching) {
+      if (trigger.recipient === 'SUBJECT') {
+        if (!employee?.email) {
+          logger.warn({ triggerId: trigger.id, event }, 'trigger has no employee email to send to');
+        } else {
+          await attempt('subject', trigger.id, () =>
+            this.notifications.notifyExternal(employee.email, trigger.templateKey, params, ref, localeOf(employee)),
+          );
+        }
+      } else {
+        await attempt('role', trigger.id, () =>
+          this.notifications.notifyRole(trigger.role ?? 'HR', trigger.templateKey, params, ref),
+        );
+      }
+      // Copies: each address gets its own row in the email history, so the
+      // person checking can see exactly what went out and remove themselves later.
+      for (const cc of splitCc(trigger.ccEmails)) {
+        await attempt(`cc:${cc}`, trigger.id, () =>
+          this.notifications.notifyExternal(cc, trigger.templateKey, params, ref),
+        );
       }
     }
   }

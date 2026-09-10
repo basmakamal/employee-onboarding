@@ -399,6 +399,21 @@ const T: Record<string, Record<Locale, Template>> = {
       }, SIGN_OFF.en),
   },
 
+  /**
+   * Generic status-change notice for admin-defined triggers. Works out of the
+   * box; admins usually replace the wording per trigger in Email templates.
+   */
+  'custom.status_change': {
+    ar: (p) => ({
+      subject: `تحديث حالة: ${p.name ?? ''} — ${p.status ?? ''}`,
+      text: `انتقل سجل ${p.name ?? ''} إلى الحالة «${p.status ?? ''}». يمكنك متابعة التفاصيل من النظام.`,
+    }),
+    en: (p) => ({
+      subject: `Status update: ${p.name ?? ''} — ${p.status ?? ''}`,
+      text: `The record for ${p.name ?? ''} moved to status "${p.status ?? ''}". Open the system for details.`,
+    }),
+  },
+
   /** HR notice — the new hire approved the contract; employee activated. */
   'hr.contract_approved': {
     ar: (p) => ({
