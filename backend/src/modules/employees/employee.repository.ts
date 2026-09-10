@@ -30,6 +30,8 @@ export interface EmployeeListQuery {
   filter: 'all' | 'onboarding' | 'active' | 'inactive';
   /** Exact status (reports drill-down) — takes precedence over `filter`. */
   status?: EmployeeStatus;
+  /** Exact department (list filter). */
+  department?: string;
   /** Inclusive date range applied to `basis` (reports duration filter). */
   from?: Date;
   to?: Date;
@@ -58,6 +60,7 @@ export interface EmployeeListItem {
 function employeeListWhere(query: EmployeeListQuery): Prisma.EmployeeWhereInput {
   const where: Prisma.EmployeeWhereInput = {};
   if (query.status) where.status = query.status;
+  if (query.department) where.department = query.department;
   else if (query.filter === 'onboarding') where.status = { in: [...PIPELINE_STATUSES] };
   else if (query.filter === 'active') where.status = 'ACTIVE';
   else if (query.filter === 'inactive') where.status = { in: ['INACTIVE', 'WITHDRAWN'] };
@@ -101,6 +104,7 @@ export interface CreateOnboardingData {
   jobTitle?: string;
   createdById: string;
   documentTypes: string[];
+  preferredLanguage?: 'AR' | 'EN';
 }
 
 /** Direct add of existing staff: born ACTIVE with a number and processes. */
@@ -119,6 +123,7 @@ export interface CreateDirectData {
   employmentType?: EmploymentType;
   hireDate: Date;
   createdById?: string;
+  preferredLanguage?: 'AR' | 'EN';
 }
 
 /** Profile fields HR may edit in place; null clears an optional column. */
@@ -135,6 +140,7 @@ export interface UpdateEmployeeData {
   directManager?: string | null;
   employmentType?: EmploymentType;
   hireDate?: Date;
+  preferredLanguage?: 'AR' | 'EN';
 }
 
 export class EmployeeRepository {
@@ -238,6 +244,7 @@ export class EmployeeRepository {
       iban?: string;
       qualification?: 'HIGH_SCHOOL' | 'DIPLOMA' | 'BACHELOR' | 'MASTER' | 'PHD' | 'OTHER';
       major?: string;
+      preferredLanguage?: 'AR' | 'EN';
       emergencyContactName?: string;
       emergencyContactPhone?: string;
     },

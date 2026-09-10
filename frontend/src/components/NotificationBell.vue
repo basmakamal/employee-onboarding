@@ -84,7 +84,7 @@ onUnmounted(() => {
     <template #activator="{ props }">
       <v-btn v-bind="props" icon>
         <v-badge :content="unread" :model-value="unread > 0" color="error">
-          <v-icon icon="mdi-bell-outline" />
+          <v-icon icon="bell" />
         </v-badge>
       </v-btn>
     </template>

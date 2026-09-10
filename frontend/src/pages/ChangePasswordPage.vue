@@ -69,7 +69,7 @@ async function signOut() {
     <v-card class="cp__card" max-width="460" width="100%" rounded="xl">
       <div class="d-flex align-center ga-3 px-6 pt-6 pb-2">
         <v-avatar color="primary" variant="tonal" size="44" rounded="lg">
-          <v-icon icon="mdi-shield-key-outline" size="24" />
+          <v-icon icon="key-round" size="24" />
         </v-avatar>
         <div>
           <h1 class="text-h6 font-weight-bold">{{ $t('changePassword.title') }}</h1>
@@ -94,7 +94,7 @@ async function signOut() {
             v-model="current"
             :label="$t('changePassword.current')"
             :type="show ? 'text' : 'password'"
-            prepend-inner-icon="mdi-lock-outline"
+            prepend-inner-icon="lock"
             autocomplete="current-password"
             autofocus
             dir="ltr"
@@ -104,7 +104,7 @@ async function signOut() {
             v-model="next"
             :label="$t('changePassword.new')"
             :type="show ? 'text' : 'password'"
-            prepend-inner-icon="mdi-lock-plus-outline"
+            prepend-inner-icon="lock"
             autocomplete="new-password"
             dir="ltr"
             :error-messages="
@@ -118,8 +118,8 @@ async function signOut() {
             v-model="confirm"
             :label="$t('changePassword.confirm')"
             :type="show ? 'text' : 'password'"
-            prepend-inner-icon="mdi-lock-check-outline"
-            :append-inner-icon="show ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+            prepend-inner-icon="lock-keyhole"
+            :append-inner-icon="show ? 'eye-off' : 'eye'"
             autocomplete="new-password"
             dir="ltr"
             :error-messages="mismatch ? [$t('changePassword.mismatch')] : []"
@@ -144,7 +144,7 @@ async function signOut() {
       <v-card-actions class="px-6 pb-5 pt-0">
         <v-btn v-if="!forced" variant="text" to="/">{{ $t('common.cancel') }}</v-btn>
         <v-spacer />
-        <v-btn variant="text" prepend-icon="mdi-logout" @click="signOut">{{ $t('login.signOut') }}</v-btn>
+        <v-btn variant="text" prepend-icon="log-out" @click="signOut">{{ $t('login.signOut') }}</v-btn>
       </v-card-actions>
     </v-card>
   </div>

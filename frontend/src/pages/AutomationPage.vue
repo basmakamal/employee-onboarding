@@ -148,7 +148,7 @@ onMounted(load);
         <p class="text-medium-emphasis mt-1">{{ $t('sla.subtitle') }}</p>
       </div>
       <v-spacer />
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="newDialog = true">
+      <v-btn color="primary" prepend-icon="plus" @click="newDialog = true">
         {{ $t('sla.addRule') }}
       </v-btn>
     </div>
@@ -374,7 +374,7 @@ onMounted(load);
                 chips
                 closable-chips
                 dir="ltr"
-                prepend-inner-icon="mdi-email-plus-outline"
+                prepend-inner-icon="mail-plus"
               />
             </v-col>
           </v-row>

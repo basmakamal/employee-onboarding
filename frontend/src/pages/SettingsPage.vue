@@ -172,7 +172,7 @@ onMounted(load);
         />
         <v-btn
           variant="tonal"
-          prepend-icon="mdi-email-fast"
+          prepend-icon="mail-check"
           :loading="testing"
           :disabled="!testTo.includes('@')"
           @click="sendTest"

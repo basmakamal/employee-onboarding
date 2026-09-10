@@ -4,6 +4,7 @@ import { GuardFailedError, NotFoundError } from '../workflow/errors.js';
 import { logger } from '../common/logger.js';
 import type { NotificationService } from './notification.service.js';
 import { MACHINE_STATUSES, STAFF_ROLES, TEMPLATE_CATALOG } from './template-catalog.js';
+import { localeOf } from './locale.js';
 
 const CACHE_MS = 30_000;
 
@@ -149,7 +150,7 @@ export class TriggerService {
           where: { id: employeeId },
           select: {
             firstName: true, lastName: true, email: true,
-            employeeNo: true, department: true, jobTitle: true,
+            employeeNo: true, department: true, jobTitle: true, preferredLanguage: true,
           },
         })
       : null;
@@ -169,7 +170,7 @@ export class TriggerService {
           if (!employee?.email) {
             logger.warn({ triggerId: trigger.id, event }, 'trigger has no employee email to send to');
           } else {
-            await this.notifications.notifyExternal(employee.email, trigger.templateKey, params, ref);
+            await this.notifications.notifyExternal(employee.email, trigger.templateKey, params, ref, localeOf(employee));
           }
         } else {
           await this.notifications.notifyRole(trigger.role ?? 'HR', trigger.templateKey, params, ref);

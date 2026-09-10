@@ -1,0 +1,113 @@
+/**
+ * Design tokens the component library cannot express through props:
+ * the display face for headings and numbers, soft status tints, radii,
+ * depth, and the Lucide icon sizing. Loaded after app.css.
+ */
+:root {
+  --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-ar: 'IBM Plex Sans Arabic', 'Inter', system-ui, sans-serif;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+}
+
+/* Headings and big numbers speak in the display face; Arabic keeps Plex. */
+.v-application .text-h1,
+.v-application .text-h2,
+.v-application .text-h3,
+.v-application .text-h4,
+.v-application .text-h5,
+.v-application .text-h6,
+.v-application .display-number {
+  font-family: var(--font-display) !important;
+  letter-spacing: -0.01em !important;
+  text-wrap: balance;
+}
+[dir='rtl'] .v-application .text-h1,
+[dir='rtl'] .v-application .text-h2,
+[dir='rtl'] .v-application .text-h3,
+[dir='rtl'] .v-application .text-h4,
+[dir='rtl'] .v-application .text-h5,
+[dir='rtl'] .v-application .text-h6 {
+  font-family: var(--font-ar) !important;
+  letter-spacing: 0 !important;
+}
+.v-application .text-h4 { font-size: 1.75rem !important; line-height: 1.2 !important; }
+.v-application .text-h5 { font-size: 1.375rem !important; }
+
+/* Lucide icons size with the surrounding text and sit on the baseline. */
+.lucide-icon { display: inline-block; vertical-align: -0.125em; flex: none; }
+.v-icon .lucide-icon { width: 1em; height: 1em; }
+
+/* Section labels: small caps with a touch of tracking. */
+.label-caps {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+/* Soft wells inside cards (access panels, hints, previews). */
+.well {
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: var(--r-md);
+}
+
+/* Cards get a hairline and a whisper of depth; hover lifts interactive ones. */
+.v-card.v-card--variant-flat {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  box-shadow: var(--app-shadow-sm);
+}
+.v-dialog .v-card,
+.v-menu .v-card,
+.v-menu .v-list {
+  box-shadow: var(--app-shadow-lg) !important;
+}
+
+/* Inputs: calmer outline, accent ring on focus. */
+.v-field--variant-outlined .v-field__outline { --v-field-border-opacity: 0.16; }
+.v-field--variant-outlined.v-field--focused .v-field__outline { --v-field-border-opacity: 1; }
+.v-field--variant-outlined.v-field--focused { box-shadow: 0 0 0 4px rgba(var(--v-theme-primary), 0.14); border-radius: 12px; }
+
+/* Tables: sticky header, quieter header text, soft row hover. */
+.v-table thead th,
+.v-data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgb(var(--v-theme-surface));
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)) !important;
+}
+.v-table tbody tr:hover td,
+.v-data-table tbody tr:hover td {
+  background: rgba(var(--v-theme-on-surface), 0.03);
+}
+
+/* Chips: a dot before the label reads as status even without colour vision. */
+.v-chip.status-dot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-inline-end: 6px;
+  opacity: 0.9;
+}
+
+/* Page enter: fade + 8px rise, one duration. */
+.page-enter-active,
+.page-leave-active { transition: opacity 0.22s var(--app-ease), transform 0.22s var(--app-ease); }
+.page-enter-from { opacity: 0; transform: translateY(8px); }
+.page-leave-to { opacity: 0; transform: translateY(-6px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-active, .page-leave-active { transition: none; }
+}

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
+import { useConfirm } from '../composables/useConfirm';
 import { useAuthStore } from '../stores/auth';
 
 interface UserRow {
@@ -31,6 +32,7 @@ function when(iso: string): string {
 const ROLES = ['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN'];
 
 const { t } = useI18n();
+const confirm = useConfirm();
 const auth = useAuthStore();
 const users = ref<UserRow[]>([]);
 const loading = ref(true);
@@ -113,7 +115,7 @@ async function createUser() {
 }
 
 async function resendInvitation(user: UserRow) {
-  if (!window.confirm(t('users.resendConfirm', { name: user.name }))) return;
+  if (!(await confirm({ title: t('users.resendInvitation'), message: t('users.resendConfirm', { name: user.name }), confirmText: t('users.resendInvitation') }))) return;
   busy.value = user.id;
   try {
     await api.post(`/api/users/${user.id}/invite`);
@@ -173,7 +175,7 @@ onMounted(load);
         <p class="text-medium-emphasis mt-1">{{ $t('users.subtitle') }}</p>
       </div>
       <v-spacer />
-      <v-btn color="primary" prepend-icon="mdi-account-plus" @click="createDialog = true">
+      <v-btn color="primary" prepend-icon="user-plus" @click="createDialog = true">
         {{ $t('users.new') }}
       </v-btn>
     </div>
@@ -188,7 +190,7 @@ onMounted(load);
               size="x-small"
               color="warning"
               variant="tonal"
-              prepend-icon="mdi-email-fast-outline"
+              prepend-icon="mail-check"
               class="me-1"
             >
               {{ item.invitedAt ? $t('users.invitedChip') : $t('users.resetChip') }}
@@ -225,7 +227,7 @@ onMounted(load);
                 :color="item.active ? 'success' : 'error'"
                 size="small"
                 variant="tonal"
-                prepend-icon="mdi-lock"
+                prepend-icon="lock"
               >
                 {{ $t(`employees.statuses.${item.active ? 'ACTIVE' : 'INACTIVE'}`) }}
               </v-chip>
@@ -245,7 +247,7 @@ onMounted(load);
           <v-btn
             size="small"
             variant="tonal"
-            prepend-icon="mdi-pencil"
+            prepend-icon="pencil"
             class="me-2"
             @click="openEdit(item)"
           >
@@ -254,7 +256,7 @@ onMounted(load);
           <v-btn
             size="small"
             variant="tonal"
-            prepend-icon="mdi-lock-reset"
+            prepend-icon="key-round"
             class="me-2"
             @click="resetDialog = { show: true, userId: item.id, name: item.name, password: '' }"
           >
@@ -265,7 +267,7 @@ onMounted(load);
             size="small"
             variant="tonal"
             color="primary"
-            prepend-icon="mdi-email-fast-outline"
+            prepend-icon="mail-check"
             :loading="busy === item.id"
             @click="resendInvitation(item)"
           >
@@ -351,7 +353,7 @@ onMounted(load);
       <v-card>
         <div class="d-flex align-center ga-3 px-6 pt-6 pb-2">
           <v-avatar color="primary" variant="tonal" size="42" rounded="lg">
-            <v-icon icon="mdi-account-edit-outline" size="22" />
+            <v-icon icon="user-pen" size="22" />
           </v-avatar>
           <div class="min-w-0">
             <h2 class="text-subtitle-1 font-weight-bold">{{ $t('users.editTitle') }}</h2>
@@ -365,14 +367,14 @@ onMounted(load);
           <v-text-field
             v-model="editDialog.name"
             :label="$t('fields.name')"
-            prepend-inner-icon="mdi-account-outline"
+            prepend-inner-icon="user"
             class="mb-1"
           />
           <v-text-field
             v-model="editDialog.email"
             :label="$t('fields.email')"
             type="email"
-            prepend-inner-icon="mdi-email-outline"
+            prepend-inner-icon="mail"
             dir="ltr"
             class="mb-1"
           />
@@ -380,7 +382,7 @@ onMounted(load);
             v-model="editDialog.role"
             :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
             :label="$t('users.role')"
-            prepend-inner-icon="mdi-shield-account-outline"
+            prepend-inner-icon="shield-check"
             :disabled="isSelf"
           />
 

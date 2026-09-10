@@ -48,7 +48,7 @@ async function scrollDown() {
   <v-container class="py-8 d-flex flex-column" style="max-width: 860px; height: calc(100vh - 64px)">
     <div class="mb-4">
       <h1 class="text-h4 font-weight-bold">
-        <v-icon icon="mdi-robot-happy-outline" color="primary" class="me-2" />
+        <v-icon icon="bot" color="primary" class="me-2" />
         {{ $t('ai.assistantTitle') }}
       </h1>
       <p class="text-medium-emphasis mt-1">{{ $t('ai.assistantSubtitle') }}</p>
@@ -93,7 +93,7 @@ async function scrollDown() {
           density="comfortable"
           hide-details
           :disabled="busy"
-          append-inner-icon="mdi-send"
+          append-inner-icon="send"
           @keydown.enter="send"
           @click:append-inner="send"
         />
@@ -106,7 +106,7 @@ async function scrollDown() {
 .bubble-assistant {
   background: rgba(var(--v-theme-on-surface), 0.06);
 }
-[dir='rtl'] .v-icon--icon-mdi-send {
+[dir='rtl'] .v-icon--icon-send {
   transform: scaleX(-1);
 }
 </style>

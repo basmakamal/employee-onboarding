@@ -61,7 +61,7 @@ async function decide(decision: 'APPROVE' | 'REJECT') {
 <template>
   <v-container class="py-10" style="max-width: 720px">
     <div class="d-flex justify-end mb-2">
-      <v-btn variant="text" size="small" prepend-icon="mdi-translate" @click="prefs.toggleLocale()">
+      <v-btn variant="text" size="small" prepend-icon="languages" @click="prefs.toggleLocale()">
         {{ $t('actions.language') }}
       </v-btn>
     </div>
@@ -71,19 +71,19 @@ async function decide(decision: 'APPROVE' | 'REJECT') {
     </v-card>
 
     <v-card v-else-if="state === 'invalid'" class="pa-10 text-center">
-      <v-icon icon="mdi-link-off" size="56" color="error" class="mb-4" />
+      <v-icon icon="unlink" size="56" color="error" class="mb-4" />
       <h2 class="text-h6 mb-2">{{ $t('publicForm.invalidTitle') }}</h2>
       <p class="text-medium-emphasis">{{ $t('publicForm.invalidHint') }}</p>
     </v-card>
 
     <v-card v-else-if="state === 'approved'" class="pa-10 text-center">
-      <v-icon icon="mdi-check-decagram" size="64" color="success" class="mb-4 pop" />
+      <v-icon icon="badge-check" size="64" color="success" class="mb-4 pop" />
       <h2 class="text-h5 mb-2">{{ $t('assetApproval.approvedTitle') }}</h2>
       <p class="text-medium-emphasis">{{ $t('assetApproval.approvedHint') }}</p>
     </v-card>
 
     <v-card v-else-if="state === 'rejected'" class="pa-10 text-center">
-      <v-icon icon="mdi-close-circle" size="64" color="warning" class="mb-4 pop" />
+      <v-icon icon="circle-x" size="64" color="warning" class="mb-4 pop" />
       <h2 class="text-h5 mb-2">{{ $t('assetApproval.rejectedTitle') }}</h2>
       <p class="text-medium-emphasis">{{ $t('assetApproval.rejectedHint') }}</p>
     </v-card>
@@ -132,7 +132,7 @@ async function decide(decision: 'APPROVE' | 'REJECT') {
           color="success"
           size="large"
           variant="flat"
-          prepend-icon="mdi-check-decagram"
+          prepend-icon="badge-check"
           :loading="state === 'deciding'"
           @click="decide('APPROVE')"
         >

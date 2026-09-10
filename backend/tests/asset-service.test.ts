@@ -79,6 +79,7 @@ describe('AssetService', () => {
       'employee.asset_approval',
       expect.objectContaining({ linkUrl: expect.stringContaining('approve-assets') }),
       { entity: 'ASSET_FORM', entityId: 'f1' },
+      'ar',
     );
   });
 

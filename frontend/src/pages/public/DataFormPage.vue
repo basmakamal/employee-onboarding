@@ -36,6 +36,7 @@ interface FormContext {
     nationalId: string | null;
     birthDate: string | null;
     project?: string | null;
+    preferredLanguage?: 'AR' | 'EN';
   };
   documents: FormDoc[];
 }
@@ -170,6 +171,8 @@ onMounted(async () => {
     const data = await api.get<FormContext>(`/api/link/${token}`);
     if (data.purpose !== 'DATA_FORM') throw new Error();
     ctx.value = data;
+    // The form opens in the language HR chose for this person; they can still switch.
+    if (data.employee.preferredLanguage) prefs.locale = data.employee.preferredLanguage === 'EN' ? 'en' : 'ar';
     // Prefill what HR already captured so the employee is not retyping it.
     fields.value.firstName = data.employee.firstName ?? '';
     fields.value.lastName = data.employee.lastName ?? '';
@@ -202,6 +205,8 @@ async function submit() {
   error.value = '';
   const body = new FormData();
   for (const [k, v] of Object.entries(fields.value)) if (v) body.append(k, String(v));
+  // The language the person actually used becomes the language of every later email.
+  body.append('locale', prefs.locale);
   for (const [docId, file] of Object.entries(files.value)) if (file) body.append(docId, file);
 
   try {
@@ -217,7 +222,7 @@ async function submit() {
 <template>
   <v-container class="py-8" style="max-width: 840px">
     <div class="d-flex justify-end mb-2">
-      <v-btn variant="text" size="small" prepend-icon="mdi-translate" @click="prefs.toggleLocale()">
+      <v-btn variant="text" size="small" prepend-icon="languages" @click="prefs.toggleLocale()">
         {{ $t('actions.language') }}
       </v-btn>
     </div>
@@ -227,13 +232,13 @@ async function submit() {
     </v-card>
 
     <v-card v-else-if="state === 'invalid'" class="pa-10 text-center">
-      <v-icon icon="mdi-link-off" size="56" color="error" class="mb-4" />
+      <v-icon icon="unlink" size="56" color="error" class="mb-4" />
       <h2 class="text-h6 mb-2">{{ $t('publicForm.invalidTitle') }}</h2>
       <p class="text-medium-emphasis">{{ $t('publicForm.invalidHint') }}</p>
     </v-card>
 
     <v-card v-else-if="state === 'done'" class="pa-10 text-center">
-      <v-icon icon="mdi-check-circle" size="64" color="success" class="mb-4 pop" />
+      <v-icon icon="circle-check" size="64" color="success" class="mb-4 pop" />
       <h2 class="text-h5 mb-2">{{ $t('publicForm.doneTitle') }}</h2>
       <p class="text-medium-emphasis">{{ $t('publicForm.doneHint') }}</p>
     </v-card>
@@ -373,7 +378,7 @@ async function submit() {
               v-if="!doc.uploaded"
               :label="docLabel(doc) + (doc.required ? ' *' : '')"
               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-              prepend-icon="mdi-paperclip"
+              prepend-icon="paperclip"
               density="comfortable"
               :error="showErrors && doc.required && !files[doc.id]"
               @update:model-value="onFile(doc.id, $event)"

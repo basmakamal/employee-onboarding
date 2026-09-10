@@ -55,12 +55,12 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const ACTION_META: Record<string, { icon: string; color: string }> = {
-  COMPLETE: { icon: 'mdi-check', color: 'success' },
-  HOLD: { icon: 'mdi-pause-circle', color: 'warning' },
-  RESUME: { icon: 'mdi-play-circle', color: 'primary' },
-  CANCEL: { icon: 'mdi-close-circle', color: 'error' },
-  SEND_REQUEST: { icon: 'mdi-send', color: 'primary' },
-  MARK_PENDING: { icon: 'mdi-clock-outline', color: 'indigo' },
+  COMPLETE: { icon: 'check', color: 'success' },
+  HOLD: { icon: 'circle-pause', color: 'warning' },
+  RESUME: { icon: 'circle-play', color: 'primary' },
+  CANCEL: { icon: 'circle-x', color: 'error' },
+  SEND_REQUEST: { icon: 'send', color: 'primary' },
+  MARK_PENDING: { icon: 'clock', color: 'indigo' },
 };
 
 function onAction(action: string) {
@@ -113,7 +113,7 @@ function confirmHold() {
         color="success"
         variant="tonal"
         size="small"
-        prepend-icon="mdi-file-eye-outline"
+        prepend-icon="file-search"
         @click="emit('viewDocument')"
       >
         {{ $t('employees.viewProcessDocument') }}
@@ -126,7 +126,7 @@ function confirmHold() {
         <v-btn
           v-if="action === 'COMPLETE'"
           color="success"
-          prepend-icon="mdi-paperclip"
+          prepend-icon="paperclip"
           :loading="busy"
           size="small"
           variant="tonal"

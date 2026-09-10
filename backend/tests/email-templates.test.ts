@@ -173,6 +173,7 @@ describe('TriggerService.handle', () => {
         department: 'Finance',
       }),
       { entity: 'EMPLOYEE', entityId: 'e1' },
+      'ar',
     );
     expect(notifications.notifyRole).not.toHaveBeenCalled();
   });
