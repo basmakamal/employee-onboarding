@@ -5,6 +5,7 @@ import { logger } from '../common/logger.js';
 import type { NotificationService } from './notification.service.js';
 import { MACHINE_STATUSES, STAFF_ROLES, TEMPLATE_CATALOG } from './template-catalog.js';
 import { localeOf } from './locale.js';
+import { contractParams } from './contract-params.js';
 
 const CACHE_MS = 30_000;
 
@@ -55,10 +56,14 @@ export class TriggerService {
       exists(key: string): Promise<boolean>;
       list(): Promise<TemplateOption[]>;
       usesFormLink?(key: string): Promise<boolean>;
+      usesContractLink?(key: string): Promise<boolean>;
     },
-    /** Issues the employee's data-form link when a template asks for {{formLink}}. */
+    /** Issues a signed link when a template asks for {{formLink}} / {{contractLink}}. */
     private readonly links?: {
-      issue(purpose: 'DATA_FORM', anchors: { employeeId: string }): Promise<{ url: string }>;
+      issue(
+        purpose: 'DATA_FORM' | 'CONTRACT_APPROVAL',
+        anchors: { employeeId: string },
+      ): Promise<{ url: string }>;
     },
   ) {}
 
@@ -176,20 +181,26 @@ export class TriggerService {
           select: {
             firstName: true, lastName: true, email: true,
             employeeNo: true, department: true, jobTitle: true, preferredLanguage: true,
+            // The contract terms travel as placeholders, so a status email can quote them.
+            contract: { select: { externalRef: true, details: true } },
           },
         })
       : null;
 
-    // {{formLink}}: one fresh link per event, shared by every recipient of it —
-    // it is the employee's link either way, and copies must match what they got.
-    const formLink = await this.formLinkFor(matching, employeeId);
+    // {{formLink}} / {{contractLink}}: one fresh link per event, shared by every
+    // recipient of it — it is the employee's link either way, and copies must
+    // match what they got.
+    const formLink = await this.linkFor(matching, employeeId, 'DATA_FORM');
+    const contractLink = await this.linkFor(matching, employeeId, 'CONTRACT_APPROVAL');
     const params = {
       name: employee ? `${employee.firstName} ${employee.lastName}`.trim() : '—',
       ...(employee?.employeeNo ? { employeeNo: employee.employeeNo } : {}),
       ...(employee?.department ? { department: employee.department } : {}),
       ...(employee?.jobTitle ? { jobTitle: employee.jobTitle } : {}),
       status: event.to,
+      ...contractParams(employee?.contract),
       ...(formLink ? { formLink, linkUrl: formLink } : {}),
+      ...(contractLink ? { contractLink, ...(formLink ? {} : { linkUrl: contractLink }) } : {}),
     };
     const ref = { entity: event.entity, entityId: event.entityId };
 
@@ -226,15 +237,21 @@ export class TriggerService {
       }
     }
   }
-  /** The data-form URL when any matching trigger's template asks for it; otherwise nothing is issued. */
-  private async formLinkFor(triggers: EmailTrigger[], employeeId: string | undefined): Promise<string | undefined> {
-    if (!employeeId || !this.links || !this.templates?.usesFormLink) return undefined;
+  /** A signed URL, issued only when a matching trigger's template asks for it. */
+  private async linkFor(
+    triggers: EmailTrigger[],
+    employeeId: string | undefined,
+    purpose: 'DATA_FORM' | 'CONTRACT_APPROVAL',
+  ): Promise<string | undefined> {
+    const asks =
+      purpose === 'DATA_FORM' ? this.templates?.usesFormLink : this.templates?.usesContractLink;
+    if (!employeeId || !this.links || !asks) return undefined;
     for (const trigger of triggers) {
-      if (!(await this.templates.usesFormLink(trigger.templateKey))) continue;
+      if (!(await asks.call(this.templates, trigger.templateKey))) continue;
       try {
-        return (await this.links.issue('DATA_FORM', { employeeId })).url;
+        return (await this.links.issue(purpose, { employeeId })).url;
       } catch (err) {
-        logger.error({ err, employeeId, triggerId: trigger.id }, 'could not issue the form link for a trigger');
+        logger.error({ err, employeeId, purpose, triggerId: trigger.id }, 'could not issue a link for a trigger');
         return undefined;
       }
     }

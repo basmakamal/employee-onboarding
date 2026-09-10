@@ -15,6 +15,12 @@ import { REQUIRED_DOCUMENT_TYPES, type DataFormInput } from './data-form.schema.
 import { languageFromLocale, localeOf } from '../../notifications/locale.js';
 
 /** What a signed link may see of the record — no ids, no internals. */
+/**
+ * What the signed-link pages may see. This is the person's own record, and
+ * HR can send the form back for corrections at any point, so everything the
+ * form collects is returned: the page reopens fully filled and fully
+ * editable rather than making someone retype a submission to fix one field.
+ */
 function publicEmployee(e: Employee) {
   return {
     firstName: e.firstName,
@@ -23,6 +29,15 @@ function publicEmployee(e: Employee) {
     phone: e.phone,
     nationalId: e.nationalId,
     birthDate: e.birthDate,
+    gender: e.gender,
+    nationality: e.nationality,
+    maritalStatus: e.maritalStatus,
+    splAddress: e.splAddress,
+    iban: e.iban,
+    qualification: e.qualification,
+    major: e.major,
+    emergencyContactName: e.emergencyContactName,
+    emergencyContactPhone: e.emergencyContactPhone,
     department: e.department,
     // Shown read-only on the data form: HR sets it when creating the record,
     // so asking the employee to retype it would only invite a mismatch.
@@ -312,7 +327,38 @@ export class OnboardingService {
       };
     }
 
+    if (token.purpose === 'CONTRACT_APPROVAL' && token.employee) {
+      const contract = await this.repos.contracts.findByEmployee(token.employee.id);
+      if (!contract) throw new NotFoundError('contract', token.employee.id);
+      const details = (contract.details ?? {}) as Record<string, unknown>;
+      return {
+        purpose: token.purpose,
+        employee: publicEmployee(token.employee),
+        contract: {
+          status: contract.status,
+          externalRef: contract.externalRef,
+          salary: details['salary'] ?? null,
+          durationMonths: details['durationMonths'] ?? null,
+          startDate: details['startDate'] ?? null,
+          terms: details['terms'] ?? null,
+          // The document itself is fetched through the same token, never inlined here.
+          hasDocument: contract.storageKey !== null,
+        },
+      };
+    }
+
     throw new NotFoundError('link', 'unsupported purpose');
+  }
+
+  /** The uploaded contract document, addressed by the employee's signed link. */
+  async contractFileKeyByToken(rawToken: string): Promise<string> {
+    const token = await this.links.verify(rawToken);
+    if (token.purpose !== 'CONTRACT_APPROVAL' || !token.employee) {
+      throw new NotFoundError('link', 'not a contract link');
+    }
+    const contract = await this.repos.contracts.findByEmployee(token.employee.id);
+    if (!contract?.storageKey) throw new NotFoundError('contract file', token.employee.id);
+    return contract.storageKey;
   }
 
   /**

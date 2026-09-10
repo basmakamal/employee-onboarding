@@ -31,6 +31,7 @@ interface FormDoc {
 
 interface FormContext {
   purpose: string;
+  /** Everything already on file — HR can send the form back for corrections. */
   employee: {
     firstName: string;
     lastName: string;
@@ -38,6 +39,15 @@ interface FormContext {
     phone: string | null;
     nationalId: string | null;
     birthDate: string | null;
+    gender: 'MALE' | 'FEMALE' | null;
+    nationality: string | null;
+    maritalStatus: 'SINGLE' | 'MARRIED' | 'DIVORCED' | 'WIDOWED' | null;
+    splAddress: string | null;
+    iban: string | null;
+    qualification: 'HIGH_SCHOOL' | 'DIPLOMA' | 'BACHELOR' | 'MASTER' | 'PHD' | 'OTHER' | null;
+    major: string | null;
+    emergencyContactName: string | null;
+    emergencyContactPhone: string | null;
     project?: string | null;
     preferredLanguage?: 'AR' | 'EN';
   };
@@ -172,6 +182,14 @@ function errorsFor(key: FieldKey): string[] {
   return showErrors.value || filled ? [message] : [];
 }
 
+/**
+ * A form HR sent back for corrections, rather than a first visit: something
+ * only the employee could have supplied is already on file.
+ */
+const reopened = computed(
+  () => !!ctx.value && (!!ctx.value.employee.iban || ctx.value.documents.some((d) => d.uploaded)),
+);
+
 /** Which required attachments are still missing. */
 const missingDocs = computed(() =>
   (ctx.value?.documents ?? []).filter((d) => d.required && !d.uploaded && !files.value[d.id]),
@@ -194,13 +212,24 @@ onMounted(async () => {
     ctx.value = data;
     // The form opens in the language HR chose for this person; they can still switch.
     if (data.employee.preferredLanguage) prefs.locale = data.employee.preferredLanguage === 'EN' ? 'en' : 'ar';
-    // Prefill what HR already captured so the employee is not retyping it.
-    fields.value.firstName = data.employee.firstName ?? '';
-    fields.value.lastName = data.employee.lastName ?? '';
-    fields.value.email = data.employee.email ?? '';
-    fields.value.phone = data.employee.phone ?? '';
-    fields.value.nationalId = data.employee.nationalId ?? '';
-    fields.value.birthDate = data.employee.birthDate?.slice(0, 10) ?? '';
+    // Everything already on file comes back, so a form sent back for one
+    // correction opens filled in rather than blank.
+    const e = data.employee;
+    fields.value.firstName = e.firstName ?? '';
+    fields.value.lastName = e.lastName ?? '';
+    fields.value.email = e.email ?? '';
+    fields.value.phone = e.phone ?? '';
+    fields.value.nationalId = e.nationalId ?? '';
+    fields.value.birthDate = e.birthDate?.slice(0, 10) ?? '';
+    fields.value.gender = e.gender ?? '';
+    fields.value.nationality = e.nationality ?? '';
+    fields.value.maritalStatus = e.maritalStatus ?? '';
+    fields.value.splAddress = e.splAddress ?? '';
+    fields.value.iban = e.iban ?? '';
+    fields.value.qualification = e.qualification ?? '';
+    fields.value.major = e.major ?? '';
+    fields.value.emergencyContactName = e.emergencyContactName ?? '';
+    fields.value.emergencyContactPhone = e.emergencyContactPhone ?? '';
     state.value = 'ready';
   } catch {
     state.value = 'invalid';
@@ -288,6 +317,9 @@ async function submit() {
             <span class="req-legend"><span class="req">*</span> {{ $t('publicForm.requiredLegend') }}</span>
           </p>
 
+          <v-alert v-if="reopened" type="info" variant="tonal" class="mb-5 text-body-2">
+            {{ $t('publicForm.reopened') }}
+          </v-alert>
           <v-alert v-if="error" type="error" variant="tonal" class="mb-5">{{ error }}</v-alert>
 
           <!-- 1 · البيانات الشخصية -->
@@ -456,20 +488,21 @@ async function submit() {
             <v-col v-for="doc in ctx.documents" :key="doc.id" cols="12" sm="6">
               <label class="fld-label" :for="`f-doc-${doc.id}`">
                 {{ docLabel(doc) }}<span v-if="doc.required" class="req">*</span>
+                <span v-if="doc.uploaded" class="doc-on-file">
+                  <v-icon icon="circle-check" size="14" /> {{ $t('onboarding.uploaded') }}
+                </span>
               </label>
               <v-file-input
-                v-if="!doc.uploaded"
                 :id="`f-doc-${doc.id}`"
-                :placeholder="$t('publicForm.chooseFile')"
+                :placeholder="doc.uploaded ? $t('publicForm.replaceFile') : $t('publicForm.chooseFile')"
+                :hint="doc.uploaded ? $t('publicForm.replaceHint') : ''"
+                :persistent-hint="doc.uploaded"
                 accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                 prepend-icon=""
                 prepend-inner-icon="paperclip"
-                :error-messages="showErrors && doc.required && !files[doc.id] ? [$t('validation.required')] : []"
+                :error-messages="showErrors && doc.required && !doc.uploaded && !files[doc.id] ? [$t('validation.required')] : []"
                 @update:model-value="onFile(doc.id, $event)"
               />
-              <v-alert v-else type="success" variant="tonal" density="compact">
-                {{ $t('onboarding.uploaded') }}
-              </v-alert>
             </v-col>
           </v-row>
         </v-card-text>
@@ -563,6 +596,15 @@ async function submit() {
   color: rgb(var(--v-theme-error));
   margin-inline-start: 4px;
   font-weight: 700;
+}
+.doc-on-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-inline-start: 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgb(var(--v-theme-success));
 }
 .req-legend {
   display: inline-block;

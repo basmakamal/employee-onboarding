@@ -229,8 +229,6 @@ export class EmployeeRepository {
     id: string,
     fields: {
       firstName?: string;
-      fatherName?: string;
-      grandfatherName?: string;
       lastName?: string;
       phone?: string;
       email?: string;

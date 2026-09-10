@@ -7,6 +7,7 @@ import {
   employeeSubdir,
   removeStoredFiles,
   storageKeyFor,
+  storagePath,
   verifyUploadedFiles,
 } from '../../common/storage.js';
 import { NotFoundError } from '../../workflow/errors.js';
@@ -51,6 +52,14 @@ export function linkRouter(
         return;
       }
       res.json(await service.linkContext(raw));
+    }),
+  );
+
+  /** The contract document, for the employee holding the contract link. */
+  router.get(
+    '/:token/contract/file',
+    asyncHandler(async (req, res) => {
+      res.sendFile(storagePath(await service.contractFileKeyByToken(req.params['token'] as string)));
     }),
   );
 

@@ -417,7 +417,10 @@
     "remaining": "{n} item(s) still need attention",
     "requiredLegend": "marks a required field.",
     "choose": "Choose…",
-    "chooseFile": "Choose a file…"
+    "chooseFile": "Choose a file…",
+    "replaceFile": "Replace the file…",
+    "replaceHint": "A file is already on file. Choose a new one only if it needs replacing.",
+    "reopened": "Your form was sent back for corrections. Everything you submitted is here — change what you need and submit again."
   },
   "approval": {
     "title": "Your employment contract",
@@ -979,5 +982,19 @@
     "upload": "Upload picture",
     "adminOnly": "Email and role are managed by an administrator.",
     "menu": "Account"
+  },
+  "contractPage": {
+    "title": "Your employment contract",
+    "greeting": "Hello {name}",
+    "intro": "These are the terms recorded by HR. Contact HR if anything here does not match what you agreed.",
+    "terms": "Contract terms",
+    "document": "Contract document",
+    "documentHint": "Open the contract that HR attached to your file.",
+    "open": "Open the document",
+    "noDocument": "No document has been attached yet. HR will add it before signing.",
+    "additionalTerms": "Additional terms",
+    "statusNote": "Signing and approval happen on the official contracting platform. This page is for your reference.",
+    "invalidTitle": "This link is no longer valid",
+    "invalidHint": "The link may have expired or been replaced by a newer email. Please contact HR for a new one."
   }
 }

@@ -24,6 +24,17 @@ export const PLACEHOLDERS: Record<string, PlaceholderMeta> = {
   docNumber: { ar: 'رقم المستند', en: 'Document number', sample: { ar: '2382910044', en: '2382910044' } },
   expiryDate: { ar: 'تاريخ الانتهاء', en: 'Expiry date', sample: { ar: '2026-08-25', en: '2026-08-25' } },
   linkUrl: { ar: 'رابط الإجراء', en: 'Action link', sample: { ar: 'https://…/form/…', en: 'https://…/form/…' } },
+  contractSalary: { ar: 'الراتب', en: 'Salary', sample: { ar: '9٬000', en: '9,000' } },
+  contractDuration: { ar: 'مدة العقد بالأشهر', en: 'Duration in months', sample: { ar: '12', en: '12' } },
+  contractStartDate: { ar: 'تاريخ المباشرة', en: 'Contract start date', sample: { ar: '2026-10-01', en: '2026-10-01' } },
+  contractEndDate: { ar: 'تاريخ انتهاء العقد', en: 'Contract end date', sample: { ar: '2027-09-30', en: '2027-09-30' } },
+  contractTerms: { ar: 'بنود العقد', en: 'Contract terms', sample: { ar: 'دوام كامل', en: 'Full time' } },
+  contractRef: { ar: 'رقم العقد', en: 'Contract reference', sample: { ar: 'C-2026-114', en: 'C-2026-114' } },
+  contractLink: {
+    ar: 'رابط عرض العقد',
+    en: 'Contract page link',
+    sample: { ar: 'https://…/contract/…', en: 'https://…/contract/…' },
+  },
   formLink: {
     ar: 'رابط نموذج بيانات الموظف',
     en: 'Employee data-form link',
@@ -44,6 +55,14 @@ export interface TemplateMeta {
 }
 
 const EMP = ['name', 'employeeNo', 'department', 'jobTitle'];
+const CONTRACT = [
+  'contractSalary',
+  'contractDuration',
+  'contractStartDate',
+  'contractEndDate',
+  'contractTerms',
+  'contractRef',
+];
 
 export const TEMPLATE_CATALOG: Record<string, TemplateMeta> = {
   'employee.form_invite': {
@@ -55,8 +74,8 @@ export const TEMPLATE_CATALOG: Record<string, TemplateMeta> = {
     placeholders: [...EMP, 'daysWaiting', 'linkUrl'], hasCta: true,
   },
   'employee.contract_approval_reminder': {
-    audience: 'employee', nameAr: 'اعتماد العقد', nameEn: 'Contract approval',
-    placeholders: [...EMP, 'daysWaiting', 'linkUrl'], hasCta: true,
+    audience: 'employee', nameAr: 'عقد العمل', nameEn: 'Employment contract',
+    placeholders: [...EMP, 'daysWaiting', ...CONTRACT, 'contractLink'], hasCta: true,
   },
   'employee.asset_approval': {
     audience: 'employee', nameAr: 'اعتماد العهدة', nameEn: 'Asset custody approval',

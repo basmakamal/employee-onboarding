@@ -29,6 +29,9 @@ function branded(
 ): RenderedMessage {
   const text =
     block.paragraphs.join('\n\n') +
+    (block.details?.length
+      ? `\n\n${block.details.map((row) => `${row.label}: ${row.value}`).join('\n')}`
+      : '') +
     (block.cta ? `\n\n${block.cta.label}: ${block.cta.url}` : '') +
     (block.note ? `\n\n${block.note}` : '') +
     `\n\n${signOff}`;
@@ -40,6 +43,43 @@ const SIGN_OFF: Record<Locale, string> = {
   ar: 'قسم الموارد البشرية — Riyada HR',
   en: 'HR Department — Riyada HR',
 };
+
+/** Contract terms as label/value rows; anything HR left blank is skipped. */
+function contractRows(p: TemplateParams, locale: Locale): Array<{ label: string; value: string }> {
+  const L =
+    locale === 'ar'
+      ? {
+          salary: 'الراتب',
+          duration: 'مدة العقد',
+          months: (n: string) => `${n} شهرًا`,
+          start: 'تاريخ المباشرة',
+          end: 'تاريخ الانتهاء',
+          ref: 'رقم العقد',
+          terms: 'بنود إضافية',
+        }
+      : {
+          salary: 'Salary',
+          duration: 'Duration',
+          months: (n: string) => `${n} month(s)`,
+          start: 'Start date',
+          end: 'End date',
+          ref: 'Contract reference',
+          terms: 'Additional terms',
+        };
+  const rows: Array<{ label: string; value: string }> = [];
+  if (p.contractSalary) rows.push({ label: L.salary, value: p.contractSalary });
+  if (p.contractDuration) rows.push({ label: L.duration, value: L.months(p.contractDuration) });
+  if (p.contractStartDate) rows.push({ label: L.start, value: p.contractStartDate });
+  if (p.contractEndDate) rows.push({ label: L.end, value: p.contractEndDate });
+  if (p.contractRef) rows.push({ label: L.ref, value: p.contractRef });
+  if (p.contractTerms) rows.push({ label: L.terms, value: p.contractTerms });
+  return rows;
+}
+
+/** The contract page link, falling back to whatever link the sender supplied. */
+function contractCta(p: TemplateParams): string | undefined {
+  return p.contractLink ?? p.linkUrl;
+}
 
 const LINK_NOTE: Record<Locale, string> = {
   ar: 'الرابط صالح لفترة محدودة ومخصص لك وحدك، يُرجى عدم مشاركته.',
@@ -60,6 +100,14 @@ export interface TemplateParams {
   linkUrl?: string;
   /** Admin-created templates: a fresh data-form link for the employee. */
   formLink?: string;
+  /** Contract terms as recorded by HR, and the employee's personal link to them. */
+  contractSalary?: string;
+  contractDuration?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
+  contractTerms?: string;
+  contractRef?: string;
+  contractLink?: string;
   /** Staff invitation only. */
   email?: string;
   tempPassword?: string;
@@ -223,19 +271,27 @@ const T: Record<string, Record<Locale, Template>> = {
     }),
   },
 
-  /** Daily reminder — contract awaiting the new hire's approval. */
+  /**
+   * The new hire's contract is ready. The terms HR recorded travel in the
+   * body as a table, and the button opens the personal contract page (the
+   * uploaded document is downloaded from there rather than attached, so a
+   * forwarded mailbox never carries the contract itself).
+   */
   'employee.contract_approval_reminder': {
     ar: (p) =>
       branded(
         'ar',
-        'اعتماد عقد العمل — Riyada HR',
+        'عقد العمل الخاص بك — Riyada HR',
         {
-          title: 'عقد العمل بانتظار اعتمادك',
+          title: 'عقد العمل الخاص بك جاهز',
           paragraphs: [
             `مرحبًا ${p.name ?? ''},`,
-            'تم إعداد عقد العمل الخاص بك، وهو الآن بانتظار اطّلاعك واعتماده إلكترونيًا.',
+            'تم إعداد عقد العمل الخاص بك. فيما يلي بنوده الأساسية كما سُجّلت لدى الموارد البشرية.',
           ],
-          ...(p.linkUrl ? { cta: { label: 'مراجعة العقد واعتماده', url: p.linkUrl } } : {}),
+          details: contractRows(p, 'ar'),
+          ...(contractCta(p)
+            ? { cta: { label: 'عرض العقد', url: contractCta(p) as string } }
+            : {}),
           note: LINK_NOTE.ar,
         },
         SIGN_OFF.ar,
@@ -243,14 +299,15 @@ const T: Record<string, Record<Locale, Template>> = {
     en: (p) =>
       branded(
         'en',
-        'Approve your employment contract — Riyada HR',
+        'Your employment contract — Riyada HR',
         {
-          title: 'Your contract is awaiting approval',
+          title: 'Your employment contract is ready',
           paragraphs: [
             `Hello ${p.name ?? ''},`,
-            'Your employment contract has been prepared and is now awaiting your review and electronic approval.',
+            'Your employment contract has been prepared. Its main terms, as recorded by HR, are below.',
           ],
-          ...(p.linkUrl ? { cta: { label: 'Review and approve', url: p.linkUrl } } : {}),
+          details: contractRows(p, 'en'),
+          ...(contractCta(p) ? { cta: { label: 'View contract', url: contractCta(p) as string } } : {}),
           note: LINK_NOTE.en,
         },
         SIGN_OFF.en,
