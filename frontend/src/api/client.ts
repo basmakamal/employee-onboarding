@@ -24,6 +24,8 @@ export interface SessionUser {
   name: string;
   email: string;
   role: string;
+  /** Still on a temporary password — the app forces a change before anything else. */
+  mustChangePassword?: boolean;
 }
 
 export function setAccessToken(token: string) {

@@ -191,6 +191,11 @@ model User {
   role         Role
   passwordHash String? // set in Phase F (auth)
   active       Boolean  @default(true)
+  /// Invitation flow: true until the person signs in and sets their own password.
+  mustChangePassword Boolean   @default(false)
+  invitedAt          DateTime?
+  passwordChangedAt  DateTime?
+  lastLoginAt        DateTime?
   createdAt    DateTime @default(now())
 
   employeesCreated    Employee[]    @relation("EmployeeCreatedBy")

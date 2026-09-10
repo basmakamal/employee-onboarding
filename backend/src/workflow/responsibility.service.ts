@@ -19,10 +19,11 @@ type Map_ = Partial<Record<ResponsibilityKey, string[]>>;
 
 /**
  * Primary follow-up responsibility per process — the NAMES that receive the
- * reminders (e.g. GOSI → Ayman + Aljawhara). This is about notifications
- * and accountability only: it never restricts who may act. Permission to
- * execute stays with the role groups (status ownership), so any authorised
- * teammate can finish a step when the primary owner is away.
+ * reminders in addition to the role group of the current status (e.g. GOSI →
+ * Ayman + Aljawhara, plus everyone in the owning group). This is about
+ * notifications and accountability only: it never restricts who may act.
+ * Permission to execute stays with the role groups (status ownership), so any
+ * authorised teammate can finish a step when the primary owner is away.
  *
  * Stored as one JSON setting; cached briefly because the SLA tick reads it
  * for every reminder.

@@ -10,6 +10,22 @@ interface UserRow {
   email: string;
   role: string;
   active: boolean;
+  /** Still on a temporary password (invited or admin-reset), not yet replaced. */
+  mustChangePassword: boolean;
+  invitedAt: string | null;
+  passwordChangedAt: string | null;
+  lastLoginAt: string | null;
+}
+
+/** Resend is only meaningful while the person has never set their own password. */
+function canResend(user: UserRow): boolean {
+  return user.active && user.mustChangePassword && !user.passwordChangedAt;
+}
+
+function when(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+  });
 }
 
 const ROLES = ['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN'];
@@ -22,7 +38,9 @@ const busy = ref('');
 const snackbar = ref({ show: false, text: '', color: 'success' });
 
 const createDialog = ref(false);
-const createForm = ref({ name: '', email: '', role: 'HR', password: '' });
+const createForm = ref({ name: '', email: '', role: 'HR', password: '', sendInvitation: true });
+/** Shown once when no invitation was sent and the password was generated. */
+const tempDialog = ref({ show: false, name: '', password: '' });
 
 const resetDialog = ref({ show: false, userId: '', name: '', password: '' });
 
@@ -71,10 +89,35 @@ async function load() {
 async function createUser() {
   busy.value = 'create';
   try {
-    await api.post('/api/users', { ...createForm.value, email: createForm.value.email.trim() });
+    const f = createForm.value;
+    const created = await api.post<UserRow & { tempPassword?: string }>('/api/users', {
+      name: f.name.trim(),
+      email: f.email.trim(),
+      role: f.role,
+      sendInvitation: f.sendInvitation,
+      ...(f.password ? { password: f.password } : {}),
+    });
     createDialog.value = false;
-    createForm.value = { name: '', email: '', role: 'HR', password: '' };
-    notify(t('common.saved'));
+    createForm.value = { name: '', email: '', role: 'HR', password: '', sendInvitation: true };
+    if (created.tempPassword) {
+      tempDialog.value = { show: true, name: created.name, password: created.tempPassword };
+    } else {
+      notify(f.sendInvitation ? t('users.invitationSent', { email: created.email }) : t('common.saved'));
+    }
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
+async function resendInvitation(user: UserRow) {
+  if (!window.confirm(t('users.resendConfirm', { name: user.name }))) return;
+  busy.value = user.id;
+  try {
+    await api.post(`/api/users/${user.id}/invite`);
+    notify(t('users.invitationSent', { email: user.email }));
     await load();
   } catch (e) {
     notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
@@ -137,6 +180,23 @@ onMounted(load);
 
     <v-card>
       <v-data-table :headers="headers" :items="users" :loading="loading">
+        <template #item.name="{ item }">
+          <div class="font-weight-medium">{{ item.name }}</div>
+          <div class="text-caption text-medium-emphasis">
+            <v-chip
+              v-if="canResend(item)"
+              size="x-small"
+              color="warning"
+              variant="tonal"
+              prepend-icon="mdi-email-fast-outline"
+              class="me-1"
+            >
+              {{ item.invitedAt ? $t('users.invitedChip') : $t('users.resetChip') }}
+            </v-chip>
+            <span v-if="item.lastLoginAt">{{ $t('users.lastLogin', { when: when(item.lastLoginAt) }) }}</span>
+            <span v-else-if="!canResend(item)">{{ $t('users.neverSignedIn') }}</span>
+          </div>
+        </template>
         <template #item.role="{ item }">
           <!-- Your own row: read-only — you cannot demote or deactivate yourself. -->
           <template v-if="item.id === auth.user?.id">
@@ -195,9 +255,21 @@ onMounted(load);
             size="small"
             variant="tonal"
             prepend-icon="mdi-lock-reset"
+            class="me-2"
             @click="resetDialog = { show: true, userId: item.id, name: item.name, password: '' }"
           >
             {{ $t('users.resetPassword') }}
+          </v-btn>
+          <v-btn
+            v-if="canResend(item)"
+            size="small"
+            variant="tonal"
+            color="primary"
+            prepend-icon="mdi-email-fast-outline"
+            :loading="busy === item.id"
+            @click="resendInvitation(item)"
+          >
+            {{ $t('users.resendInvitation') }}
           </v-btn>
         </template>
       </v-data-table>
@@ -216,11 +288,23 @@ onMounted(load);
           />
           <v-text-field
             v-model="createForm.password"
-            :label="$t('login.password')"
+            :label="$t('users.tempPassword')"
             type="password"
-            :hint="$t('users.passwordHint')"
+            :hint="createForm.password ? $t('users.passwordHint') : $t('users.tempPasswordOptional')"
             persistent-hint
+            dir="ltr"
           />
+
+          <div class="access-panel mt-4 px-4 py-3 rounded-lg">
+            <v-switch v-model="createForm.sendInvitation" color="primary" hide-details density="comfortable">
+              <template #label>
+                <div class="ms-2">
+                  <div class="text-body-2 font-weight-medium">{{ $t('users.sendInvitation') }}</div>
+                  <div class="text-caption text-medium-emphasis">{{ $t('users.sendInvitationHint') }}</div>
+                </div>
+              </template>
+            </v-switch>
+          </div>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -230,10 +314,33 @@ onMounted(load);
             color="primary"
             class="px-5"
             :loading="busy === 'create'"
-            :disabled="!createForm.name || !createForm.email || createForm.password.length < 8"
+            :disabled="
+              !createForm.name || !createForm.email || (createForm.password.length > 0 && createForm.password.length < 8)
+            "
             @click="createUser"
           >
-            {{ $t('common.create') }}
+            {{ createForm.sendInvitation ? $t('users.sendInvitation') : $t('common.create') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Generated temporary password: shown exactly once -->
+    <v-dialog v-model="tempDialog.show" max-width="440" persistent>
+      <v-card>
+        <div class="px-6 pt-6 pb-2">
+          <h2 class="text-subtitle-1 font-weight-bold">{{ $t('users.tempPasswordTitle') }}</h2>
+          <p class="text-caption text-medium-emphasis mb-0">
+            {{ $t('users.tempPasswordShown', { name: tempDialog.name }) }}
+          </p>
+        </div>
+        <v-card-text class="pt-4">
+          <v-text-field :model-value="tempDialog.password" readonly dir="ltr" class="font-weight-bold" />
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5 pt-0">
+          <v-spacer />
+          <v-btn variant="flat" color="primary" class="px-5" @click="tempDialog.show = false">
+            {{ $t('common.done') }}
           </v-btn>
         </v-card-actions>
       </v-card>

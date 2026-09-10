@@ -66,7 +66,7 @@ export class SlaScheduler {
       notifications: NotificationService;
       /** System calendar: which weekdays are the weekend (admin-configured). */
       calendar?: { getCalendar(): Promise<{ weekendDays: number[] }> };
-      /** Named primary owners per process — when set, reminders go to them, not the whole group. */
+      /** Named primary owners per process — they receive reminders in addition to the role group. */
       responsibility?: { get(processKey: string): Promise<string[]> };
     },
     watchers: SlaWatcher[],
@@ -193,9 +193,10 @@ export class SlaScheduler {
   }
 
   /**
-   * Staff-side message. Business rule: the named primary owners of a process
-   * (e.g. GOSI → two specific people) receive the reminders; when none are
-   * named, the whole role group does. Owners never restrict who may act.
+   * Staff-side message. Business rule: the role group of the current status
+   * always receives the reminder; the named primary owners of the process
+   * (e.g. GOSI → two specific people) receive it in addition, never instead.
+   * Owners never restrict who may act.
    */
   private async notifyStaff(
     rule: SlaRule,
@@ -214,7 +215,7 @@ export class SlaScheduler {
     const ref = this.ref(rule, record);
     const owners = preferOwners ? await this.deps.responsibility?.get(rule.processKey) : undefined;
     if (owners && owners.length > 0) {
-      await this.deps.notifications.notifyUsers(owners, template, params, ref);
+      await this.deps.notifications.notifyRoleAndUsers(role, owners, template, params, ref);
       return;
     }
     await this.deps.notifications.notifyRole(role, template, params, ref);

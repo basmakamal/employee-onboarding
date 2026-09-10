@@ -16,7 +16,7 @@ const rail = ref(false);
 
 /** Public pages (signed links, login) render without the staff chrome. */
 const isPublicPage = () =>
-  ['/form/', '/approve-assets/', '/exit-interview/', '/login'].some((p) =>
+  ['/form/', '/approve-assets/', '/exit-interview/', '/login', '/change-password'].some((p) =>
     route.path.startsWith(p),
   );
 
@@ -97,6 +97,11 @@ onMounted(() => prefs.apply());
             </v-card-item>
             <v-divider />
             <v-list density="compact">
+              <v-list-item
+                prepend-icon="mdi-shield-key-outline"
+                :title="$t('changePassword.menu')"
+                to="/change-password"
+              />
               <v-list-item prepend-icon="mdi-logout" :title="$t('login.signOut')" @click="logout" />
             </v-list>
           </v-card>

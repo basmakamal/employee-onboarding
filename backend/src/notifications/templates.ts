@@ -58,6 +58,9 @@ export interface TemplateParams {
   docNumber?: string;
   expiryDate?: string;
   linkUrl?: string;
+  /** Staff invitation only. */
+  email?: string;
+  tempPassword?: string;
 }
 
 type Template = (p: TemplateParams) => RenderedMessage;
@@ -360,6 +363,40 @@ const T: Record<string, Record<Locale, Template>> = {
       subject: `Asset custody decision: ${p.name ?? ''}`,
       text: `Employee ${p.name ?? ''} has decided on the custody form. Check the system for details.`,
     }),
+  },
+
+  /**
+   * Staff account invitation — the sign-in link plus a temporary password.
+   * The system forces a new password at first sign-in, so the temporary one
+   * is only ever good for that single step.
+   */
+  'staff.invitation': {
+    ar: (p) =>
+      branded('ar', 'دعوتك إلى نظام الموارد البشرية — Riyada HR', {
+        title: 'حسابك في نظام الموارد البشرية جاهز',
+        paragraphs: [
+          `مرحبًا ${p.name ?? ''},`,
+          'تم إنشاء حساب لك في نظام الموارد البشرية بشركة ريادة. بيانات الدخول المؤقتة:',
+          `البريد الإلكتروني: ${p.email ?? ''}`,
+          `كلمة المرور المؤقتة: ${p.tempPassword ?? ''}`,
+          'عند أول تسجيل دخول سيُطلب منك اختيار كلمة مرور خاصة بك قبل المتابعة.',
+        ],
+        ...(p.linkUrl ? { cta: { label: 'تسجيل الدخول', url: p.linkUrl } } : {}),
+        note: 'هذه الرسالة مخصصة لك وحدك — لا تشاركها مع أي شخص.',
+      }, SIGN_OFF.ar),
+    en: (p) =>
+      branded('en', 'Your Riyada HR account is ready', {
+        title: 'Your HR system account is ready',
+        paragraphs: [
+          `Hello ${p.name ?? ''},`,
+          'An account has been created for you on the Riyada HR system. Your temporary sign-in details:',
+          `Email: ${p.email ?? ''}`,
+          `Temporary password: ${p.tempPassword ?? ''}`,
+          'The first time you sign in you will be asked to choose your own password before continuing.',
+        ],
+        ...(p.linkUrl ? { cta: { label: 'Sign in', url: p.linkUrl } } : {}),
+        note: 'This message is personal to you — please do not share it.',
+      }, SIGN_OFF.en),
   },
 
   /** HR notice — the new hire approved the contract; employee activated. */

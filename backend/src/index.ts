@@ -51,7 +51,7 @@ staffApi.use(
     container.responsibilityService,
   ),
 );
-staffApi.use('/users', usersRouter(container.repos.users));
+staffApi.use('/users', usersRouter(container.repos.users, container.notifications, config.APP_URL));
 staffApi.use(
   '/notifications',
   notificationRouter(container.repos.notificationRepo, container.notifications),

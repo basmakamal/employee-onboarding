@@ -277,9 +277,10 @@ const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'TEMPORARY'];
 const editDialog = ref(false);
 
 /** Known departments / job titles — new typed values join the list on save. */
-const fieldOptions = ref<{ departments: string[]; jobTitles: string[] }>({
+const fieldOptions = ref<{ departments: string[]; jobTitles: string[]; projects: string[] }>({
   departments: [],
   jobTitles: [],
+  projects: [],
 });
 const editForm = ref({
   firstName: '',
@@ -299,8 +300,7 @@ const editForm = ref({
 function openEdit() {
   const e = employee.value;
   if (!e) return;
-  void api
-    .get<{ departments: string[]; jobTitles: string[] }>('/api/employees/options')
+  void api.get<{ departments: string[]; jobTitles: string[]; projects: string[] }>('/api/employees/options')
     .then((opts) => (fieldOptions.value = opts));
   editForm.value = {
     firstName: e.firstName,
@@ -2195,7 +2195,14 @@ onMounted(load);
               />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.project" :label="$t('employees.project')" />
+              <v-combobox
+                v-model="editForm.project"
+                :items="fieldOptions.projects"
+                :label="$t('employees.project')"
+                :hint="$t('fields.comboHint')"
+                persistent-hint
+                clearable
+              />
             </v-col>
             <v-col cols="12" sm="6">
               <v-combobox
