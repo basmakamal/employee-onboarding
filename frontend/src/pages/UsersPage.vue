@@ -182,7 +182,8 @@ const headers = [
   { title: t('fields.email'), key: 'email' },
   { title: t('users.role'), key: 'role' },
   { title: t('users.active'), key: 'active' },
-  { title: '', key: 'actions', sortable: false },
+  // Icons only: four labelled buttons did not fit one row.
+  { title: '', key: 'actions', sortable: false, width: 168, nowrap: true, align: 'end' as const },
 ];
 
 onMounted(load);
@@ -265,46 +266,64 @@ onMounted(load);
           />
         </template>
         <template #item.actions="{ item }">
-          <v-btn
-            size="small"
-            variant="tonal"
-            prepend-icon="pencil"
-            class="me-2"
-            @click="openEdit(item)"
-          >
-            {{ $t('common.edit') }}
-          </v-btn>
-          <v-btn
-            size="small"
-            variant="tonal"
-            prepend-icon="key-round"
-            class="me-2"
-            @click="resetDialog = { show: true, userId: item.id, name: item.name, password: '' }"
-          >
-            {{ $t('users.resetPassword') }}
-          </v-btn>
-          <v-btn
-            v-if="canResend(item)"
-            size="small"
-            variant="tonal"
-            color="primary"
-            prepend-icon="mail-check"
-            :loading="busy === item.id"
-            @click="resendInvitation(item)"
-          >
-            {{ $t('users.resendInvitation') }}
-          </v-btn>
-          <v-btn
-            v-if="item.id !== auth.user?.id"
-            size="small"
-            variant="text"
-            color="error"
-            icon="trash-2"
-            class="ms-1"
-            :aria-label="$t('users.delete')"
-            :disabled="busy === item.id"
-            @click="removeUser(item)"
-          />
+          <div class="d-flex justify-end flex-nowrap ga-1">
+            <v-tooltip :text="$t('common.edit')" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="pencil"
+                  size="small"
+                  variant="text"
+                  density="comfortable"
+                  :aria-label="$t('common.edit')"
+                  @click="openEdit(item)"
+                />
+              </template>
+            </v-tooltip>
+            <v-tooltip :text="$t('users.resetPassword')" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="key-round"
+                  size="small"
+                  variant="text"
+                  density="comfortable"
+                  :aria-label="$t('users.resetPassword')"
+                  @click="resetDialog = { show: true, userId: item.id, name: item.name, password: '' }"
+                />
+              </template>
+            </v-tooltip>
+            <v-tooltip v-if="canResend(item)" :text="$t('users.resendInvitation')" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="mail-check"
+                  size="small"
+                  variant="text"
+                  color="primary"
+                  density="comfortable"
+                  :loading="busy === item.id"
+                  :aria-label="$t('users.resendInvitation')"
+                  @click="resendInvitation(item)"
+                />
+              </template>
+            </v-tooltip>
+            <v-tooltip v-if="item.id !== auth.user?.id" :text="$t('users.delete')" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="trash-2"
+                  size="small"
+                  variant="text"
+                  color="error"
+                  density="comfortable"
+                  :aria-label="$t('users.delete')"
+                  :disabled="busy === item.id"
+                  @click="removeUser(item)"
+                />
+              </template>
+            </v-tooltip>
+          </div>
         </template>
       </v-data-table>
     </v-card>
