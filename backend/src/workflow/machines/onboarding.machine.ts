@@ -89,23 +89,25 @@ export function onboardingMachine(gates: OnboardingGates): MachineDef<Employee> 
         },
       },
 
-      // HR records the external approval (contract status → Active). The
-      // service then allocates the employee number and opens the Stage-2
-      // process tracks — this is the trainee → employee conversion.
+      // The contract is approved: by HR recording the external platform's
+      // outcome, or by the new hire accepting it from their signed link.
+      // Either way the service allocates the employee number and opens the
+      // Stage-2 tracks — this is the trainee → employee conversion.
       {
         action: 'APPROVE_CONTRACT',
         from: 'AWAITING_CONTRACT_APPROVAL',
         to: 'ACTIVE',
-        actors: ['USER'], roles: ['HR'],
+        actors: ['USER', 'LINK'], roles: ['HR'],
       },
 
-      // The platform rejected the contract — back to drafting so HR can fix
-      // and resubmit. The contract row keeps status REJECTED + reason.
+      // Rejected — by the platform (HR records it) or by the new hire from
+      // their link. Back to drafting so HR can fix and resubmit; the
+      // contract row keeps status REJECTED + reason.
       {
         action: 'REJECT_CONTRACT',
         from: 'AWAITING_CONTRACT_APPROVAL',
         to: 'CONTRACT_CREATION',
-        actors: ['USER'], roles: ['HR'],
+        actors: ['USER', 'LINK'], roles: ['HR'],
       },
 
       // Deadlines expire the two waiting states: automatically by the SLA

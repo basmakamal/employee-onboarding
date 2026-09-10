@@ -55,6 +55,16 @@ export function linkRouter(
     }),
   );
 
+  /** The new hire accepts or rejects their contract. */
+  router.post(
+    '/:token/contract/decision',
+    validate(decisionSchema),
+    asyncHandler(async (req, res) => {
+      const { decision, rejectReason } = req.body as z.infer<typeof decisionSchema>;
+      res.json(await service.decideContract(req.params['token'] as string, decision, rejectReason));
+    }),
+  );
+
   /** The contract document, for the employee holding the contract link. */
   router.get(
     '/:token/contract/file',

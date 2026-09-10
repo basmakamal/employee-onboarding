@@ -986,15 +986,29 @@
   "contractPage": {
     "title": "Your employment contract",
     "greeting": "Hello {name}",
-    "intro": "These are the terms recorded by HR. Contact HR if anything here does not match what you agreed.",
+    "intro": "These are the terms recorded by HR. Review them, then accept or reject the contract below.",
     "terms": "Contract terms",
     "document": "Contract document",
     "documentHint": "Open the contract that HR attached to your file.",
     "open": "Open the document",
     "noDocument": "No document has been attached yet. HR will add it before signing.",
     "additionalTerms": "Additional terms",
-    "statusNote": "Signing and approval happen on the official contracting platform. This page is for your reference.",
+    "statusNote": "Accepting is your electronic signature on these terms. Contact HR before deciding if anything is unclear.",
     "invalidTitle": "This link is no longer valid",
-    "invalidHint": "The link may have expired or been replaced by a newer email. Please contact HR for a new one."
+    "invalidHint": "The link may have expired or been replaced by a newer email. Please contact HR for a new one.",
+    "decide": "Your decision",
+    "accept": "Accept the contract",
+    "reject": "Reject",
+    "acceptConfirmTitle": "Accept this contract?",
+    "acceptConfirm": "You are accepting the terms above electronically. HR will be notified and your employee file will be opened.",
+    "rejectTitle": "Reject the contract",
+    "rejectHint": "Tell HR what needs to change. They will correct the contract and send it to you again.",
+    "rejectReason": "Reason",
+    "closed": "This contract is no longer awaiting your decision. Contact HR if you need to change something.",
+    "acceptedTitle": "Contract accepted — welcome aboard!",
+    "acceptedHint": "HR has been notified and will contact you with your joining details.",
+    "employeeNo": "Your employee number is {no}.",
+    "rejectedTitle": "Your response has been sent",
+    "rejectedHint": "HR will review your comments, correct the contract and send it to you again."
   }
 }
