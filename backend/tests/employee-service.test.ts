@@ -77,11 +77,23 @@ describe('EmployeeService.actOnProcess', () => {
     );
   });
 
-  it('criminal record cannot skip ahead (machine enforced)', async () => {
+  it('criminal record cannot skip a stage without the certificate', async () => {
     const { service } = makeService();
-    await expect(service.actOnProcess('e1', 'criminal', 'COMPLETE', HR)).rejects.toBeInstanceOf(
+    // TRAINING → PENDING would jump over the request itself.
+    await expect(service.actOnProcess('e1', 'criminal', 'MARK_PENDING', HR)).rejects.toBeInstanceOf(
       IllegalTransitionError,
     );
+  });
+
+  it('the certificate closes the criminal record from whichever stage it is at', async () => {
+    const { service, repos } = makeService();
+    repos.criminal.findByEmployee.mockResolvedValue({ id: 'c1', employeeId: 'e1', status: 'TRAINING' });
+
+    await service.actOnProcess('e1', 'criminal', 'COMPLETE', HR, {
+      certificateStorageKey: 'cert-early.pdf',
+    });
+
+    expect(repos.criminal.moveStatus).toHaveBeenCalledWith('c1', 'TRAINING', 'DONE', 'cert-early.pdf');
   });
 
   it('criminal COMPLETE passes the certificate key to the move', async () => {

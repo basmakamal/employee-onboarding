@@ -132,14 +132,23 @@ describe('employee-file process machines (Stage 2)', () => {
     await expect(wf.transition(rec('PENDING'), 'HOLD', IT)).rejects.toThrow(/role IT/);
   });
 
-  it('criminal record: strictly forward, no skipping', async () => {
+  it('criminal record: forward only, and the certificate may arrive at any stage', async () => {
     const wf = new Workflow(criminalRecordMachine(), deps());
     const rec = (status: string) => ({ id: 'c1', employeeId: 'e1', status });
 
     expect((await wf.transition(rec('TRAINING'), 'SEND_REQUEST', HR)).to).toBe('REQUEST_SENT');
     expect((await wf.transition(rec('REQUEST_SENT'), 'MARK_PENDING', HR)).to).toBe('PENDING');
-    expect((await wf.transition(rec('PENDING'), 'COMPLETE', HR)).to).toBe('DONE');
-    await expect(wf.transition(rec('TRAINING'), 'COMPLETE', HR)).rejects.toBeInstanceOf(
+
+    // Attaching the certificate closes the track from wherever it stands.
+    for (const from of ['TRAINING', 'REQUEST_SENT', 'PENDING']) {
+      expect((await wf.transition(rec(from), 'COMPLETE', HR)).to).toBe('DONE');
+    }
+
+    // Moving a stage on without the certificate is still a skip.
+    await expect(wf.transition(rec('TRAINING'), 'MARK_PENDING', HR)).rejects.toBeInstanceOf(
+      IllegalTransitionError,
+    );
+    await expect(wf.transition(rec('DONE'), 'SEND_REQUEST', HR)).rejects.toBeInstanceOf(
       IllegalTransitionError,
     );
   });
