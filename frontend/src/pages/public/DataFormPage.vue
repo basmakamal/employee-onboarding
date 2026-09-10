@@ -36,6 +36,7 @@ interface FormContext {
     nationalId: string | null;
     birthDate: string | null;
     project?: string | null;
+    preferredLanguage?: 'AR' | 'EN';
   };
   documents: FormDoc[];
 }
@@ -170,6 +171,8 @@ onMounted(async () => {
     const data = await api.get<FormContext>(`/api/link/${token}`);
     if (data.purpose !== 'DATA_FORM') throw new Error();
     ctx.value = data;
+    // The form opens in the language HR chose for this person; they can still switch.
+    if (data.employee.preferredLanguage) prefs.locale = data.employee.preferredLanguage === 'EN' ? 'en' : 'ar';
     // Prefill what HR already captured so the employee is not retyping it.
     fields.value.firstName = data.employee.firstName ?? '';
     fields.value.lastName = data.employee.lastName ?? '';
@@ -202,6 +205,8 @@ async function submit() {
   error.value = '';
   const body = new FormData();
   for (const [k, v] of Object.entries(fields.value)) if (v) body.append(k, String(v));
+  // The language the person actually used becomes the language of every later email.
+  body.append('locale', prefs.locale);
   for (const [docId, file] of Object.entries(files.value)) if (file) body.append(docId, file);
 
   try {

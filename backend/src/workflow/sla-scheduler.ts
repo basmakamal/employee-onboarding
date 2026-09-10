@@ -18,6 +18,8 @@ export interface WatchedRecord {
   name: string;
   /** Subject's email (the employee / new hire) — omit when not applicable. */
   email?: string;
+  /** Language for the subject's own email (staff mail follows the system default). */
+  locale?: 'ar' | 'en';
   /** When the record entered this status — the SLA anchor. */
   anchorAt: Date;
   employeeId?: string;
@@ -179,6 +181,7 @@ export class SlaScheduler {
         subjectTemplate,
         { name: record.name },
         this.ref(rule, record),
+        record.locale ?? 'ar',
       );
     }
     if (rule.notifyHr) {

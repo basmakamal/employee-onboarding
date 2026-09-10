@@ -101,6 +101,7 @@ describe('OffboardingService', () => {
       'employee.exit_interview',
       expect.objectContaining({ linkUrl: expect.stringContaining('exit-interview') }),
       { entity: 'OFFBOARDING', entityId: 'o1' },
+      'ar',
     );
   });
 
@@ -125,6 +126,7 @@ describe('OffboardingService', () => {
       'employee.termination_notice',
       expect.anything(),
       { entity: 'OFFBOARDING', entityId: 'o1' },
+      'ar',
     );
   });
 

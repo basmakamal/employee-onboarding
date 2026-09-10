@@ -101,6 +101,7 @@ export interface CreateOnboardingData {
   jobTitle?: string;
   createdById: string;
   documentTypes: string[];
+  preferredLanguage?: 'AR' | 'EN';
 }
 
 /** Direct add of existing staff: born ACTIVE with a number and processes. */
@@ -119,6 +120,7 @@ export interface CreateDirectData {
   employmentType?: EmploymentType;
   hireDate: Date;
   createdById?: string;
+  preferredLanguage?: 'AR' | 'EN';
 }
 
 /** Profile fields HR may edit in place; null clears an optional column. */
@@ -135,6 +137,7 @@ export interface UpdateEmployeeData {
   directManager?: string | null;
   employmentType?: EmploymentType;
   hireDate?: Date;
+  preferredLanguage?: 'AR' | 'EN';
 }
 
 export class EmployeeRepository {
@@ -238,6 +241,7 @@ export class EmployeeRepository {
       iban?: string;
       qualification?: 'HIGH_SCHOOL' | 'DIPLOMA' | 'BACHELOR' | 'MASTER' | 'PHD' | 'OTHER';
       major?: string;
+      preferredLanguage?: 'AR' | 'EN';
       emergencyContactName?: string;
       emergencyContactPhone?: string;
     },

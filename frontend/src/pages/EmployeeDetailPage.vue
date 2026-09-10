@@ -105,6 +105,8 @@ interface EmployeeDetail {
   jobTitle: string | null;
   directManager: string | null;
   employmentType: string;
+  /** Language of every email this person receives. */
+  preferredLanguage: 'AR' | 'EN';
   photoKey: string | null;
   hireDate: string | null;
   status: string;
@@ -296,6 +298,7 @@ const editForm = ref({
   jobTitle: '',
   directManager: '',
   employmentType: 'FULL_TIME',
+  preferredLanguage: 'AR' as 'AR' | 'EN',
   hireDate: '',
 });
 
@@ -316,6 +319,7 @@ function openEdit() {
     jobTitle: e.jobTitle ?? '',
     directManager: e.directManager ?? '',
     employmentType: e.employmentType,
+    preferredLanguage: e.preferredLanguage ?? 'AR',
     hireDate: e.hireDate?.slice(0, 10) ?? '',
   };
   editDialog.value = true;
@@ -338,6 +342,7 @@ async function saveEdit() {
       jobTitle: (f.jobTitle ?? '').trim() || null,
       directManager: f.directManager.trim() || null,
       employmentType: f.employmentType,
+      preferredLanguage: f.preferredLanguage,
       ...(f.hireDate ? { hireDate: f.hireDate } : {}),
     });
     editDialog.value = false;
@@ -2227,6 +2232,16 @@ onMounted(load);
             </v-col>
             <v-col cols="12" sm="6">
               <v-text-field v-model="editForm.hireDate" :label="$t('employees.hireDate')" type="date" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="editForm.preferredLanguage"
+                :items="[{ title: $t('languages.AR'), value: 'AR' }, { title: $t('languages.EN'), value: 'EN' }]"
+                :label="$t('fields.preferredLanguage')"
+                :hint="$t('fields.preferredLanguageHint')"
+                persistent-hint
+                prepend-inner-icon="languages"
+              />
             </v-col>
           </v-row>
         </v-card-text>

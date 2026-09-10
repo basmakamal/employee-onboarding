@@ -12,6 +12,7 @@ import type { AuditLogRepository } from '../../workflow/audit-log.repository.js'
 import type { LinkTokenService } from '../../auth/link-token.service.js';
 import type { NotificationService } from '../../notifications/notification.service.js';
 import type { OpenWorkHalter } from '../../workflow/halt-open-work.js';
+import { localeOf } from '../../notifications/locale.js';
 
 interface ExitLinkRow {
   id: string;
@@ -169,6 +170,7 @@ export class OffboardingService {
           'employee.exit_interview',
           { name: `${employee.firstName} ${employee.lastName}`, linkUrl: link.url },
           { entity: 'OFFBOARDING', entityId: id },
+          localeOf(employee),
         );
         await this.transact(async (s) => {
           await this.stamp(s, id, 'IN_PROGRESS', { exitInterviewSentAt: new Date() });
@@ -233,6 +235,7 @@ export class OffboardingService {
         'employee.termination_notice',
         { name: `${employee.firstName} ${employee.lastName}` },
         { entity: 'OFFBOARDING', entityId: id },
+        localeOf(employee),
       );
     }
     return result;

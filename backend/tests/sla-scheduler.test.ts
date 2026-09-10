@@ -77,6 +77,7 @@ describe('SlaScheduler (generalized)', () => {
       'employee.form_reminder',
       expect.objectContaining({ name: 'Sara Ahmed' }),
       { entity: 'EMPLOYEE', entityId: 'e1' },
+      'ar',
     );
     expect(deps.notifications.notifyRole).toHaveBeenCalledWith(
       'HR',

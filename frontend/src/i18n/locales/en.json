@@ -646,7 +646,9 @@
     "iban": "Bank IBAN",
     "emergencyContactName": "Emergency Contact Name",
     "emergencyContactPhone": "Emergency Contact Number",
-    "project": "Project / Company"
+    "project": "Project / Company",
+    "preferredLanguage": "Email language",
+    "preferredLanguageHint": "Every email this person receives is written in this language. Their choice on the data form updates it."
   },
   "onboarding": {
     "title": "Onboarding",
@@ -887,5 +889,9 @@
     "recent": "Recent",
     "noResults": "Nothing matches. Try a name, an employee number or a page.",
     "hint": "Type to search · ↑↓ to move · ↵ to open · Esc to close"
+  },
+  "languages": {
+    "AR": "Arabic",
+    "EN": "English"
   }
 }

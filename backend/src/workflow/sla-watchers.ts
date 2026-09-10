@@ -8,6 +8,7 @@ import type { OffboardingRepository } from '../modules/offboarding/offboarding.r
 import type { GosiRepository } from '../modules/processes/gosi.repository.js';
 import type { MedicalInsuranceRepository } from '../modules/processes/medical-insurance.repository.js';
 import type { EmployeeDocumentRepository } from '../modules/employees/employee-document.repository.js';
+import { localeOf } from '../notifications/locale.js';
 
 /**
  * Emails the new hire themselves can act on. Contract approval happens on
@@ -31,6 +32,7 @@ export function onboardingWatcher(
         id: e.id,
         name: `${e.firstName} ${e.lastName}`,
         email: e.email,
+        locale: localeOf(e),
         anchorAt: e.statusChangedAt,
         employeeId: e.id,
       }));

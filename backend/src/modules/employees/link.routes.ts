@@ -108,6 +108,7 @@ export function linkRouter(
           req.params['token'] as string,
           fields,
           uploads,
+          (req.body as Record<string, unknown> | undefined)?.['locale'] as string | undefined,
         );
         // Files this submission made unreferenced: replaced re-uploads and
         // unknown field names. Removed only after the commit.

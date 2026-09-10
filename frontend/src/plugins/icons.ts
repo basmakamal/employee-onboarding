@@ -1,37 +1,28 @@
 /**
- * Icons: Lucide, rendered as inline SVG components (tree-shaken), replacing
- * the 1.3 MB Material Design Icons webfont.
+ * Icons: Lucide, rendered as inline SVG components, replacing the 1.3 MB
+ * Material Design Icons webfont.
  *
  * Usage stays the Vuetify way — `icon="user-plus"` or `prepend-icon="mail"` —
- * with Lucide's kebab-case names. One stroke width everywhere so every icon
- * looks drawn by the same hand.
+ * with Lucide's kebab-case names. Only the icons the app actually uses are
+ * bundled: `icon-registry.ts` is generated from the source tree, so a new
+ * icon name means re-running `gen-icon-registry.cjs` (the console warns when
+ * a name is missing and shows a placeholder).
  */
 import { h, type FunctionalComponent } from 'vue';
 import type { IconAliases, IconProps, IconSet } from 'vuetify';
-import * as lucide from 'lucide-vue-next';
+import { ICONS } from './icon-registry';
 
 const STROKE_WIDTH = 1.75;
-
-/** `user-plus` → `UserPlus`; also accepts an already-PascalCase name. */
-function toComponentName(name: string): string {
-  return name
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
-}
-
-const registry = lucide as unknown as Record<string, FunctionalComponent>;
 const warned = new Set<string>();
 
 function resolve(name: string): FunctionalComponent {
-  const found = registry[toComponentName(name)];
+  const found = ICONS[name];
   if (found) return found;
   if (!warned.has(name)) {
     warned.add(name);
-    console.warn(`[icons] unknown Lucide icon "${name}" — showing a placeholder`);
+    console.warn(`[icons] "${name}" is not in the icon registry — showing a placeholder`);
   }
-  return registry['Circle'] as FunctionalComponent;
+  return ICONS['circle'] as FunctionalComponent;
 }
 
 const LucideIcon: FunctionalComponent<IconProps> = (props) => {

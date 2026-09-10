@@ -12,6 +12,7 @@ import type { AuditLogRepository } from '../../workflow/audit-log.repository.js'
 import type { LinkTokenService } from '../../auth/link-token.service.js';
 import type { NotificationService } from '../../notifications/notification.service.js';
 import { REQUIRED_DOCUMENT_TYPES, type DataFormInput } from './data-form.schema.js';
+import { languageFromLocale, localeOf } from '../../notifications/locale.js';
 
 /** What a signed link may see of the record — no ids, no internals. */
 function publicEmployee(e: Employee) {
@@ -28,6 +29,7 @@ function publicEmployee(e: Employee) {
     project: e.project,
     jobTitle: e.jobTitle,
     status: e.status,
+    preferredLanguage: e.preferredLanguage,
   };
 }
 
@@ -291,6 +293,8 @@ export class OnboardingService {
     rawToken: string,
     fields: Partial<DataFormInput>,
     uploads: Array<{ documentId: string; storageKey: string; mimeType: string; sizeBytes: number }>,
+    /** UI language the person filled the form in — becomes their email language. */
+    locale?: string,
   ) {
     const token = await this.links.verify(rawToken);
     if (token.purpose !== 'DATA_FORM' || !token.employee) {
@@ -336,7 +340,11 @@ export class OnboardingService {
           now,
         );
       }
-      await s.employees.updatePersonal(employee.id, compact(fields));
+      const language = languageFromLocale(locale);
+      await s.employees.updatePersonal(employee.id, {
+        ...compact(fields),
+        ...(language ? { preferredLanguage: language } : {}),
+      });
       const r = await s.workflow.transition(employee, 'SUBMIT_FORM', {
         type: 'LINK',
         id: token.id,
@@ -364,6 +372,7 @@ export class OnboardingService {
       'employee.form_invite',
       { name: `${employee.firstName} ${employee.lastName}`, linkUrl: link.url },
       { entity: 'EMPLOYEE', entityId: employee.id },
+      localeOf(employee),
     );
     await this.auditLinkSent(employee.id, 'DATA_FORM', actor);
     return { url: link.url, expiresAt: link.expiresAt };

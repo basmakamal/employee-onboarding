@@ -11,6 +11,7 @@ import type { EmployeeRepository } from '../employees/employee.repository.js';
 import type { AuditLogRepository } from '../../workflow/audit-log.repository.js';
 import type { LinkTokenService } from '../../auth/link-token.service.js';
 import type { NotificationService } from '../../notifications/notification.service.js';
+import { localeOf } from '../../notifications/locale.js';
 
 /** The verified link row shape the routes hand over (from LinkTokenService). */
 interface AssetLinkRow {
@@ -146,6 +147,7 @@ export class AssetService {
       'employee.asset_approval',
       { name: `${employee.firstName} ${employee.lastName}`, linkUrl: link.url },
       { entity: 'ASSET_FORM', entityId: formId },
+      localeOf(employee),
     );
     await this.repos.audit.append({
       entity: 'ASSET_FORM',

@@ -41,6 +41,11 @@ enum EmployeeStatus {
   WITHDRAWN
 }
 
+enum Language {
+  AR
+  EN
+}
+
 enum EmploymentType {
   FULL_TIME
   PART_TIME
@@ -250,6 +255,8 @@ model Employee {
   jobTitle       String?
   directManager  String?
   employmentType EmploymentType @default(FULL_TIME)
+  /// Language of every email this person receives (set at creation, confirmed by the data form).
+  preferredLanguage Language @default(AR)
   photoKey       String? // storage key of the profile photo (UPLOAD_DIR)
   /// Set on activation (contract approval or direct add of existing staff).
   hireDate       DateTime?

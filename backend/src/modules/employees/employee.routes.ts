@@ -48,6 +48,7 @@ const createEmployeeSchema = z.object({
   directManager: z.string().optional(),
   employmentType: z.enum(EMPLOYMENT_TYPES).optional(),
   hireDate: z.coerce.date().optional(),
+  preferredLanguage: z.enum(['AR', 'EN']).optional(),
   direct: z.boolean().default(false),
   /** Onboarding mode: e-mail the signed data-form link right after creation. */
   sendForm: z.boolean().default(true),
@@ -105,6 +106,7 @@ const updateEmployeeSchema = z.object({
   directManager: z.string().nullable().optional(),
   employmentType: z.enum(EMPLOYMENT_TYPES).optional(),
   hireDate: z.coerce.date().optional(),
+  preferredLanguage: z.enum(['AR', 'EN']).optional(),
 });
 
 const createRequestSchema = z.object({

@@ -62,6 +62,7 @@ const form = ref({
   project: '',
   jobTitle: '',
   hireDate: '',
+  preferredLanguage: 'AR',
 });
 const sendFormNow = ref(true);
 
@@ -351,6 +352,16 @@ onMounted(loadOptions);
             </v-col>
             <v-col v-if="form.mode === 'direct'" cols="6">
               <v-text-field v-model="form.hireDate" :label="$t('employees.hireDate')" type="date" />
+            </v-col>
+            <v-col cols="6">
+              <v-select
+                v-model="form.preferredLanguage"
+                :items="[{ title: $t('languages.AR'), value: 'AR' }, { title: $t('languages.EN'), value: 'EN' }]"
+                :label="$t('fields.preferredLanguage')"
+                :hint="$t('fields.preferredLanguageHint')"
+                persistent-hint
+                prepend-inner-icon="languages"
+              />
             </v-col>
           </v-row>
           <template v-if="form.mode === 'onboarding'">
