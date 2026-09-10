@@ -53,7 +53,8 @@ const headers = computed(() => [
   { title: t('emailLog.subject'), key: 'subject', sortable: false },
   { title: t('emailLog.template'), key: 'templateKey', sortable: false },
   { title: t('emailLog.status'), key: 'status', sortable: false, width: 120 },
-  { title: '', key: 'actions', sortable: false, width: 150, align: 'end' as const },
+  // Two icon buttons: labelled ones needed ~200px and wrapped out of the row.
+  { title: '', key: 'actions', sortable: false, width: 96, nowrap: true, align: 'end' as const },
 ]);
 
 function notify(text: string, color = 'success') {
@@ -209,20 +210,36 @@ async function resend(row: LogRow) {
           </v-chip>
         </template>
         <template #item.actions="{ item }">
-          <v-btn size="small" variant="tonal" prepend-icon="eye" class="me-2" @click="viewing = item">
-            {{ $t('emailLog.view') }}
-          </v-btn>
-          <v-btn
-            v-if="item.channel === 'EMAIL'"
-            size="small"
-            variant="tonal"
-            color="primary"
-            prepend-icon="send"
-            :loading="resending === item.id"
-            @click="resend(item)"
-          >
-            {{ $t('emailLog.resend') }}
-          </v-btn>
+          <div class="d-flex justify-end flex-nowrap ga-1">
+            <v-tooltip :text="$t('emailLog.view')" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="eye"
+                  size="small"
+                  variant="text"
+                  density="comfortable"
+                  :aria-label="$t('emailLog.view')"
+                  @click="viewing = item"
+                />
+              </template>
+            </v-tooltip>
+            <v-tooltip v-if="item.channel === 'EMAIL'" :text="$t('emailLog.resend')" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="send"
+                  size="small"
+                  variant="text"
+                  color="primary"
+                  density="comfortable"
+                  :loading="resending === item.id"
+                  :aria-label="$t('emailLog.resend')"
+                  @click="resend(item)"
+                />
+              </template>
+            </v-tooltip>
+          </div>
         </template>
         <template #no-data>
           <div class="py-12 text-center">
