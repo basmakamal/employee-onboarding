@@ -14,14 +14,18 @@ import NotificationBell from './components/NotificationBell.vue';
 import LanguageToggle from './components/LanguageToggle.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import CommandPalette from './components/CommandPalette.vue';
+import ProfileDialog from './components/ProfileDialog.vue';
+import { useMyAvatar } from './composables/useMyAvatar';
 
 const prefs = usePreferencesStore();
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const display = useDisplay();
+const avatar = useMyAvatar();
 
 const drawer = ref(true);
+const profileOpen = ref(false);
 /** Desktop: collapse the menu to an icons-only rail. Remembered per browser. */
 const rail = ref(localStorage.getItem('nav-rail') === '1');
 const palette = ref(false);
@@ -210,28 +214,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
               @click="toggleRail"
             />
             <template v-else>
-              <v-avatar color="primary" variant="tonal" size="34">
-                <span class="text-caption font-weight-bold">{{ initials }}</span>
-              </v-avatar>
-              <div class="min-w-0 flex-grow-1">
-                <div class="text-body-2 font-weight-medium text-truncate">{{ auth.user?.name }}</div>
-                <div class="text-caption text-medium-emphasis">{{ $t(`roles.${auth.user?.role}`) }}</div>
-              </div>
-              <v-menu>
-                <template #activator="{ props }">
-                  <v-btn
-                    v-bind="props"
-                    icon="ellipsis-vertical"
-                    variant="text"
-                    size="small"
-                    :aria-label="$t('common.more')"
-                  />
-                </template>
-                <v-list density="compact" min-width="220">
-                  <v-list-item prepend-icon="key-round" :title="$t('changePassword.menu')" to="/change-password" />
-                  <v-list-item prepend-icon="log-out" :title="$t('login.signOut')" @click="logout" />
-                </v-list>
-              </v-menu>
+              <!-- The card is the shortcut to "My profile"; account actions live in the top bar. -->
+              <button type="button" class="shell-user__btn" @click="profileOpen = true">
+                <v-avatar color="primary" variant="tonal" size="34">
+                  <v-img v-if="avatar.url.value" :src="avatar.url.value" cover />
+                  <span v-else class="text-caption font-weight-bold">{{ initials }}</span>
+                </v-avatar>
+                <div class="min-w-0 flex-grow-1 text-start">
+                  <div class="text-body-2 font-weight-medium text-truncate">{{ auth.user?.name }}</div>
+                  <div class="text-caption text-medium-emphasis">{{ $t(`roles.${auth.user?.role}`) }}</div>
+                </div>
+                <v-icon icon="chevron-right" size="16" class="text-medium-emphasis flip-rtl" />
+              </button>
             </template>
           </div>
         </template>
@@ -268,7 +262,39 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
           @click="prefs.toggleTheme()"
         />
         <NotificationBell />
+
+        <!-- Account menu: profile, password, sign out -->
+        <v-menu>
+          <template #activator="{ props }">
+            <v-btn v-bind="props" icon variant="text" class="ms-1" :aria-label="$t('account.menu')">
+              <v-avatar color="primary" variant="tonal" size="32">
+                <v-img v-if="avatar.url.value" :src="avatar.url.value" cover />
+                <span v-else class="text-caption font-weight-bold">{{ initials }}</span>
+              </v-avatar>
+            </v-btn>
+          </template>
+          <v-card min-width="240">
+            <div class="d-flex align-center ga-3 px-4 pt-4 pb-2">
+              <v-avatar color="primary" variant="tonal" size="40">
+                <v-img v-if="avatar.url.value" :src="avatar.url.value" cover />
+                <span v-else class="text-body-2 font-weight-bold">{{ initials }}</span>
+              </v-avatar>
+              <div class="min-w-0">
+                <div class="text-body-2 font-weight-semibold text-truncate">{{ auth.user?.name }}</div>
+                <div class="text-caption text-medium-emphasis text-truncate" dir="ltr">{{ auth.user?.email }}</div>
+              </div>
+            </div>
+            <v-divider />
+            <v-list density="compact">
+              <v-list-item prepend-icon="user" :title="$t('account.title')" @click="profileOpen = true" />
+              <v-list-item prepend-icon="key-round" :title="$t('changePassword.menu')" to="/change-password" />
+              <v-list-item prepend-icon="log-out" :title="$t('login.signOut')" @click="logout" />
+            </v-list>
+          </v-card>
+        </v-menu>
       </v-app-bar>
+
+      <ProfileDialog v-model="profileOpen" />
 
       <!-- ───────── phone bottom navigation ───────── -->
       <v-bottom-navigation v-if="display.smAndDown.value" grow class="shell-bottom" height="64" :elevation="0">
@@ -371,6 +397,20 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 .shell-user--rail { justify-content: center; border: 0; padding: 4px; }
+.shell-user__btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 2px;
+}
+.shell-user__btn:hover { background: rgba(var(--v-theme-on-surface), 0.04); }
 .shell-bar {
   border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)) !important;
   background: rgba(var(--v-theme-background), 0.85) !important;

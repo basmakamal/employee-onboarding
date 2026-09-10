@@ -1,10 +1,20 @@
 import { Router, type Response } from 'express';
 import { z } from 'zod';
 import { asyncHandler, validate } from '../common/http.js';
-import { UnauthorizedError } from '../workflow/errors.js';
+import { GuardFailedError, NotFoundError, UnauthorizedError } from '../workflow/errors.js';
 import type { AuthService } from './auth.service.js';
 import { requireAuth } from './require-auth.middleware.js';
 import { config } from '../common/config.js';
+import {
+  discardUploads,
+  photoUpload,
+  removeStoredFile,
+  storageKeyFor,
+  storagePath,
+  verifyUploadedFiles,
+} from '../common/storage.js';
+
+const profileSchema = z.object({ name: z.string().trim().min(1).max(120) });
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -73,6 +83,51 @@ export function authRouter(auth: AuthService): Router {
     requireAuth(auth),
     asyncHandler(async (req, res) => {
       res.json({ actor: req.actor });
+    }),
+  );
+
+  /** The signed-in person edits their own profile (display name). */
+  router.put(
+    '/me',
+    requireAuth(auth),
+    validate(profileSchema),
+    asyncHandler(async (req, res) => {
+      const { name } = req.body as z.infer<typeof profileSchema>;
+      res.json({ user: await auth.updateProfile(req.actor?.id ?? '', { name }) });
+    }),
+  );
+
+  /** Own profile picture: upload (JPEG/PNG, sniffed) and authenticated serving. */
+  router.post(
+    '/me/photo',
+    requireAuth(auth),
+    (req, _res, next) => {
+      req.uploadSubdir = `users/${req.actor?.id ?? 'unknown'}`;
+      next();
+    },
+    photoUpload.single('photo'),
+    asyncHandler(async (req, res) => {
+      if (!req.file) throw new GuardFailedError('PHOTO_MISSING', 'no photo uploaded');
+      try {
+        await verifyUploadedFiles([req.file]);
+        const key = storageKeyFor(req.uploadSubdir as string, req.file.filename);
+        const { user, previousKey } = await auth.setPhoto(req.actor?.id ?? '', key);
+        if (previousKey && previousKey !== key) await removeStoredFile(previousKey);
+        res.json({ user });
+      } catch (err) {
+        await discardUploads([req.file]);
+        throw err;
+      }
+    }),
+  );
+
+  router.get(
+    '/me/photo',
+    requireAuth(auth),
+    asyncHandler(async (req, res) => {
+      const key = await auth.photoKeyOf(req.actor?.id ?? '');
+      if (!key) throw new NotFoundError('photo', req.actor?.id ?? '');
+      res.sendFile(storagePath(key));
     }),
   );
 

@@ -30,6 +30,8 @@ export interface PublicUser {
   role: Role;
   /** True while the account still runs on a temporary (invitation / reset) password. */
   mustChangePassword: boolean;
+  /** A profile picture is stored and can be fetched from /api/auth/me/photo. */
+  hasPhoto: boolean;
 }
 
 export interface LoginResult {
@@ -106,6 +108,25 @@ export class AuthService {
     return publicUser(updated);
   }
 
+  /** The signed-in person edits their own display name. */
+  async updateProfile(userId: string, changes: { name: string }): Promise<PublicUser> {
+    const updated = await this.users.update(userId, { name: changes.name.trim() });
+    return publicUser(updated);
+  }
+
+  /** Store the new picture's key; returns the replaced key so the caller can delete the file. */
+  async setPhoto(userId: string, photoKey: string): Promise<{ user: PublicUser; previousKey: string | null }> {
+    const before = await this.users.findById(userId);
+    if (!before) throw new UnauthorizedError('account unavailable');
+    const updated = await this.users.update(userId, { photoKey });
+    return { user: publicUser(updated), previousKey: before.photoKey ?? null };
+  }
+
+  async photoKeyOf(userId: string): Promise<string | null> {
+    const user = await this.users.findById(userId);
+    return user?.photoKey ?? null;
+  }
+
   /** Rotate: a valid refresh token yields a fresh access+refresh pair. */
   async refresh(refreshToken: string): Promise<LoginResult> {
     const payload = this.verify(refreshToken, 'refresh');
@@ -178,6 +199,7 @@ function publicUser(u: {
   email: string;
   role: Role;
   mustChangePassword?: boolean;
+  photoKey?: string | null;
 }): PublicUser {
   return {
     id: u.id,
@@ -185,5 +207,6 @@ function publicUser(u: {
     email: u.email,
     role: u.role,
     mustChangePassword: u.mustChangePassword ?? false,
+    hasPhoto: !!u.photoKey,
   };
 }
