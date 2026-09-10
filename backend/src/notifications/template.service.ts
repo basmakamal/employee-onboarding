@@ -19,13 +19,29 @@ const DEFAULT_CTA: Record<Locale, string> = { ar: 'فتح الرابط', en: 'Op
 /** Admin-created templates live under this prefix; the catalogue never uses it for its own keys except the generic status message. */
 const CUSTOM_PREFIX = 'custom.';
 /** What a custom template can reference: whatever every trigger / reminder provides. */
-const CUSTOM_PLACEHOLDERS = ['name', 'employeeNo', 'department', 'jobTitle', 'status', 'formLink'];
+const CUSTOM_PLACEHOLDERS = [
+  'name',
+  'employeeNo',
+  'department',
+  'jobTitle',
+  'status',
+  'contractSalary',
+  'contractDuration',
+  'contractStartDate',
+  'contractEndDate',
+  'contractTerms',
+  'contractRef',
+  'formLink',
+  'contractLink',
+];
 
-/** The one placeholder that costs something to provide (a link is issued). */
-const FORM_LINK_TOKEN = /\{\{\s*formLink\s*\}\}/;
-
-function mentionsFormLink(row: Pick<EmailTemplate, 'subjectAr' | 'subjectEn' | 'bodyAr' | 'bodyEn'>): boolean {
-  return FORM_LINK_TOKEN.test([row.subjectAr, row.subjectEn, row.bodyAr, row.bodyEn].join('\n'));
+/** The placeholders that cost something to provide: each one issues a signed link. */
+function mentions(
+  row: Pick<EmailTemplate, 'subjectAr' | 'subjectEn' | 'bodyAr' | 'bodyEn'>,
+  placeholder: string,
+): boolean {
+  const token = new RegExp(`\\{\\{\\s*${placeholder}\\s*\\}\\}`);
+  return token.test([row.subjectAr, row.subjectEn, row.bodyAr, row.bodyEn].join('\n'));
 }
 
 export interface TemplateDraft {
@@ -112,18 +128,29 @@ export class TemplateService {
       nameAr: row.name,
       nameEn: row.name,
       placeholders: CUSTOM_PLACEHOLDERS,
-      // A template that carries the form link gets the button (and its label fields).
-      hasCta: mentionsFormLink(row),
+      // A template that carries a signed link gets the button (and its label fields).
+      hasCta: mentions(row, 'formLink') || mentions(row, 'contractLink'),
     };
   }
 
   /**
-   * Does this admin-created template use {{formLink}}? The trigger asks before
-   * issuing a link, because issuing one invalidates the previous form link.
+   * Does this admin-created template use {{formLink}} / {{contractLink}}? The
+   * trigger asks before issuing, because issuing one link invalidates the
+   * previous link of that purpose.
    */
   async usesFormLink(key: string): Promise<boolean> {
     const row = (await this.rows()).get(key);
-    return !!row && this.isCustom(key, row) && mentionsFormLink(row);
+    return !!row && this.isCustom(key, row) && mentions(row, 'formLink');
+  }
+
+  /**
+   * Built-ins declare the link in the catalogue; admin-created ones ask for it
+   * by writing the token, so both paths are checked.
+   */
+  async usesContractLink(key: string): Promise<boolean> {
+    if (TEMPLATE_CATALOG[key]?.placeholders.includes('contractLink')) return true;
+    const row = (await this.rows()).get(key);
+    return !!row && this.isCustom(key, row) && mentions(row, 'contractLink');
   }
 
   /** Catalogue meta or, for an admin-created template, meta derived from its row. */
@@ -157,6 +184,13 @@ export class TemplateService {
       expiryDate: s('expiryDate'),
       linkUrl: `${this.appUrl}/form/preview-only`,
       formLink: `${this.appUrl}/form/preview-only`,
+      contractLink: `${this.appUrl}/contract/preview-only`,
+      contractSalary: s('contractSalary'),
+      contractDuration: s('contractDuration'),
+      contractStartDate: s('contractStartDate'),
+      contractEndDate: s('contractEndDate'),
+      contractTerms: s('contractTerms'),
+      contractRef: s('contractRef'),
     };
   }
 
@@ -231,6 +265,12 @@ export class TemplateService {
       docType: '{{docType}}',
       docNumber: '{{docNumber}}',
       expiryDate: '{{expiryDate}}',
+      contractSalary: '{{contractSalary}}',
+      contractDuration: '{{contractDuration}}',
+      contractStartDate: '{{contractStartDate}}',
+      contractEndDate: '{{contractEndDate}}',
+      contractTerms: '{{contractTerms}}',
+      contractRef: '{{contractRef}}',
       // Numeric fields drive conditionals in code templates; give them values.
       // linkUrl is left out on purpose: the editor adds the button itself.
       daysWaiting: 3,

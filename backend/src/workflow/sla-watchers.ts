@@ -9,13 +9,23 @@ import type { GosiRepository } from '../modules/processes/gosi.repository.js';
 import type { MedicalInsuranceRepository } from '../modules/processes/medical-insurance.repository.js';
 import type { EmployeeDocumentRepository } from '../modules/employees/employee-document.repository.js';
 import { localeOf } from '../notifications/locale.js';
+import { contractParams } from '../notifications/contract-params.js';
 
 /**
- * Emails the new hire themselves can act on. Contract approval happens on
- * an external platform, so there is no link to chase — only the data form.
+ * Emails the new hire themselves receives. The contract is approved on an
+ * external platform, so that message is informational: it carries the terms
+ * HR recorded and a link to the contract page.
  */
 const ONBOARDING_SUBJECT_TEMPLATES: Record<string, string> = {
   AWAITING_FORM: 'employee.form_reminder',
+};
+
+/** Which signed link (if any) the subject's email for a status needs. */
+const LINK_FOR_STATUS: Record<string, 'DATA_FORM' | 'CONTRACT_APPROVAL'> = {
+  AWAITING_FORM: 'DATA_FORM',
+  FORM_RECEIVED: 'DATA_FORM',
+  CONTRACT_CREATION: 'CONTRACT_APPROVAL',
+  AWAITING_CONTRACT_APPROVAL: 'CONTRACT_APPROVAL',
 };
 
 /** The onboarding pipeline — subject emails and EXPIRE support. */
@@ -23,6 +33,13 @@ export function onboardingWatcher(
   employees: EmployeeRepository,
   workflow: Workflow<Employee>,
   contracts?: ContractRepository,
+  /** Issues the link the reminder carries; without it the mail is text only. */
+  links?: {
+    issue(
+      purpose: 'DATA_FORM' | 'CONTRACT_APPROVAL',
+      anchors: { employeeId: string },
+    ): Promise<{ url: string }>;
+  },
 ): SlaWatcher {
   return {
     processKey: 'EMPLOYEE',
@@ -38,6 +55,30 @@ export function onboardingWatcher(
       }));
     },
     subjectTemplate: (status) => ONBOARDING_SUBJECT_TEMPLATES[status],
+    /**
+     * The terms HR recorded, plus a working link. Each reminder issues a new
+     * token (only its hash is stored, so an existing link cannot be rebuilt),
+     * which means the newest email is the one that opens.
+     */
+    async subjectParams(record, status) {
+      const extra: Record<string, string | number> = {};
+      const employeeId = record.employeeId ?? record.id;
+
+      if (contracts) {
+        const contract = await contracts.findByEmployee(employeeId);
+        for (const [key, value] of Object.entries(contractParams(contract))) {
+          if (value !== undefined) extra[key] = value as string | number;
+        }
+      }
+
+      const purpose = LINK_FOR_STATUS[status];
+      if (links && purpose) {
+        const { url } = await links.issue(purpose, { employeeId });
+        extra['linkUrl'] = url;
+        extra[purpose === 'DATA_FORM' ? 'formLink' : 'contractLink'] = url;
+      }
+      return extra;
+    },
     async expire(record, ruleId) {
       const employee = await employees.findById(record.id);
       if (!employee) return;

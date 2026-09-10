@@ -35,6 +35,8 @@ export interface EmailBlock {
   title: string;
   /** Paragraphs, already plain text; each becomes its own <p>. */
   paragraphs: string[];
+  /** Label/value rows shown as a small table (e.g. the contract terms). */
+  details?: Array<{ label: string; value: string }>;
   /** Optional call-to-action button. */
   cta?: { label: string; url: string };
   /** Small print under the button (e.g. link expiry). */
@@ -75,6 +77,23 @@ export function renderEmail(block: EmailBlock, locale: 'ar' | 'en'): string {
         `<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:${BRAND.ink};">${esc(p)}</p>`,
     )
     .join('');
+
+  // Terms and the like read far better as a table than as a run-on paragraph.
+  const details = block.details?.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+              style="margin:4px 0 18px;border-collapse:collapse;">
+         ${block.details
+           .map(
+             (row) => `<tr>
+               <td width="42%" style="padding:9px 12px;border:1px solid ${BRAND.line};background:${BRAND.page};
+                          font-size:13px;line-height:1.5;color:${BRAND.muted};">${esc(row.label)}</td>
+               <td style="padding:9px 12px;border:1px solid ${BRAND.line};
+                          font-size:14px;line-height:1.5;color:${BRAND.ink};font-weight:600;">${esc(row.value)}</td>
+             </tr>`,
+           )
+           .join('')}
+       </table>`
+    : '';
 
   // Bulletproof-ish button: a padded anchor. VML would be needed for perfect
   // Outlook rounded corners; a square-ish 4px radius degrades acceptably.
@@ -150,6 +169,7 @@ export function renderEmail(block: EmailBlock, locale: 'ar' | 'en'): string {
               ${esc(block.title)}
             </h1>
             ${paragraphs}
+            ${details}
             ${cta}
             ${rawLink}
             ${note}

@@ -29,7 +29,7 @@ export class LinkTokenService {
   private path(purpose: LinkPurpose, token: string): string {
     const routes: Record<LinkPurpose, string> = {
       DATA_FORM: `/form/${token}`,
-      CONTRACT_APPROVAL: `/approve-contract/${token}`,
+      CONTRACT_APPROVAL: `/contract/${token}`,
       ASSET_APPROVAL: `/approve-assets/${token}`,
       EXIT_INTERVIEW: `/exit-interview/${token}`,
     };

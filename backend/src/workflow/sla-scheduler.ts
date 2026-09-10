@@ -43,6 +43,12 @@ export interface SlaWatcher {
   ): Promise<WatchedRecord[]>;
   /** Subject-facing template key per status (staff always get the generic one). */
   subjectTemplate?(status: string): string | undefined;
+  /**
+   * Extra placeholders for the subject's own email — the contract terms, and
+   * the signed link the message needs. Called once per reminder, so a link
+   * issued here is fresh in the mail that carries it.
+   */
+  subjectParams?(record: WatchedRecord, status: string): Promise<Record<string, string | number>>;
   /** Override the generic staff templates (stalled/escalation wording). */
   templates?: { stalled?: string; escalation?: string };
   /** EXPIRE support — transition through the machine (guarded + audited). */
@@ -176,10 +182,13 @@ export class SlaScheduler {
     // An admin-chosen template on the rule beats the watcher's built-in one.
     const subjectTemplate = rule.subjectTemplateKey ?? watcher.subjectTemplate?.(rule.status);
     if (rule.notifySubject && subjectTemplate && record.email) {
+      // A reminder with no link or details reads as an empty message; the
+      // watcher fills in whatever this status can offer.
+      const extra = (await watcher.subjectParams?.(record, rule.status)) ?? {};
       await this.deps.notifications.notifyExternal(
         record.email,
         subjectTemplate,
-        { name: record.name },
+        { name: record.name, ...extra },
         this.ref(rule, record),
         record.locale ?? 'ar',
       );

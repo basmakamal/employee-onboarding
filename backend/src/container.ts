@@ -183,7 +183,7 @@ export function buildContainer() {
       responsibility: responsibilityService,
     },
     [
-      onboardingWatcher(employees, onboardingWorkflow, contracts),
+      onboardingWatcher(employees, onboardingWorkflow, contracts, linkTokenService),
       offboardingWatcher(new OffboardingRepository(prisma)),
       processWatcher('GOSI', gosi),
       processWatcher('MEDICAL_INSURANCE', medical),

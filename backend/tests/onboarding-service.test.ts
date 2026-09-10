@@ -233,15 +233,54 @@ describe('OnboardingService signed-link surface', () => {
     ]);
   });
 
-  it('linkContext no longer serves contract-approval links', async () => {
-    const { service, links } = makeService();
+  it('linkContext serves the contract page: terms on file, document behind the same token', async () => {
+    const { service, links, repos } = makeService({
+      contract: {
+        id: 'c1',
+        status: 'PENDING_APPROVAL',
+        externalRef: 'C-2026-114',
+        storageKey: 'contracts/c1.pdf',
+        details: { salary: '9000', durationMonths: '12', startDate: '2026-10-01', terms: 'Full time' },
+      },
+    });
     (links.verify as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 'tok1',
       purpose: 'CONTRACT_APPROVAL',
       employee: PIPELINE_EMPLOYEE,
     });
 
-    await expect(service.linkContext('raw')).rejects.toThrow(/not found/);
+    const ctx = (await service.linkContext('raw')) as {
+      purpose: string;
+      contract: Record<string, unknown>;
+    };
+    expect(ctx.purpose).toBe('CONTRACT_APPROVAL');
+    expect(ctx.contract).toMatchObject({
+      salary: '9000',
+      durationMonths: '12',
+      startDate: '2026-10-01',
+      externalRef: 'C-2026-114',
+      hasDocument: true,
+    });
+    expect(repos.contracts.findByEmployee).toHaveBeenCalledWith('e1');
+  });
+
+  it('the contract link resolves the document, and refuses a link of another purpose', async () => {
+    const { service, links } = makeService({
+      contract: { id: 'c1', status: 'PENDING_APPROVAL', storageKey: 'contracts/c1.pdf', details: {} },
+    });
+    (links.verify as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'tok1',
+      purpose: 'CONTRACT_APPROVAL',
+      employee: PIPELINE_EMPLOYEE,
+    });
+    await expect(service.contractFileKeyByToken('raw')).resolves.toBe('contracts/c1.pdf');
+
+    (links.verify as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'tok2',
+      purpose: 'DATA_FORM',
+      employee: PIPELINE_EMPLOYEE,
+    });
+    await expect(service.contractFileKeyByToken('raw')).rejects.toThrow(/not found/);
   });
 
   it('submitForm attaches known uploads, skips unknown field names', async () => {
