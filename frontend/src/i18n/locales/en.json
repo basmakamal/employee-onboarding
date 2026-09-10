@@ -405,7 +405,7 @@
     "info": "Your information",
     "formTitle": "Employee Information Form",
     "formTitleAlt": "نموذج استكمال بيانات الموظف",
-    "allRequired": "All fields are required (*). The form takes only a few minutes.",
+    "allRequired": "All fields are required and the form takes only a few minutes.",
     "secPersonal": "Personal Information",
     "secQualifications": "Qualifications",
     "secBank": "Bank Details",
@@ -414,7 +414,10 @@
     "secAttachments": "Attachments",
     "projectPending": "To be confirmed by HR",
     "fixErrors": "Please correct the highlighted fields before submitting.",
-    "remaining": "{n} item(s) still need attention"
+    "remaining": "{n} item(s) still need attention",
+    "requiredLegend": "marks a required field.",
+    "choose": "Choose…",
+    "chooseFile": "Choose a file…"
   },
   "approval": {
     "title": "Your employment contract",
@@ -758,7 +761,9 @@
     "phone": "e.g. 0551234567",
     "spl": "e.g. RRRD2929",
     "iban": "e.g. SA0380000000608010167519",
-    "project": "Set by HR — contact them if this looks wrong"
+    "project": "Set by HR — contact them if this looks wrong",
+    "splFormat": "National short address: 4 letters then 4 digits.",
+    "ibanFormat": "Saudi IBAN: SA followed by 22 digits."
   },
   "enums": {
     "gender": {
