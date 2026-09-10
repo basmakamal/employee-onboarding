@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { api, ApiError } from '../api/client';
 import StatusChip from '../components/StatusChip.vue';
 import { useAuthStore } from '../stores/auth';
@@ -26,15 +26,24 @@ interface EmployeePage {
 
 const { t } = useI18n();
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
 const employees = ref<EmployeeRow[]>([]);
 const total = ref(0);
 const counts = ref<EmployeePage['counts']>({ all: 0, onboarding: 0, active: 0, inactive: 0 });
 const loading = ref(true);
-const dialog = ref(false);
+// Deep links from the dashboard and the command palette: ?new=1 opens the
+// create dialog, ?filter= picks a lifecycle tab, ?status= narrows to one status.
+const FILTERS = ['all', 'onboarding', 'active', 'inactive'] as const;
+type Filter = (typeof FILTERS)[number];
+const initialFilter = route.query['filter'] as string | undefined;
+const dialog = ref(route.query['new'] === '1');
 const saving = ref(false);
 const error = ref('');
-const filter = ref<'all' | 'onboarding' | 'active' | 'inactive'>('all');
+const filter = ref<Filter>(
+  FILTERS.includes(initialFilter as Filter) ? (initialFilter as Filter) : 'all',
+);
+const statusFilter = ref<string>((route.query['status'] as string | undefined) ?? '');
 const search = ref('');
 
 // v-data-table-server drives these; the server does the actual work.
@@ -80,6 +89,7 @@ async function load() {
       limit: String(itemsPerPage.value),
     });
     if (search.value.trim()) params.set('q', search.value.trim());
+    if (statusFilter.value) params.set('status', statusFilter.value);
     const sort = sortBy.value[0];
     if (sort && SORT_KEYS[sort.key]) {
       params.set('sortBy', SORT_KEYS[sort.key] as string);
@@ -110,6 +120,8 @@ function onTableOptions(options: {
 // the server sees one query per pause, not one per keystroke.
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(filter, () => {
+  // Choosing a lifecycle tab replaces any single-status deep link.
+  statusFilter.value = '';
   page.value = 1;
   void load();
 });
