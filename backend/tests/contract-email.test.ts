@@ -110,3 +110,18 @@ describe('a trigger on the contract status', () => {
     );
   });
 });
+
+describe('an admin-authored body', () => {
+  it('keeps the line breaks of a typed list of terms', () => {
+    const prisma = { emailTemplate: { findMany: vi.fn().mockResolvedValue([]) } };
+    const svc = new TemplateService(prisma as unknown as PrismaClient, 'https://hr.example');
+    const body = 'Hello {{name}},\n\nSalary: {{contractSalary}}\nDuration: {{contractDuration}}';
+    const out = svc.renderDraft(
+      { name: 'n', subjectAr: 's', subjectEn: 's', bodyAr: body, bodyEn: body },
+      'en',
+      { name: 'Sara', contractSalary: '9000', contractDuration: '12' },
+    );
+    expect(out.html).toContain('Salary: 9000<br>Duration: 12');
+    expect(out.text).toContain('Salary: 9000\nDuration: 12');
+  });
+});

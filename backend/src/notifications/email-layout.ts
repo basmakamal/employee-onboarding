@@ -71,10 +71,14 @@ export function renderEmail(block: EmailBlock, locale: 'ar' | 'en'): string {
   const align = rtl ? 'right' : 'left';
   const font = rtl ? FONT_AR : FONT_EN;
 
+  // Escaped first, then single newlines become <br>: an admin who types a list
+  // of contract terms in the template editor gets those lines back, not one
+  // run-on sentence. Blank lines still separate paragraphs.
   const paragraphs = block.paragraphs
     .map(
       (p) =>
-        `<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:${BRAND.ink};">${esc(p)}</p>`,
+        `<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:${BRAND.ink};">` +
+        `${esc(p).replace(/\n/g, '<br>')}</p>`,
     )
     .join('');
 
