@@ -116,7 +116,7 @@ export class OffboardingService {
         action: 'CREATE',
         toStatus: row.status,
         actorType: actor.type,
-        ...(actor.id ? { actorId: actor.id } : {}),
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId,
         metadata: { reason },
       });
@@ -206,7 +206,7 @@ export class OffboardingService {
         entityId: offboardingId,
         action: 'ASSET_RETURNED',
         actorType: actor.type,
-        ...(actor.id ? { actorId: actor.id } : {}),
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId: offboarding.employeeId,
         metadata: { itemId, type: item.type, name: item.name },
       });
@@ -277,7 +277,7 @@ export class OffboardingService {
         entityId: id,
         action: 'SETTLEMENT_RECORDED',
         actorType: actor.type,
-        ...(actor.id ? { actorId: actor.id } : {}),
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId: offboarding.employeeId,
         metadata: amounts,
       });

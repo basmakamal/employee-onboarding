@@ -113,7 +113,7 @@ export class AssetService {
         action: 'CREATE',
         toStatus: form.status,
         actorType: actor.type,
-        ...(actor.id ? { actorId: actor.id } : {}),
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId: input.employeeId,
       });
       return form;
@@ -154,7 +154,7 @@ export class AssetService {
       entityId: formId,
       action: 'LINK_SENT',
       actorType: actor.type,
-      ...(actor.id ? { actorId: actor.id } : {}),
+      ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
       employeeId: form.employeeId,
       metadata: { purpose: 'ASSET_APPROVAL' },
     });
