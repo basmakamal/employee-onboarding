@@ -103,6 +103,28 @@ export class NotificationService {
     await this.fanOut(staff, templateKey, params, ref, locale);
   }
 
+  /**
+   * The role group that owns the current status ALWAYS gets the message;
+   * the named primary owners get it in addition. One message per person
+   * even when an owner is also in the group.
+   */
+  async notifyRoleAndUsers(
+    role: string,
+    userIds: string[],
+    templateKey: string,
+    params: TemplateParams,
+    ref?: EntityRef,
+    locale: Locale = 'ar',
+  ): Promise<void> {
+    const [group, owners] = await Promise.all([
+      this.users.listActiveByRole(role as never),
+      this.users.listActiveByIds(userIds),
+    ]);
+    const seen = new Set<string>();
+    const staff = [...group, ...owners].filter((u) => !seen.has(u.id) && seen.add(u.id));
+    await this.fanOut(staff, templateKey, params, ref, locale);
+  }
+
   /** Notify specific people (the named primary owners of a process). */
   async notifyUsers(
     userIds: string[],

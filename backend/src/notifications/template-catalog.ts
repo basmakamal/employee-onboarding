@@ -24,6 +24,8 @@ export const PLACEHOLDERS: Record<string, PlaceholderMeta> = {
   docNumber: { ar: 'رقم المستند', en: 'Document number', sample: { ar: '2382910044', en: '2382910044' } },
   expiryDate: { ar: 'تاريخ الانتهاء', en: 'Expiry date', sample: { ar: '2026-08-25', en: '2026-08-25' } },
   linkUrl: { ar: 'رابط الإجراء', en: 'Action link', sample: { ar: 'https://…/form/…', en: 'https://…/form/…' } },
+  email: { ar: 'البريد الإلكتروني', en: 'Email', sample: { ar: 'nora@riyada-ksa.com', en: 'nora@riyada-ksa.com' } },
+  tempPassword: { ar: 'كلمة المرور المؤقتة', en: 'Temporary password', sample: { ar: 'Kq7mXp29TzRw', en: 'Kq7mXp29TzRw' } },
 };
 
 export interface TemplateMeta {
@@ -82,6 +84,10 @@ export const TEMPLATE_CATALOG: Record<string, TemplateMeta> = {
   'staff.document_expiry_escalation': {
     audience: 'staff', nameAr: 'تصعيد: انتهاء مستند', nameEn: 'Escalation: document expiry',
     placeholders: [...EMP, 'docType', 'expiryDate'], hasCta: false,
+  },
+  'staff.invitation': {
+    audience: 'staff', nameAr: 'دعوة مستخدم جديد', nameEn: 'Staff invitation',
+    placeholders: ['name', 'email', 'tempPassword', 'linkUrl'], hasCta: true,
   },
   'hr.contract_approved': {
     audience: 'staff', nameAr: 'تم اعتماد العقد', nameEn: 'Contract approved',

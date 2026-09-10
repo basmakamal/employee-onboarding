@@ -7,6 +7,11 @@ export const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: HomePage },
     { path: '/login', name: 'login', component: () => import('../pages/LoginPage.vue'), meta: { public: true } },
+    {
+      path: '/change-password',
+      name: 'change-password',
+      component: () => import('../pages/ChangePasswordPage.vue'),
+    },
     // The trainee pipeline lives inside the employee lifecycle now.
     { path: '/trainees', redirect: '/employees' },
     { path: '/trainees/:id', redirect: (to) => `/employees/${to.params['id'] as string}` },
@@ -110,6 +115,12 @@ router.beforeEach(async (to) => {
   if (!auth.isAuthenticated) await auth.restore();
   if (!auth.isAuthenticated) {
     return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} };
+  }
+
+  // A temporary (invitation / reset) password must be replaced before
+  // anything else — every other page bounces here until it is.
+  if (auth.user?.mustChangePassword && to.name !== 'change-password') {
+    return { name: 'change-password' };
   }
 
   const roles = to.meta['roles'] as string[] | undefined;

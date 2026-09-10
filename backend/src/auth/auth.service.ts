@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { Role } from '../generated/prisma/enums.js';
@@ -9,6 +9,10 @@ import { UnauthorizedError } from '../workflow/errors.js';
 const ACCESS_TTL = '15m';
 const REFRESH_TTL_SECONDS = 7 * 24 * 3600;
 const BCRYPT_ROUNDS = 10;
+
+/** Temporary passwords: readable over the phone — no 0/O, 1/l/I look-alikes. */
+const TEMP_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+const TEMP_LENGTH = 12;
 
 export interface TokenPayload {
   sub: string;
@@ -24,6 +28,8 @@ export interface PublicUser {
   name: string;
   email: string;
   role: Role;
+  /** True while the account still runs on a temporary (invitation / reset) password. */
+  mustChangePassword: boolean;
 }
 
 export interface LoginResult {
@@ -48,6 +54,15 @@ export class AuthService {
     return bcrypt.hash(plain, BCRYPT_ROUNDS);
   }
 
+  /** A fresh temporary password for an invitation or an admin reset. */
+  static generateTempPassword(): string {
+    let out = '';
+    for (let i = 0; i < TEMP_LENGTH; i += 1) {
+      out += TEMP_ALPHABET[randomInt(TEMP_ALPHABET.length)];
+    }
+    return out;
+  }
+
   async login(email: string, password: string): Promise<LoginResult> {
     const user = await this.users.findByEmail(email.toLowerCase());
     // Same error for every failure mode — no user-enumeration oracle.
@@ -57,11 +72,38 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedError('invalid email or password');
 
+    // Best-effort stamp; a failure here must never block a valid sign-in.
+    try {
+      await this.users.update(user.id, { lastLoginAt: new Date() });
+    } catch {
+      /* ignore */
+    }
+
     return {
       user: publicUser(user),
       accessToken: this.sign(user.id, user.role, 'access'),
       refreshToken: await this.issueRefresh(user.id, user.role),
     };
+  }
+
+  /**
+   * The signed-in person sets their own password. Clears the "must change"
+   * flag, which is what ends the invitation phase and disables "resend".
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<PublicUser> {
+    const user = await this.users.findById(userId);
+    if (!user || !user.active || !user.passwordHash) {
+      throw new UnauthorizedError('account unavailable');
+    }
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedError('current password is incorrect');
+
+    const updated = await this.users.update(userId, {
+      passwordHash: await AuthService.hashPassword(newPassword),
+      mustChangePassword: false,
+      passwordChangedAt: new Date(),
+    });
+    return publicUser(updated);
   }
 
   /** Rotate: a valid refresh token yields a fresh access+refresh pair. */
@@ -130,6 +172,18 @@ export class AuthService {
   }
 }
 
-function publicUser(u: { id: string; name: string; email: string; role: Role }): PublicUser {
-  return { id: u.id, name: u.name, email: u.email, role: u.role };
+function publicUser(u: {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  mustChangePassword?: boolean;
+}): PublicUser {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    mustChangePassword: u.mustChangePassword ?? false,
+  };
 }

@@ -30,7 +30,21 @@
     "editTitle": "Edit teammate",
     "activeHint": "Can sign in and work as normal.",
     "inactiveHint": "Sign-in is blocked. Their records stay untouched.",
-    "selfHint": "You cannot deactivate or demote your own account — ask another administrator."
+    "selfHint": "You cannot deactivate or demote your own account — ask another administrator.",
+    "sendInvitation": "Send invitation email",
+    "sendInvitationHint": "They receive the sign-in link and a temporary password, and must choose their own password the first time they sign in.",
+    "tempPassword": "Temporary password",
+    "tempPasswordOptional": "Leave empty to generate one automatically.",
+    "invitedChip": "Invited · not signed in yet",
+    "resetChip": "Must change password",
+    "resendInvitation": "Resend invitation",
+    "invitationSent": "Invitation sent to {email}.",
+    "resendConfirm": "Send a new invitation to {name}? The previous temporary password stops working.",
+    "tempPasswordTitle": "Temporary password",
+    "tempPasswordShown": "No invitation was sent, so this is the only time the password is shown. Pass it on to {name} yourself.",
+    "lastLogin": "Last sign-in: {when}",
+    "neverSignedIn": "Never signed in",
+    "invitedOn": "Invited {when}"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -606,7 +620,7 @@
     "department": "Department",
     "jobTitle": "Job title",
     "status": "Status",
-    "comboHint": "Pick from the list or type a new value",
+    "comboHint": "Pick from the list, or type a new value and press Tab to add it",
     "fatherName": "Father's Name",
     "grandfatherName": "Grandfather's Name",
     "gender": "Gender",
@@ -827,11 +841,25 @@
   },
   "responsibility": {
     "title": "Primary follow-up owners",
-    "subtitle": "The people who receive the reminders for each process. This never limits who may act — any authorised teammate can complete a step.",
+    "subtitle": "People who receive the reminders for each process, in addition to the role group of the current status. This never limits who may act.",
     "process": "Process",
     "owners": "Responsible people",
-    "none": "Whole group (default)",
-    "hint": "Leave empty to notify the whole role group. Escalations always go to the escalation group.",
+    "none": "Role group only (default)",
+    "hint": "The owning role group always receives the reminder; the people named here receive it as well. Escalations go to the escalation group.",
     "EMPLOYEE": "Onboarding & contract follow-up"
+  },
+  "changePassword": {
+    "title": "Set your password",
+    "subtitle": "Choose a new password for your account.",
+    "forcedHint": "One quick step before you start.",
+    "forcedBanner": "Welcome, {name}. You signed in with a temporary password — please choose your own to continue.",
+    "current": "Current (temporary) password",
+    "new": "New password",
+    "confirm": "Confirm new password",
+    "mismatch": "The two passwords do not match.",
+    "sameAsCurrent": "Choose a password different from the current one.",
+    "wrongCurrent": "The current password is not correct.",
+    "save": "Save and continue",
+    "menu": "Change password"
   }
 }

@@ -331,9 +331,11 @@ export class EmployeeRepository {
   }
 
   /** Distinct departments / job titles in use — feeds the form comboboxes. */
-  async fieldOptions(): Promise<{ departments: string[]; jobTitles: string[] }> {
+  async fieldOptions(): Promise<{ departments: string[]; jobTitles: string[]; projects: string[] }> {
     // GROUP BY runs the dedup in the database instead of loading every row.
-    const [departments, jobTitles] = await Promise.all([
+    // Every value ever saved is offered again, so a new department typed once
+    // becomes a dropdown choice for everyone from then on.
+    const [departments, jobTitles, projects] = await Promise.all([
       this.db.employee.groupBy({
         by: ['department'],
         where: { department: { not: null } },
@@ -341,6 +343,10 @@ export class EmployeeRepository {
       this.db.employee.groupBy({
         by: ['jobTitle'],
         where: { jobTitle: { not: null } },
+      }),
+      this.db.employee.groupBy({
+        by: ['project'],
+        where: { project: { not: null } },
       }),
     ]);
     const clean = (values: Array<string | null>) =>
@@ -350,6 +356,7 @@ export class EmployeeRepository {
     return {
       departments: clean(departments.map((d) => d.department)),
       jobTitles: clean(jobTitles.map((j) => j.jobTitle)),
+      projects: clean(projects.map((p) => p.project)),
     };
   }
 

@@ -11,6 +11,11 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(200),
+});
+
 const REFRESH_COOKIE = 'refresh_token';
 
 function setRefreshCookie(res: Response, token: string) {
@@ -24,7 +29,7 @@ function setRefreshCookie(res: Response, token: string) {
 }
 
 /**
- * /api/auth — login, silent refresh, logout, me.
+ * /api/auth — login, silent refresh, logout, me, change-password.
  * Access token: short-lived, returned in the body, held in SPA memory.
  * Refresh token: httpOnly cookie scoped to /api/auth, rotated on use.
  */
@@ -68,6 +73,18 @@ export function authRouter(auth: AuthService): Router {
     requireAuth(auth),
     asyncHandler(async (req, res) => {
       res.json({ actor: req.actor });
+    }),
+  );
+
+  /** The signed-in person replaces a temporary (or old) password with their own. */
+  router.post(
+    '/change-password',
+    requireAuth(auth),
+    validate(changePasswordSchema),
+    asyncHandler(async (req, res) => {
+      const { currentPassword, newPassword } = req.body as z.infer<typeof changePasswordSchema>;
+      const user = await auth.changePassword(req.actor?.id ?? '', currentPassword, newPassword);
+      res.json({ user });
     }),
   );
 

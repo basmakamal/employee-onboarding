@@ -65,11 +65,9 @@ const form = ref({
 });
 const sendFormNow = ref(true);
 
-/** Known departments / job titles — new typed values join the list on save. */
-const options = ref<{ departments: string[]; jobTitles: string[] }>({
-  departments: [],
-  jobTitles: [],
-});
+/** Known departments / projects / job titles — a value typed once joins the list for everyone. */
+type FieldOptions = { departments: string[]; jobTitles: string[]; projects: string[] };
+const options = ref<FieldOptions>({ departments: [], jobTitles: [], projects: [] });
 
 /** Fetch the current page from the server — search/filter/sort included. */
 async function load() {
@@ -123,7 +121,7 @@ watch(search, () => {
 });
 
 async function loadOptions() {
-  options.value = await api.get<{ departments: string[]; jobTitles: string[] }>(
+  options.value = await api.get<FieldOptions>(
     '/api/employees/options',
   );
 }
@@ -328,9 +326,19 @@ onMounted(loadOptions);
                 :label="$t('fields.department')"
                 :hint="$t('fields.comboHint')"
                 persistent-hint
+                clearable
               />
             </v-col>
-            <v-col cols="6"><v-text-field v-model="form.project" :label="$t('employees.project')" /></v-col>
+            <v-col cols="6">
+              <v-combobox
+                v-model="form.project"
+                :items="options.projects"
+                :label="$t('employees.project')"
+                :hint="$t('fields.comboHint')"
+                persistent-hint
+                clearable
+              />
+            </v-col>
             <v-col cols="6">
               <v-combobox
                 v-model="form.jobTitle"
@@ -338,6 +346,7 @@ onMounted(loadOptions);
                 :label="$t('fields.jobTitle')"
                 :hint="$t('fields.comboHint')"
                 persistent-hint
+                clearable
               />
             </v-col>
             <v-col v-if="form.mode === 'direct'" cols="6">
