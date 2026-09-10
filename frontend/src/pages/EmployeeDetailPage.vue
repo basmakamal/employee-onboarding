@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { api, ApiError, getAccessToken } from '../api/client';
+import { useConfirm } from '../composables/useConfirm';
 import ProcessCard from '../components/ProcessCard.vue';
 import StatusChip from '../components/StatusChip.vue';
 import { useAuthStore } from '../stores/auth';
@@ -162,6 +163,7 @@ const ASSET_STATUS_COLORS: Record<string, string> = {
 };
 
 const { t, locale } = useI18n();
+const confirm = useConfirm();
 const route = useRoute();
 const auth = useAuthStore();
 const id = route.params['id'] as string;
@@ -489,10 +491,10 @@ const PIPELINE_STAGES = [
 // Contract actions are NOT here on purpose: they live on the contract card
 // as a status change (the contract is approved on an external platform).
 const ONBOARDING_ACTIONS: Record<string, { endpoint: string; icon: string; color: string }> = {
-  SEND_FORM: { endpoint: 'send-form', icon: 'mdi-send', color: 'primary' },
-  REQUEST_MISSING: { endpoint: 'request-missing', icon: 'mdi-file-alert', color: 'warning' },
-  ACCEPT_DOCUMENTS: { endpoint: 'accept-documents', icon: 'mdi-file-check', color: 'success' },
-  REOPEN: { endpoint: 'reopen', icon: 'mdi-restore', color: 'secondary' },
+  SEND_FORM: { endpoint: 'send-form', icon: 'send', color: 'primary' },
+  REQUEST_MISSING: { endpoint: 'request-missing', icon: 'file-warning', color: 'warning' },
+  ACCEPT_DOCUMENTS: { endpoint: 'accept-documents', icon: 'file-check', color: 'success' },
+  REOPEN: { endpoint: 'reopen', icon: 'rotate-ccw', color: 'secondary' },
 };
 
 const isWithdrawn = computed(() => employee.value?.status === 'WITHDRAWN');
@@ -510,16 +512,16 @@ const contractStatusOptions = computed(() => {
   const acts = employee.value?.availableActions ?? [];
   const options: Array<{ status: ContractStatus; label: string; hint: string; icon: string; color: string }> = [];
   if (acts.includes('SUBMIT_CONTRACT')) {
-    options.push({ status: 'PENDING_APPROVAL', label: t('contract.submit'), hint: t('contract.submitHint'), icon: 'mdi-send-check-outline', color: 'primary' });
+    options.push({ status: 'PENDING_APPROVAL', label: t('contract.submit'), hint: t('contract.submitHint'), icon: 'send', color: 'primary' });
   }
   if (acts.includes('APPROVE_CONTRACT')) {
-    options.push({ status: 'ACTIVE', label: t('contract.approve'), hint: t('contract.approveHint'), icon: 'mdi-check-decagram', color: 'success' });
+    options.push({ status: 'ACTIVE', label: t('contract.approve'), hint: t('contract.approveHint'), icon: 'badge-check', color: 'success' });
   }
   if (acts.includes('REJECT_CONTRACT')) {
-    options.push({ status: 'REJECTED', label: t('contract.reject'), hint: t('contract.rejectHint'), icon: 'mdi-close-octagon-outline', color: 'error' });
+    options.push({ status: 'REJECTED', label: t('contract.reject'), hint: t('contract.rejectHint'), icon: 'octagon-x', color: 'error' });
   }
   if (acts.includes('EXPIRE')) {
-    options.push({ status: 'EXPIRED', label: t('contract.expire'), hint: t('contract.expireHint'), icon: 'mdi-timer-off-outline', color: 'warning' });
+    options.push({ status: 'EXPIRED', label: t('contract.expire'), hint: t('contract.expireHint'), icon: 'timer-off', color: 'warning' });
   }
   return options;
 });
@@ -527,15 +529,15 @@ const contractStatusOptions = computed(() => {
 const rejectDialog = ref(false);
 const rejectReason = ref('');
 
-function onContractStatus(status: ContractStatus) {
+async function onContractStatus(status: ContractStatus) {
   const name = `${employee.value?.firstName ?? ''} ${employee.value?.lastName ?? ''}`.trim();
   if (status === 'REJECTED') {
     rejectReason.value = '';
     rejectDialog.value = true;
     return;
   }
-  if (status === 'ACTIVE' && !window.confirm(t('contract.approveConfirm', { name }))) return;
-  if (status === 'EXPIRED' && !window.confirm(t('contract.expireConfirm'))) return;
+  if (status === 'ACTIVE' && !(await confirm({ title: t('contract.approve'), message: t('contract.approveConfirm', { name }), color: 'success', confirmText: t('contract.approve') }))) return;
+  if (status === 'EXPIRED' && !(await confirm({ title: t('contract.expire'), message: t('contract.expireConfirm'), color: 'warning', confirmText: t('contract.expire') }))) return;
   void setContractStatus(status);
 }
 
@@ -742,14 +744,14 @@ async function saveContract() {
 
 // ------------------------------------------------------------- requests & services
 const REQUEST_TYPES = [
-  { type: 'SALARY_LETTER', icon: 'mdi-file-account-outline' },
-  { type: 'BANK_LETTER', icon: 'mdi-bank-outline' },
-  { type: 'DEPARTMENT_CHANGE', icon: 'mdi-sitemap-outline' },
-  { type: 'JOB_TITLE_CHANGE', icon: 'mdi-account-convert' },
-  { type: 'PROMOTION', icon: 'mdi-arrow-up-bold-circle-outline' },
-  { type: 'PROJECT_TRANSFER', icon: 'mdi-swap-horizontal' },
-  { type: 'WARNING', icon: 'mdi-alert-outline' },
-  { type: 'INVESTIGATION', icon: 'mdi-magnify' },
+  { type: 'SALARY_LETTER', icon: 'file-user' },
+  { type: 'BANK_LETTER', icon: 'landmark' },
+  { type: 'DEPARTMENT_CHANGE', icon: 'network' },
+  { type: 'JOB_TITLE_CHANGE', icon: 'user-check' },
+  { type: 'PROMOTION', icon: 'circle-arrow-up' },
+  { type: 'PROJECT_TRANSFER', icon: 'arrow-left-right' },
+  { type: 'WARNING', icon: 'triangle-alert' },
+  { type: 'INVESTIGATION', icon: 'search' },
 ];
 
 /** type → icon lookup for the recent-requests log and dialogs. */
@@ -759,12 +761,12 @@ const REQUEST_ICON: Record<string, string> = Object.fromEntries(
 
 /** Expiry-tracked document types get a recognizable icon each. */
 const DOC_ICON: Record<string, string> = {
-  IQAMA: 'mdi-card-account-details-outline',
-  NATIONAL_ID: 'mdi-card-account-details',
-  PASSPORT: 'mdi-passport',
-  CONTRACT: 'mdi-file-sign',
-  WORK_PERMIT: 'mdi-briefcase-check-outline',
-  DRIVING_LICENSE: 'mdi-car-outline',
+  IQAMA: 'id-card',
+  NATIONAL_ID: 'id-card',
+  PASSPORT: 'book-user',
+  CONTRACT: 'file-signature',
+  WORK_PERMIT: 'briefcase',
+  DRIVING_LICENSE: 'car',
 };
 
 const requestDialog = ref({ show: false, type: 'SALARY_LETTER', notes: '' });
@@ -1001,7 +1003,7 @@ onMounted(load);
   <v-container v-if="employee" class="py-8" style="max-width: 1200px">
     <!-- Header -->
     <div class="d-flex align-center mb-4" style="gap: 8px">
-      <v-btn icon="mdi-arrow-left" variant="text" to="/employees" class="flip-rtl" />
+      <v-btn icon="arrow-left" variant="text" to="/employees" class="flip-rtl" />
       <span class="text-medium-emphasis text-body-2">
         {{ $t('employees.title') }} / {{ employee.firstName }} {{ employee.lastName }}
       </span>
@@ -1019,7 +1021,7 @@ onMounted(load);
             </v-avatar>
             <v-btn
               v-if="auth.hasRole('HR')"
-              icon="mdi-camera"
+              icon="camera"
               size="x-small"
               color="primary"
               class="photo-edit-btn"
@@ -1059,10 +1061,10 @@ onMounted(load);
             <v-icon
               :icon="
                 employee.status === 'ACTIVE'
-                  ? 'mdi-check-circle-outline'
+                  ? 'circle-check'
                   : employee.status === 'INACTIVE'
-                    ? 'mdi-pause-circle-outline'
-                    : 'mdi-progress-clock'
+                    ? 'circle-pause'
+                    : 'clock'
               "
               :color="
                 employee.status === 'ACTIVE'
@@ -1095,28 +1097,28 @@ onMounted(load);
         <v-row dense>
           <v-col
             v-for="field in [
-              { icon: 'mdi-pound', label: $t('employees.no'), value: employee.employeeNo },
-              { icon: 'mdi-sitemap-outline', label: $t('fields.department'), value: employee.department },
-              { icon: 'mdi-briefcase-outline', label: $t('employees.project'), value: employee.project },
-              { icon: 'mdi-card-account-details-outline', label: $t('fields.nationalId'), value: employee.nationalId },
+              { icon: 'hash', label: $t('employees.no'), value: employee.employeeNo },
+              { icon: 'network', label: $t('fields.department'), value: employee.department },
+              { icon: 'briefcase', label: $t('employees.project'), value: employee.project },
+              { icon: 'id-card', label: $t('fields.nationalId'), value: employee.nationalId },
               {
-                icon: 'mdi-cake-variant-outline',
+                icon: 'cake',
                 label: $t('fields.birthDate'),
                 value: employee.birthDate ? new Date(employee.birthDate).toLocaleDateString() : null,
               },
-              { icon: 'mdi-phone-outline', label: $t('fields.phone'), value: employee.phone },
-              { icon: 'mdi-email-outline', label: $t('fields.email'), value: employee.email },
+              { icon: 'phone', label: $t('fields.phone'), value: employee.phone },
+              { icon: 'mail', label: $t('fields.email'), value: employee.email },
               {
-                icon: 'mdi-calendar-check-outline',
+                icon: 'calendar-check',
                 label: $t('employees.hireDate'),
                 value: employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : null,
               },
               {
-                icon: 'mdi-briefcase-clock-outline',
+                icon: 'briefcase-business',
                 label: $t('profile.employmentType'),
                 value: $t(`profile.types.${employee.employmentType}`),
               },
-              { icon: 'mdi-account-tie-outline', label: $t('profile.directManager'), value: employee.directManager },
+              { icon: 'user-round', label: $t('profile.directManager'), value: employee.directManager },
             ]"
             :key="field.label"
             cols="6"
@@ -1151,7 +1153,7 @@ onMounted(load);
             v-if="isPipeline && employee.status === 'CONTRACT_CREATION' && auth.hasRole('HR')"
             color="indigo"
             variant="tonal"
-            prepend-icon="mdi-file-document-edit"
+            prepend-icon="file-pen-line"
             @click="openContractDialog"
           >
             {{ employee.contract ? $t('contract.edit') : $t('contract.createBtn') }}
@@ -1176,7 +1178,7 @@ onMounted(load);
             v-if="isPipeline && auth.hasRole('IT')"
             color="secondary"
             variant="tonal"
-            prepend-icon="mdi-laptop"
+            prepend-icon="laptop"
             @click="formDialog = true"
           >
             {{ $t('assets.newForm') }}
@@ -1184,32 +1186,32 @@ onMounted(load);
 
           <v-menu v-if="!isPipeline && !isClosed">
             <template #activator="{ props }">
-              <v-btn v-bind="props" color="primary" variant="tonal" prepend-icon="mdi-plus-circle-outline">
+              <v-btn v-bind="props" color="primary" variant="tonal" prepend-icon="circle-plus">
                 {{ $t('profile.newAction') }}
               </v-btn>
             </template>
             <v-list density="compact">
               <v-list-item
                 v-if="auth.hasRole('IT')"
-                prepend-icon="mdi-laptop"
+                prepend-icon="laptop"
                 :title="$t('assets.newForm')"
                 @click="formDialog = true"
               />
               <v-list-item
                 v-if="auth.hasRole('HR')"
-                prepend-icon="mdi-file-clock"
+                prepend-icon="file-clock"
                 :title="$t('expiryDocs.add')"
                 @click="openDocDialog()"
               />
               <v-list-item
                 v-if="auth.hasRole('HR')"
-                prepend-icon="mdi-hand-extended-outline"
+                prepend-icon="hand"
                 :title="$t('requests.new')"
                 @click="openRequest('SALARY_LETTER')"
               />
               <v-list-item
                 v-if="auth.hasRole('HR') && !openOffboarding && employee.status === 'ACTIVE'"
-                prepend-icon="mdi-exit-run"
+                prepend-icon="door-open"
                 :title="$t('offboarding.start')"
                 @click="offboardingDialog = true"
               />
@@ -1218,12 +1220,12 @@ onMounted(load);
           <v-btn
             v-if="auth.hasRole('HR')"
             variant="outlined"
-            prepend-icon="mdi-pencil"
+            prepend-icon="pencil"
             @click="openEdit"
           >
             {{ $t('profile.edit') }}
           </v-btn>
-          <v-btn variant="outlined" prepend-icon="mdi-printer-outline" @click="printProfile">
+          <v-btn variant="outlined" prepend-icon="printer" @click="printProfile">
             {{ $t('common.print') }}
           </v-btn>
           <v-spacer />
@@ -1231,7 +1233,7 @@ onMounted(load);
             v-if="!openOffboarding && employee.status === 'ACTIVE' && auth.hasRole('HR')"
             color="error"
             variant="outlined"
-            prepend-icon="mdi-logout-variant"
+            prepend-icon="log-out"
             @click="offboardingDialog = true"
           >
             {{ $t('profile.endContract') }}
@@ -1240,7 +1242,7 @@ onMounted(load);
             v-if="employee.availableActions.includes('WITHDRAW')"
             color="error"
             variant="outlined"
-            prepend-icon="mdi-account-off-outline"
+            prepend-icon="user-x"
             @click="withdrawReason = ''; withdrawDialog = true"
           >
             {{ $t('withdraw.button') }}
@@ -1253,7 +1255,7 @@ onMounted(load);
             <template #activator="{ props }">
               <v-btn
                 v-bind="props"
-                icon="mdi-delete-forever-outline"
+                icon="trash-2"
                 variant="text"
                 color="error"
                 @click="deleteDialog = true"
@@ -1288,10 +1290,10 @@ onMounted(load);
 
     <!-- Overview / Timeline tabs -->
     <v-tabs v-model="tab" color="primary" class="mb-4">
-      <v-tab value="overview" prepend-icon="mdi-view-dashboard-outline">
+      <v-tab value="overview" prepend-icon="layout-dashboard">
         {{ $t('profile.overview') }}
       </v-tab>
-      <v-tab value="timeline" prepend-icon="mdi-history">
+      <v-tab value="timeline" prepend-icon="history">
         {{ $t('profile.timelineTab') }}
       </v-tab>
     </v-tabs>
@@ -1302,7 +1304,7 @@ onMounted(load);
     <v-card v-if="isPipeline || isWithdrawn" class="mb-6">
       <v-card-item>
         <v-card-title class="text-subtitle-1 font-weight-bold">
-          <v-icon icon="mdi-school" class="me-2" color="primary" />
+          <v-icon icon="graduation-cap" class="me-2" color="primary" />
           {{ $t('onboarding.section') }}
         </v-card-title>
       </v-card-item>
@@ -1320,14 +1322,14 @@ onMounted(load);
               :variant="stage === employee.status ? 'flat' : 'tonal'"
               size="small"
               :prepend-icon="
-                PIPELINE_STAGES.indexOf(employee.status) > i ? 'mdi-check' : undefined
+                PIPELINE_STAGES.indexOf(employee.status) > i ? 'check' : undefined
               "
             >
               {{ $t(`status.${stage}`) }}
             </v-chip>
             <v-icon
               v-if="i < PIPELINE_STAGES.length - 1"
-              icon="mdi-chevron-right"
+              icon="chevron-right"
               size="16"
               class="text-medium-emphasis flip-rtl"
             />
@@ -1347,7 +1349,7 @@ onMounted(load);
           type="warning"
           variant="tonal"
           density="compact"
-          icon="mdi-account-off-outline"
+          icon="user-x"
           class="mt-2 mb-0"
         >
           {{ $t('withdraw.banner') }}
@@ -1362,7 +1364,7 @@ onMounted(load);
       <v-col cols="12" sm="6" md="3">
         <ProcessCard
           :title="$t('processes.gosi')"
-          icon="mdi-shield-account"
+          icon="shield-check"
           :process="employee.gosi"
           :actions="employee.processActions.gosi"
           :hold-reasons="GOSI_REASONS"
@@ -1375,7 +1377,7 @@ onMounted(load);
       <v-col cols="12" sm="6" md="3">
         <ProcessCard
           :title="$t('processes.medical')"
-          icon="mdi-hospital-box"
+          icon="cross"
           :process="employee.medical"
           :actions="employee.processActions.medical"
           :hold-reasons="MEDICAL_REASONS"
@@ -1388,7 +1390,7 @@ onMounted(load);
       <v-col cols="12" sm="6" md="3">
         <ProcessCard
           :title="$t('processes.criminal')"
-          icon="mdi-file-certificate"
+          icon="file-badge"
           :process="employee.criminalRecord"
           :actions="employee.processActions.criminal"
           :hold-reasons="[]"
@@ -1402,7 +1404,7 @@ onMounted(load);
       <v-col cols="12" sm="6" md="3">
         <v-card class="h-100">
           <v-card-text class="text-center py-5">
-            <v-icon icon="mdi-package-variant-closed" size="36" color="deep-purple" class="mb-2" />
+            <v-icon icon="package" size="36" color="deep-purple" class="mb-2" />
             <div class="text-subtitle-2 font-weight-bold mb-2">{{ $t('assets.title') }}</div>
             <v-chip
               v-if="custodySummary.latest"
@@ -1429,7 +1431,7 @@ onMounted(load);
         <v-card class="mb-4">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="mdi-file-sign" class="me-2" color="primary" />
+              <v-icon icon="file-signature" class="me-2" color="primary" />
               {{ $t('contractCard.title') }}
             </v-card-title>
             <template #append>
@@ -1515,7 +1517,7 @@ onMounted(load);
                 size="small"
                 variant="text"
                 color="primary"
-                :append-icon="showTerms ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+                :append-icon="showTerms ? 'chevron-up' : 'chevron-down'"
                 @click="showTerms = !showTerms"
               >
                 {{ $t('contractCard.view') }}
@@ -1531,7 +1533,7 @@ onMounted(load);
         <v-card v-if="!isPipeline" class="mb-4">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="mdi-card-account-details" class="me-2" color="primary" />
+              <v-icon icon="id-card" class="me-2" color="primary" />
               {{ $t('expiryDocs.title') }}
             </v-card-title>
             <template #append>
@@ -1539,7 +1541,7 @@ onMounted(load);
                 v-if="auth.hasRole('HR')"
                 color="primary"
                 size="small"
-                prepend-icon="mdi-plus"
+                prepend-icon="plus"
                 @click="openDocDialog()"
               >
                 {{ $t('expiryDocs.add') }}
@@ -1552,7 +1554,7 @@ onMounted(load);
           <v-list v-else density="compact">
             <v-list-item v-for="doc in expiryDocs" :key="doc.id">
               <template #prepend>
-                <v-icon :icon="DOC_ICON[doc.type] ?? 'mdi-file-clock'" :color="docColor(doc)" />
+                <v-icon :icon="DOC_ICON[doc.type] ?? 'file-clock'" :color="docColor(doc)" />
               </template>
               <v-list-item-title>
                 {{ $t(`expiryDocs.types.${doc.type}`, doc.type) }}
@@ -1571,14 +1573,14 @@ onMounted(load);
               <template #append>
                 <v-btn
                   v-if="auth.hasRole('HR')"
-                  icon="mdi-pencil"
+                  icon="pencil"
                   variant="text"
                   size="small"
                   @click="openDocDialog(doc)"
                 />
                 <v-btn
                   v-if="auth.hasRole('HR')"
-                  icon="mdi-delete"
+                  icon="trash-2"
                   variant="text"
                   size="small"
                   color="error"
@@ -1594,7 +1596,7 @@ onMounted(load);
         <v-card>
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="mdi-laptop" class="me-2" color="secondary" />
+              <v-icon icon="laptop" class="me-2" color="secondary" />
               {{ $t('assets.title') }}
             </v-card-title>
             <template #append>
@@ -1602,7 +1604,7 @@ onMounted(load);
                 v-if="auth.hasRole('IT') && !isClosed"
                 color="primary"
                 size="small"
-                prepend-icon="mdi-plus"
+                prepend-icon="plus"
                 @click="formDialog = true"
               >
                 {{ $t('assets.newForm') }}
@@ -1678,7 +1680,7 @@ onMounted(load);
         <v-card v-if="!isPipeline" class="mb-4">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="mdi-hand-extended-outline" class="me-2" color="primary" />
+              <v-icon icon="hand" class="me-2" color="primary" />
               {{ $t('requests.title') }}
             </v-card-title>
           </v-card-item>
@@ -1703,7 +1705,7 @@ onMounted(load);
                 <v-list-item v-for="r in employee.requests.slice(0, 5)" :key="r.id" class="px-0">
                   <template #prepend>
                     <v-icon
-                      :icon="REQUEST_ICON[r.type] ?? 'mdi-clipboard-text-clock-outline'"
+                      :icon="REQUEST_ICON[r.type] ?? 'clipboard-clock'"
                       size="20"
                       class="me-2"
                       color="primary"
@@ -1720,7 +1722,7 @@ onMounted(load);
                       <template #activator="{ props }">
                         <v-btn
                           v-bind="props"
-                          icon="mdi-creation"
+                          icon="sparkles"
                           variant="text"
                           size="small"
                           color="primary"
@@ -1740,7 +1742,7 @@ onMounted(load);
         <v-card v-if="employee.onboardingDocuments.length">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="mdi-folder-account-outline" class="me-2" color="secondary" />
+              <v-icon icon="folder" class="me-2" color="secondary" />
               {{ $t('onboarding.documents') }}
             </v-card-title>
           </v-card-item>
@@ -1755,10 +1757,10 @@ onMounted(load);
               <template #activator="{ props }">
                 <v-chip
                   v-bind="props"
-                  :prepend-icon="doc.uploaded ? 'mdi-file-check' : 'mdi-file-remove-outline'"
+                  :prepend-icon="doc.uploaded ? 'file-check' : 'file-x'"
                   :color="doc.uploaded ? 'success' : doc.required ? 'error' : 'grey'"
                   variant="tonal"
-                  :append-icon="doc.uploaded && auth.hasRole('HR') ? 'mdi-eye-outline' : undefined"
+                  :append-icon="doc.uploaded && auth.hasRole('HR') ? 'eye' : undefined"
                   @click="doc.uploaded && auth.hasRole('HR') && viewOnboardingDoc(doc)"
                 >
                   {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }}
@@ -1799,7 +1801,7 @@ onMounted(load);
                 variant="tonal"
                 size="small"
                 :loading="timelineBusy"
-                prepend-icon="mdi-history"
+                prepend-icon="history"
                 @click="loadMoreTimeline"
               >
                 {{ $t('profile.timelineMore') }} ({{ employee.auditTotal - timelineLogs.length }})
@@ -1836,7 +1838,7 @@ onMounted(load);
               </v-col>
               <v-col cols="12" sm="1" class="d-flex align-center">
                 <v-btn
-                  icon="mdi-delete"
+                  icon="trash-2"
                   variant="text"
                   size="small"
                   color="error"
@@ -1846,7 +1848,7 @@ onMounted(load);
               </v-col>
             </v-row>
           </div>
-          <v-btn variant="tonal" size="small" prepend-icon="mdi-plus" @click="newForm.items.push(emptyItem())">
+          <v-btn variant="tonal" size="small" prepend-icon="plus" @click="newForm.items.push(emptyItem())">
             {{ $t('assets.addItem') }}
           </v-btn>
         </v-card-text>
@@ -1896,7 +1898,7 @@ onMounted(load);
       <v-card>
         <div class="d-flex align-center ga-3 px-6 pt-6 pb-2">
           <v-avatar color="error" variant="tonal" size="42" rounded="lg">
-            <v-icon icon="mdi-account-off-outline" size="22" />
+            <v-icon icon="user-x" size="22" />
           </v-avatar>
           <div>
             <h2 class="text-subtitle-1 font-weight-bold">{{ $t('withdraw.title') }}</h2>
@@ -1949,7 +1951,7 @@ onMounted(load);
           <v-btn
             variant="tonal"
             color="secondary"
-            prepend-icon="mdi-line-scan"
+            prepend-icon="scan-line"
             class="mb-1"
             block
             :loading="busy === 'scan'"
@@ -1976,7 +1978,7 @@ onMounted(load);
               {
                 title: $t('expiryDocs.types.CUSTOM'),
                 value: 'CUSTOM',
-                props: { prependIcon: 'mdi-file-question-outline' },
+                props: { prependIcon: 'file-question' },
               },
             ]"
             :label="$t('assets.type')"
@@ -2035,7 +2037,7 @@ onMounted(load);
       <v-card class="pa-2">
         <v-card-item>
           <v-card-title class="text-subtitle-1 font-weight-bold">
-            <v-icon icon="mdi-creation" class="me-2" color="primary" />
+            <v-icon icon="sparkles" class="me-2" color="primary" />
             {{ $t('ai.letterTitle') }} — {{ $t(`requests.types.${letterDialog.type}`, letterDialog.type) }}
           </v-card-title>
         </v-card-item>
@@ -2057,7 +2059,7 @@ onMounted(load);
         <v-card-actions>
           <v-btn
             variant="tonal"
-            prepend-icon="mdi-content-copy"
+            prepend-icon="copy"
             :disabled="letterDialog.loading"
             @click="copyLetter"
           >
@@ -2066,7 +2068,7 @@ onMounted(load);
           <v-btn
             variant="tonal"
             color="primary"
-            prepend-icon="mdi-printer"
+            prepend-icon="printer"
             :disabled="letterDialog.loading"
             @click="printLetter"
           >
@@ -2282,7 +2284,7 @@ onMounted(load);
           {{ viewer.title }}
           <v-spacer />
           <v-btn
-            prepend-icon="mdi-download"
+            prepend-icon="download"
             variant="tonal"
             size="small"
             color="primary"
@@ -2291,7 +2293,7 @@ onMounted(load);
           >
             {{ $t('common.download') }}
           </v-btn>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="closeViewer" />
+          <v-btn icon="x" variant="text" size="small" @click="closeViewer" />
         </v-card-title>
         <v-divider />
         <v-card-text class="pa-0" style="height: 70vh">
@@ -2312,11 +2314,11 @@ onMounted(load);
             />
           </div>
           <div v-else class="d-flex flex-column align-center justify-center h-100 pa-8">
-            <v-icon icon="mdi-file-document-outline" size="56" class="mb-4 text-medium-emphasis" />
+            <v-icon icon="file-text" size="56" class="mb-4 text-medium-emphasis" />
             <p class="text-medium-emphasis text-center mb-4">
               {{ $t('employees.previewUnavailable') }}
             </p>
-            <v-btn color="primary" prepend-icon="mdi-download" @click="downloadFromViewer">
+            <v-btn color="primary" prepend-icon="download" @click="downloadFromViewer">
               {{ $t('common.download') }}
             </v-btn>
           </div>

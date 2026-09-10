@@ -112,7 +112,7 @@ onMounted(load);
       <v-card class="mb-6">
         <v-card-item>
           <v-card-title class="text-subtitle-1 font-weight-bold">
-            <v-icon icon="mdi-account-star-outline" class="me-2" color="primary" />
+            <v-icon icon="user-star" class="me-2" color="primary" />
             {{ $t('responsibility.title') }}
           </v-card-title>
           <v-card-subtitle class="text-wrap">{{ $t('responsibility.subtitle') }}</v-card-subtitle>
@@ -154,7 +154,7 @@ onMounted(load);
       <v-card>
         <v-card-item>
           <v-card-title class="text-subtitle-1 font-weight-bold">
-            <v-icon icon="mdi-shield-account-outline" class="me-2" color="primary" />
+            <v-icon icon="shield-check" class="me-2" color="primary" />
             {{ $t('ownership.groups') }}
           </v-card-title>
         </v-card-item>

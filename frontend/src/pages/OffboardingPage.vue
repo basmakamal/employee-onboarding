@@ -39,12 +39,12 @@ interface OffboardingDetail {
 const STAGES = ['REQUESTED', 'IN_PROGRESS', 'ASSETS_PENDING', 'NOTICE_SENT', 'SETTLEMENT', 'CLOSED'];
 
 const ACTION_META: Record<string, { endpoint: string; icon: string; color: string }> = {
-  START: { endpoint: 'start', icon: 'mdi-play', color: 'primary' },
-  TO_ASSET_RETURN: { endpoint: 'to-asset-return', icon: 'mdi-laptop', color: 'primary' },
-  CONFIRM_ASSETS_RETURNED: { endpoint: 'confirm-assets', icon: 'mdi-check-all', color: 'success' },
-  TO_SETTLEMENT: { endpoint: 'to-settlement', icon: 'mdi-cash', color: 'primary' },
-  CLOSE: { endpoint: 'close', icon: 'mdi-lock-check', color: 'success' },
-  CANCEL: { endpoint: 'cancel', icon: 'mdi-close-circle', color: 'error' },
+  START: { endpoint: 'start', icon: 'play', color: 'primary' },
+  TO_ASSET_RETURN: { endpoint: 'to-asset-return', icon: 'laptop', color: 'primary' },
+  CONFIRM_ASSETS_RETURNED: { endpoint: 'confirm-assets', icon: 'check-check', color: 'success' },
+  TO_SETTLEMENT: { endpoint: 'to-settlement', icon: 'banknote', color: 'primary' },
+  CLOSE: { endpoint: 'close', icon: 'lock-keyhole', color: 'success' },
+  CANCEL: { endpoint: 'cancel', icon: 'circle-x', color: 'error' },
 };
 
 const { t } = useI18n();
@@ -134,7 +134,7 @@ onMounted(load);
     <!-- Header -->
     <div class="d-flex align-center flex-wrap mb-6" style="gap: 12px">
       <v-btn
-        icon="mdi-arrow-left"
+        icon="arrow-left"
         variant="text"
         :to="`/employees/${record.employeeId}`"
         class="flip-rtl"
@@ -212,7 +212,7 @@ onMounted(load);
             <v-list-item v-for="item in record.assets.items" :key="item.id">
               <template #prepend>
                 <v-icon
-                  :icon="item.returnedAt ? 'mdi-check-circle' : 'mdi-progress-clock'"
+                  :icon="item.returnedAt ? 'circle-check' : 'clock'"
                   :color="item.returnedAt ? 'success' : 'warning'"
                 />
               </template>

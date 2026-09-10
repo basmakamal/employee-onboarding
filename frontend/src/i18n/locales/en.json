@@ -14,7 +14,15 @@
     "assistant": "AI Assistant",
     "calendar": "Work calendar",
     "emailLog": "Email history",
-    "emailTemplates": "Email templates"
+    "emailTemplates": "Email templates",
+    "groupWork": "Work",
+    "groupInsights": "Insights",
+    "groupAdmin": "Administration",
+    "searchPlaceholder": "Search or jump to…",
+    "more": "More",
+    "people": "People",
+    "inbox": "Inbox",
+    "newEmployee": "New employee"
   },
   "users": {
     "title": "Staff & roles",
@@ -197,7 +205,11 @@
     "saved": "Saved",
     "done": "Done",
     "error": "Something went wrong",
-    "submit": "Submit"
+    "submit": "Submit",
+    "confirm": "Confirm",
+    "search": "Search",
+    "more": "More",
+    "new": "New"
   },
   "contract": {
     "salary": "Salary",
@@ -866,5 +878,14 @@
     "wrongCurrent": "The current password is not correct.",
     "save": "Save and continue",
     "menu": "Change password"
+  },
+  "cmdk": {
+    "placeholder": "Search employees, pages, actions…",
+    "employees": "Employees",
+    "pages": "Pages",
+    "actions": "Actions",
+    "recent": "Recent",
+    "noResults": "Nothing matches. Try a name, an employee number or a page.",
+    "hint": "Type to search · ↑↓ to move · ↵ to open · Esc to close"
   }
 }

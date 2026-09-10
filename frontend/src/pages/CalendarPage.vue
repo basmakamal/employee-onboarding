@@ -132,7 +132,7 @@ onMounted(load);
         <v-list v-if="holidays.length" density="compact">
           <v-list-item v-for="holiday in holidays" :key="holiday.id">
             <template #prepend>
-              <v-icon icon="mdi-calendar-star" color="warning" />
+              <v-icon icon="calendar-days" color="warning" />
             </template>
             <v-list-item-title>{{ holiday.name }}</v-list-item-title>
             <v-list-item-subtitle>
@@ -140,7 +140,7 @@ onMounted(load);
             </v-list-item-subtitle>
             <template #append>
               <v-btn
-                icon="mdi-delete"
+                icon="trash-2"
                 variant="text"
                 size="small"
                 color="error"
@@ -171,7 +171,7 @@ onMounted(load);
           <v-btn
             color="primary"
             variant="tonal"
-            prepend-icon="mdi-plus"
+            prepend-icon="plus"
             :loading="calendarBusy"
             :disabled="!newHoliday.date || !newHoliday.name.trim()"
             @click="addHoliday"
@@ -194,7 +194,7 @@ onMounted(load);
           <v-btn
             color="secondary"
             variant="tonal"
-            prepend-icon="mdi-calendar-import"
+            prepend-icon="calendar-plus"
             :loading="calendarBusy"
             @click="generateYear"
           >
@@ -202,7 +202,7 @@ onMounted(load);
           </v-btn>
           <v-btn
             variant="text"
-            :prepend-icon="showYearView ? 'mdi-eye-off' : 'mdi-calendar-month'"
+            :prepend-icon="showYearView ? 'eye-off' : 'calendar'"
             @click="showYearView = !showYearView"
           >
             {{ showYearView ? $t('calendar.hideYear') : $t('calendar.showYear') }}

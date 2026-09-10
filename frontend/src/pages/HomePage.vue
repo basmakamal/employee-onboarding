@@ -46,10 +46,10 @@ const sum = (map: CountMap | undefined) =>
   Object.values(map ?? {}).reduce((a, b) => a + b, 0);
 
 const stats = computed(() => [
-  { key: 'onboarding', icon: 'mdi-school', color: 'primary', value: sum(data.value?.onboarding), to: '/employees' },
-  { key: 'activeEmployees', icon: 'mdi-badge-account', color: 'success', value: data.value?.employees['ACTIVE'] ?? 0, to: '/employees' },
-  { key: 'openOffboardings', icon: 'mdi-exit-run', color: 'warning', value: OFFBOARDING_STAGES.reduce((a, s) => a + (data.value?.offboardings[s] ?? 0), 0), to: '/employees' },
-  { key: 'pendingApprovals', icon: 'mdi-file-clock', color: 'indigo', value: (data.value?.onboarding['AWAITING_CONTRACT_APPROVAL'] ?? 0) + (data.value?.assetForms['PENDING_EMPLOYEE_APPROVAL'] ?? 0), to: '/employees' },
+  { key: 'onboarding', icon: 'graduation-cap', color: 'primary', value: sum(data.value?.onboarding), to: '/employees' },
+  { key: 'activeEmployees', icon: 'id-card', color: 'success', value: data.value?.employees['ACTIVE'] ?? 0, to: '/employees' },
+  { key: 'openOffboardings', icon: 'door-open', color: 'warning', value: OFFBOARDING_STAGES.reduce((a, s) => a + (data.value?.offboardings[s] ?? 0), 0), to: '/employees' },
+  { key: 'pendingApprovals', icon: 'file-clock', color: 'indigo', value: (data.value?.onboarding['AWAITING_CONTRACT_APPROVAL'] ?? 0) + (data.value?.assetForms['PENDING_EMPLOYEE_APPROVAL'] ?? 0), to: '/employees' },
 ]);
 
 function processSummary(map: CountMap | undefined) {

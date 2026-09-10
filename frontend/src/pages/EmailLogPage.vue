@@ -7,6 +7,7 @@
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
+import { useConfirm } from '../composables/useConfirm';
 
 interface LogRow {
   id: string;
@@ -26,6 +27,7 @@ interface LogRow {
 }
 
 const { t } = useI18n();
+const confirm = useConfirm();
 
 const rows = ref<LogRow[]>([]);
 const total = ref(0);
@@ -106,7 +108,7 @@ function when(iso: string): string {
 
 async function resend(row: LogRow) {
   const email = row.recipientEmail ?? row.recipient?.email ?? '';
-  if (!window.confirm(t('emailLog.resendConfirm', { email }))) return;
+  if (!(await confirm({ title: t('emailLog.resend'), message: t('emailLog.resendConfirm', { email }), confirmText: t('emailLog.resend') }))) return;
   resending.value = row.id;
   try {
     await api.post(`/api/notifications/${row.id}/resend`);
@@ -135,7 +137,7 @@ async function resend(row: LogRow) {
         <v-text-field
           v-model="search"
           :placeholder="$t('emailLog.search')"
-          prepend-inner-icon="mdi-magnify"
+          prepend-inner-icon="search"
           density="compact"
           hide-details
           clearable
@@ -207,7 +209,7 @@ async function resend(row: LogRow) {
           </v-chip>
         </template>
         <template #item.actions="{ item }">
-          <v-btn size="small" variant="tonal" prepend-icon="mdi-eye-outline" class="me-2" @click="viewing = item">
+          <v-btn size="small" variant="tonal" prepend-icon="eye" class="me-2" @click="viewing = item">
             {{ $t('emailLog.view') }}
           </v-btn>
           <v-btn
@@ -215,7 +217,7 @@ async function resend(row: LogRow) {
             size="small"
             variant="tonal"
             color="primary"
-            prepend-icon="mdi-send-outline"
+            prepend-icon="send"
             :loading="resending === item.id"
             @click="resend(item)"
           >
@@ -224,7 +226,7 @@ async function resend(row: LogRow) {
         </template>
         <template #no-data>
           <div class="py-12 text-center">
-            <v-icon icon="mdi-email-outline" size="40" class="mb-3 text-medium-emphasis" />
+            <v-icon icon="mail" size="40" class="mb-3 text-medium-emphasis" />
             <div class="text-subtitle-1 font-weight-medium">{{ $t('emailLog.empty') }}</div>
             <div class="text-body-2 text-medium-emphasis">{{ $t('emailLog.emptyHint') }}</div>
           </div>
@@ -271,7 +273,7 @@ async function resend(row: LogRow) {
           <v-btn
             v-if="viewing.channel === 'EMAIL'"
             color="primary"
-            prepend-icon="mdi-send-outline"
+            prepend-icon="send"
             :loading="resending === viewing.id"
             @click="resend(viewing)"
           >

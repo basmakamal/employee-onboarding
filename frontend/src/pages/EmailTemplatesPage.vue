@@ -11,6 +11,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
+import { useConfirm } from '../composables/useConfirm';
 
 type Audience = 'employee' | 'staff';
 type Lang = 'ar' | 'en';
@@ -76,6 +77,7 @@ interface TriggerOptions {
 }
 
 const { t, locale } = useI18n();
+const confirm = useConfirm();
 const lang = computed<Lang>(() => (locale.value === 'ar' ? 'ar' : 'en'));
 
 const templates = ref<TemplateRow[]>([]);
@@ -252,7 +254,7 @@ async function sendTest() {
 }
 
 async function revert(key: string) {
-  if (!window.confirm(t('emailTemplates.revertConfirm'))) return;
+  if (!(await confirm({ title: t('emailTemplates.revert'), message: t('emailTemplates.revertConfirm'), color: 'error', confirmText: t('emailTemplates.revert') }))) return;
   try {
     await api.delete(`/api/email-templates/${key}`);
     notify(t('emailTemplates.reverted'));
@@ -342,7 +344,7 @@ async function toggleTrigger(trigger: Trigger, active: boolean) {
 }
 
 async function removeTrigger(trigger: Trigger) {
-  if (!window.confirm(t('emailTemplates.triggers.removeConfirm'))) return;
+  if (!(await confirm({ title: t('emailTemplates.triggers.remove'), message: t('emailTemplates.triggers.removeConfirm'), color: 'error', confirmText: t('emailTemplates.triggers.remove') }))) return;
   busyTrigger.value = trigger.id;
   try {
     await api.delete(`/api/email-triggers/${trigger.id}`);
@@ -365,7 +367,7 @@ async function removeTrigger(trigger: Trigger) {
       </div>
       <v-spacer />
       <!-- The most frequent action lives up here, not under the templates list. -->
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="triggerDialog = true">
+      <v-btn color="primary" prepend-icon="plus" @click="triggerDialog = true">
         {{ $t('emailTemplates.triggers.add') }}
       </v-btn>
     </div>
@@ -399,7 +401,7 @@ async function removeTrigger(trigger: Trigger) {
                   size="x-small"
                   color="success"
                   variant="tonal"
-                  prepend-icon="mdi-pencil-outline"
+                  prepend-icon="pencil"
                 >
                   {{ $t('emailTemplates.customized') }} · v{{ tpl.version }}
                 </v-chip>
@@ -409,7 +411,7 @@ async function removeTrigger(trigger: Trigger) {
                 <span v-else class="text-caption text-medium-emphasis">{{ $t('emailTemplates.builtIn') }}</span>
               </td>
               <td class="text-end">
-                <v-btn size="small" variant="tonal" prepend-icon="mdi-pencil" @click="openEditor(tpl.key)">
+                <v-btn size="small" variant="tonal" prepend-icon="pencil" @click="openEditor(tpl.key)">
                   {{ $t('emailTemplates.edit') }}
                 </v-btn>
               </td>
@@ -479,7 +481,7 @@ async function removeTrigger(trigger: Trigger) {
                   size="small"
                   variant="text"
                   color="error"
-                  icon="mdi-delete-outline"
+                  icon="trash-2"
                   :disabled="busyTrigger === tr.id"
                   @click="removeTrigger(tr)"
                 />
@@ -488,7 +490,7 @@ async function removeTrigger(trigger: Trigger) {
           </tbody>
         </v-table>
         <v-card-text v-else class="py-10 text-center">
-          <v-icon icon="mdi-lightning-bolt-outline" size="40" class="mb-3 text-medium-emphasis" />
+          <v-icon icon="zap" size="40" class="mb-3 text-medium-emphasis" />
           <div class="text-subtitle-1 font-weight-medium">{{ $t('emailTemplates.triggers.empty') }}</div>
           <div class="text-body-2 text-medium-emphasis">{{ $t('emailTemplates.triggers.emptyHint') }}</div>
         </v-card-text>
@@ -507,7 +509,7 @@ async function removeTrigger(trigger: Trigger) {
       <v-card v-if="editor.detail">
         <div class="d-flex align-center ga-3 px-6 pt-6 pb-2">
           <v-avatar color="primary" variant="tonal" size="42" rounded="lg">
-            <v-icon icon="mdi-email-edit-outline" size="22" />
+            <v-icon icon="mail-open" size="22" />
           </v-avatar>
           <div class="min-w-0">
             <h2 class="text-subtitle-1 font-weight-bold">{{ templateName(editor.detail.meta) }}</h2>
@@ -628,7 +630,7 @@ async function removeTrigger(trigger: Trigger) {
                   <div class="text-caption text-medium-emphasis">{{ $t('emailTemplates.previewHint') }}</div>
                 </div>
                 <v-spacer />
-                <v-btn size="small" variant="tonal" prepend-icon="mdi-refresh" :loading="editor.previewing" @click="preview">
+                <v-btn size="small" variant="tonal" prepend-icon="refresh-cw" :loading="editor.previewing" @click="preview">
                   {{ $t('emailTemplates.preview') }}
                 </v-btn>
               </div>
@@ -647,7 +649,7 @@ async function removeTrigger(trigger: Trigger) {
                   <pre v-else class="px-4 py-3 text-body-2 preview-text">{{ editor.preview.text }}</pre>
                 </template>
                 <div v-else class="pa-8 text-center text-medium-emphasis text-body-2">
-                  <v-icon icon="mdi-eye-outline" size="32" class="mb-2" />
+                  <v-icon icon="eye" size="32" class="mb-2" />
                   <div>{{ $t('emailTemplates.preview') }}</div>
                 </div>
               </div>
@@ -660,13 +662,13 @@ async function removeTrigger(trigger: Trigger) {
             v-if="editor.detail.row"
             variant="text"
             color="error"
-            prepend-icon="mdi-restore"
+            prepend-icon="rotate-ccw"
             @click="revert(editor.key)"
           >
             {{ $t('emailTemplates.revert') }}
           </v-btn>
           <v-spacer />
-          <v-btn variant="text" prepend-icon="mdi-email-fast-outline" :loading="editor.testing" @click="sendTest">
+          <v-btn variant="text" prepend-icon="mail-check" :loading="editor.testing" @click="sendTest">
             {{ $t('emailTemplates.test') }}
           </v-btn>
           <v-btn variant="text" @click="editor.show = false">{{ $t('common.cancel') }}</v-btn>
@@ -735,7 +737,7 @@ async function removeTrigger(trigger: Trigger) {
                 chips
                 closable-chips
                 dir="ltr"
-                prepend-inner-icon="mdi-email-plus-outline"
+                prepend-inner-icon="mail-plus"
               />
             </v-col>
           </v-row>

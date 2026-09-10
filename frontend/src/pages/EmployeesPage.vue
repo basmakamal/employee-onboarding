@@ -199,7 +199,7 @@ onMounted(loadOptions);
         <p class="text-medium-emphasis mt-1">{{ $t('employees.subtitle') }}</p>
       </div>
       <v-spacer />
-      <v-btn v-if="auth.hasRole('HR')" color="primary" prepend-icon="mdi-plus" @click="dialog = true">
+      <v-btn v-if="auth.hasRole('HR')" color="primary" prepend-icon="plus" @click="dialog = true">
         {{ $t('employees.new') }}
       </v-btn>
     </div>
@@ -221,7 +221,7 @@ onMounted(loadOptions);
       <v-text-field
         v-model="search"
         :placeholder="$t('employees.searchPlaceholder')"
-        prepend-inner-icon="mdi-magnify"
+        prepend-inner-icon="search"
         variant="solo"
         flat
         hide-details
@@ -253,7 +253,7 @@ onMounted(loadOptions);
             <template #activator="{ props }">
               <v-btn
                 v-bind="props"
-                icon="mdi-delete-forever-outline"
+                icon="trash-2"
                 variant="text"
                 size="small"
                 color="error"
@@ -301,10 +301,10 @@ onMounted(loadOptions);
           <v-alert v-if="error" type="error" variant="tonal" class="mb-4">{{ error }}</v-alert>
 
           <v-btn-toggle v-model="form.mode" mandatory color="primary" class="mb-4" divided>
-            <v-btn value="onboarding" prepend-icon="mdi-school">
+            <v-btn value="onboarding" prepend-icon="graduation-cap">
               {{ $t('onboarding.newHire') }}
             </v-btn>
-            <v-btn value="direct" prepend-icon="mdi-badge-account">
+            <v-btn value="direct" prepend-icon="id-card">
               {{ $t('onboarding.existing') }}
             </v-btn>
           </v-btn-toggle>

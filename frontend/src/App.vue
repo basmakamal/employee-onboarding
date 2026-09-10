@@ -1,43 +1,98 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+/**
+ * The application shell: a grouped sidebar (Work · Insights · Administration)
+ * that collapses to an icon rail on tablets, a slim top bar with breadcrumb,
+ * a bottom navigation bar on phones, the command palette (Ctrl+K) and the
+ * single confirmation dialog every page shares.
+ */
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useDisplay } from 'vuetify';
 import { usePreferencesStore } from './stores/preferences';
 import { useAuthStore } from './stores/auth';
 import NotificationBell from './components/NotificationBell.vue';
 import LanguageToggle from './components/LanguageToggle.vue';
+import ConfirmDialog from './components/ConfirmDialog.vue';
+import CommandPalette from './components/CommandPalette.vue';
 
 const prefs = usePreferencesStore();
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
-const drawer = ref(true);
-/** Desktop: collapse the menu to an icons-only rail; mobile: hide it fully. */
-const rail = ref(false);
+const display = useDisplay();
 
-/** Public pages (signed links, login) render without the staff chrome. */
-const isPublicPage = () =>
+const drawer = ref(true);
+/** Desktop: collapse the menu to an icons-only rail. Remembered per browser. */
+const rail = ref(localStorage.getItem('nav-rail') === '1');
+const palette = ref(false);
+
+/** Pages that render without the staff chrome (signed links, login, first password). */
+const isBare = computed(() =>
   ['/form/', '/approve-assets/', '/exit-interview/', '/login', '/change-password'].some((p) =>
     route.path.startsWith(p),
-  );
+  ),
+);
+const isRail = computed(() => display.mdAndUp.value && rail.value);
 
-const NAV = [
-  { to: '/', icon: 'mdi-view-dashboard', key: 'nav.home', roles: [] as string[] },
-  { to: '/employees', icon: 'mdi-badge-account', key: 'nav.employees', roles: [] as string[] },
-  { to: '/reports', icon: 'mdi-chart-box', key: 'nav.reports', roles: ['HR'] },
-  { to: '/assistant', icon: 'mdi-robot-happy-outline', key: 'nav.assistant', roles: ['HR'] },
-  { to: '/emails', icon: 'mdi-email-outline', key: 'nav.emailLog', roles: ['HR'] },
-  // hasRole() lets ADMIN through on any check; listing no other role makes
-  // these entries effectively admin-only.
-  { to: '/users', icon: 'mdi-account-cog', key: 'nav.users', roles: ['ADMIN'] },
-  { to: '/ownership', icon: 'mdi-sitemap', key: 'nav.ownership', roles: ['ADMIN'] },
-  { to: '/automation', icon: 'mdi-robot', key: 'nav.automation', roles: ['ADMIN'] },
-  { to: '/email-templates', icon: 'mdi-email-edit-outline', key: 'nav.emailTemplates', roles: ['ADMIN'] },
-  { to: '/calendar', icon: 'mdi-calendar-star', key: 'nav.calendar', roles: ['ADMIN'] },
-  { to: '/settings', icon: 'mdi-cog', key: 'nav.settings', roles: ['ADMIN'] },
+interface NavItem { to: string; icon: string; key: string; roles: string[] }
+interface NavGroup { key: string; items: NavItem[] }
+
+// hasRole() lets ADMIN through on any check; listing only ADMIN makes an
+// entry admin-only.
+const GROUPS: NavGroup[] = [
+  {
+    key: 'nav.groupWork',
+    items: [
+      { to: '/', icon: 'layout-dashboard', key: 'nav.home', roles: [] },
+      { to: '/employees', icon: 'users', key: 'nav.employees', roles: [] },
+      { to: '/emails', icon: 'mail', key: 'nav.emailLog', roles: ['HR'] },
+    ],
+  },
+  {
+    key: 'nav.groupInsights',
+    items: [
+      { to: '/reports', icon: 'chart-column', key: 'nav.reports', roles: ['HR'] },
+      { to: '/assistant', icon: 'sparkles', key: 'nav.assistant', roles: ['HR'] },
+    ],
+  },
+  {
+    key: 'nav.groupAdmin',
+    items: [
+      { to: '/users', icon: 'user-cog', key: 'nav.users', roles: ['ADMIN'] },
+      { to: '/ownership', icon: 'network', key: 'nav.ownership', roles: ['ADMIN'] },
+      { to: '/automation', icon: 'zap', key: 'nav.automation', roles: ['ADMIN'] },
+      { to: '/email-templates', icon: 'mail-open', key: 'nav.emailTemplates', roles: ['ADMIN'] },
+      { to: '/calendar', icon: 'calendar-days', key: 'nav.calendar', roles: ['ADMIN'] },
+      { to: '/settings', icon: 'settings', key: 'nav.settings', roles: ['ADMIN'] },
+    ],
+  },
 ];
 
-const navItems = computed(() =>
-  NAV.filter((item) => item.roles.length === 0 || auth.hasRole(...item.roles)),
+const groups = computed(() =>
+  GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => i.roles.length === 0 || auth.hasRole(...i.roles)),
+  })).filter((g) => g.items.length > 0),
+);
+
+/** Breadcrumb title: the nav entry whose path is the longest prefix of the route. */
+const currentKey = computed(() => {
+  const all = GROUPS.flatMap((g) => g.items).filter((i) => i.to !== '/');
+  const match = all
+    .filter((i) => route.path === i.to || route.path.startsWith(i.to + '/'))
+    .sort((a, b) => b.to.length - a.to.length)[0];
+  if (match) return match.key;
+  if (route.path.startsWith('/offboardings')) return 'nav.employees';
+  return null;
+});
+
+/** Phone bottom bar: the places HR goes most, plus the one big action. */
+const bottomItems = computed(() =>
+  [
+    { to: '/', icon: 'layout-dashboard', key: 'nav.home', roles: [] as string[] },
+    { to: '/employees', icon: 'users', key: 'nav.people', roles: [] as string[] },
+    { to: '/emails', icon: 'mail', key: 'nav.inbox', roles: ['HR'] },
+  ].filter((i) => i.roles.length === 0 || auth.hasRole(...i.roles)),
 );
 
 const initials = computed(() =>
@@ -49,116 +104,294 @@ const initials = computed(() =>
     .toUpperCase(),
 );
 
+function toggleRail() {
+  rail.value = !rail.value;
+  localStorage.setItem('nav-rail', rail.value ? '1' : '0');
+}
+
 async function logout() {
   await auth.logout();
   await router.push('/login');
 }
 
-onMounted(() => prefs.apply());
+function onKey(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    palette.value = !palette.value;
+  }
+}
+
+onMounted(() => {
+  prefs.apply();
+  window.addEventListener('keydown', onKey);
+});
+onUnmounted(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <template>
   <v-app>
-    <!-- The staff chrome (bar + menu) appears only for a signed-in user.
-         On a cold load the router is still restoring the session; drawing
-         the chrome before that answer arrives made it flash and vanish
-         when the answer was "no session" and the user was sent to login. -->
-    <template v-if="!isPublicPage() && auth.isAuthenticated">
-      <v-app-bar flat border density="comfortable">
-        <v-app-bar-nav-icon
-          @click="$vuetify.display.mdAndUp ? (rail = !rail) : (drawer = !drawer)"
-        />
-        <v-app-bar-title class="font-weight-bold">
-          <v-icon icon="mdi-account-group" color="primary" class="me-2" />
-          {{ $t('app.title') }}
-        </v-app-bar-title>
+    <!-- Chrome only for a signed-in user: on a cold load the router is still
+         restoring the session, and drawing it early made it flash. -->
+    <template v-if="!isBare && auth.isAuthenticated">
+      <!-- ───────── sidebar (desktop: full or rail · phone: off-canvas) ───────── -->
+      <v-navigation-drawer
+        v-model="drawer"
+        :permanent="display.mdAndUp.value"
+        :rail="isRail"
+        :temporary="!display.mdAndUp.value"
+        rail-width="68"
+        width="252"
+        class="shell-drawer"
+      >
+        <div class="shell-brand" :class="{ 'shell-brand--rail': isRail }">
+          <img src="/riyada-logo.png" alt="Riyada" class="shell-brand__logo" />
+          <b v-if="!isRail" class="shell-brand__text">{{ $t('app.title') }}</b>
+          <v-btn
+            v-if="display.mdAndUp.value && !rail"
+            icon="panel-left-close"
+            variant="text"
+            size="small"
+            class="ms-auto flip-rtl"
+            :aria-label="$t('common.more')"
+            @click="toggleRail"
+          />
+        </div>
 
-        <LanguageToggle class="me-2" />
+        <button
+          type="button"
+          class="shell-search"
+          :class="{ 'shell-search--rail': isRail }"
+          :aria-label="$t('common.search')"
+          @click="palette = true"
+        >
+          <v-icon icon="search" size="16" />
+          <template v-if="!isRail">
+            <span class="flex-grow-1 text-start text-truncate">{{ $t('nav.searchPlaceholder') }}</span>
+            <kbd>Ctrl K</kbd>
+          </template>
+        </button>
+
+        <v-list nav density="comfortable" class="shell-nav">
+          <template v-for="group in groups" :key="group.key">
+            <div v-if="!isRail" class="shell-nav__group label-caps">{{ $t(group.key) }}</div>
+            <v-divider v-else class="my-2 mx-3" />
+            <v-tooltip
+              v-for="item in group.items"
+              :key="item.to"
+              :disabled="!isRail"
+              location="end"
+              :text="$t(item.key)"
+            >
+              <template #activator="{ props }">
+                <v-list-item
+                  v-bind="props"
+                  :to="item.to"
+                  :prepend-icon="item.icon"
+                  :title="$t(item.key)"
+                  exact
+                  rounded="lg"
+                  class="shell-nav__item"
+                  @click="!display.mdAndUp.value && (drawer = false)"
+                />
+              </template>
+            </v-tooltip>
+          </template>
+        </v-list>
+
+        <template #append>
+          <div class="shell-user" :class="{ 'shell-user--rail': isRail }">
+            <v-btn
+              v-if="isRail"
+              icon="panel-left-open"
+              variant="text"
+              size="small"
+              class="flip-rtl"
+              :aria-label="$t('common.more')"
+              @click="toggleRail"
+            />
+            <template v-else>
+              <v-avatar color="primary" variant="tonal" size="34">
+                <span class="text-caption font-weight-bold">{{ initials }}</span>
+              </v-avatar>
+              <div class="min-w-0 flex-grow-1">
+                <div class="text-body-2 font-weight-medium text-truncate">{{ auth.user?.name }}</div>
+                <div class="text-caption text-medium-emphasis">{{ $t(`roles.${auth.user?.role}`) }}</div>
+              </div>
+              <v-menu>
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="props"
+                    icon="ellipsis-vertical"
+                    variant="text"
+                    size="small"
+                    :aria-label="$t('common.more')"
+                  />
+                </template>
+                <v-list density="compact" min-width="220">
+                  <v-list-item prepend-icon="key-round" :title="$t('changePassword.menu')" to="/change-password" />
+                  <v-list-item prepend-icon="log-out" :title="$t('login.signOut')" @click="logout" />
+                </v-list>
+              </v-menu>
+            </template>
+          </div>
+        </template>
+      </v-navigation-drawer>
+
+      <!-- ───────── top bar ───────── -->
+      <v-app-bar flat density="comfortable" class="shell-bar">
+        <v-app-bar-nav-icon
+          v-if="!display.mdAndUp.value"
+          icon="menu"
+          :aria-label="$t('nav.more')"
+          @click="drawer = !drawer"
+        />
+        <nav class="shell-bar__crumbs text-body-2" aria-label="Breadcrumb">
+          <router-link to="/" class="text-medium-emphasis text-decoration-none">{{ $t('nav.home') }}</router-link>
+          <template v-if="currentKey">
+            <v-icon icon="chevron-right" size="14" class="mx-1 text-medium-emphasis flip-rtl" />
+            <span class="font-weight-medium">{{ $t(currentKey) }}</span>
+          </template>
+        </nav>
+        <v-spacer />
         <v-btn
-          :icon="prefs.dark ? 'mdi-weather-sunny' : 'mdi-weather-night'"
+          v-if="display.smAndDown.value"
+          icon="search"
+          variant="text"
+          :aria-label="$t('common.search')"
+          @click="palette = true"
+        />
+        <LanguageToggle v-if="display.mdAndUp.value" class="me-2" />
+        <v-btn
+          :icon="prefs.dark ? 'sun' : 'moon'"
+          variant="text"
           :aria-label="$t('actions.toggleTheme')"
           @click="prefs.toggleTheme()"
         />
-
-        <NotificationBell v-if="auth.user" />
-
-        <v-menu v-if="auth.user">
-          <template #activator="{ props }">
-            <v-btn v-bind="props" icon class="ms-1">
-              <v-avatar color="primary" size="36">
-                <span class="text-body-2 font-weight-bold">{{ initials }}</span>
-              </v-avatar>
-            </v-btn>
-          </template>
-          <v-card min-width="220">
-            <v-card-item>
-              <v-card-title class="text-body-1">{{ auth.user.name }}</v-card-title>
-              <v-card-subtitle>{{ $t(`roles.${auth.user.role}`) }}</v-card-subtitle>
-            </v-card-item>
-            <v-divider />
-            <v-list density="compact">
-              <v-list-item
-                prepend-icon="mdi-shield-key-outline"
-                :title="$t('changePassword.menu')"
-                to="/change-password"
-              />
-              <v-list-item prepend-icon="mdi-logout" :title="$t('login.signOut')" @click="logout" />
-            </v-list>
-          </v-card>
-        </v-menu>
+        <NotificationBell />
       </v-app-bar>
 
-      <v-navigation-drawer
-        v-model="drawer"
-        :permanent="$vuetify.display.mdAndUp"
-        :rail="$vuetify.display.mdAndUp && rail"
-      >
-        <v-list nav density="comfortable">
-          <v-tooltip
-            v-for="item in navItems"
-            :key="item.to"
-            :disabled="!rail"
-            location="end"
-            :text="$t(item.key)"
-          >
-            <template #activator="{ props }">
-              <v-list-item
-                v-bind="props"
-                :to="item.to"
-                :prepend-icon="item.icon"
-                :title="$t(item.key)"
-                exact
-                rounded="xl"
-              />
-            </template>
-          </v-tooltip>
-        </v-list>
-      </v-navigation-drawer>
+      <!-- ───────── phone bottom navigation ───────── -->
+      <v-bottom-navigation v-if="display.smAndDown.value" grow class="shell-bottom" height="64" :elevation="0">
+        <v-btn v-for="item in bottomItems" :key="item.to" :to="item.to" exact :value="item.to">
+          <v-icon :icon="item.icon" size="20" />
+          <span class="text-caption">{{ $t(item.key) }}</span>
+        </v-btn>
+        <v-btn v-if="auth.hasRole('HR')" to="/employees?new=1" :aria-label="$t('nav.newEmployee')">
+          <span class="shell-bottom__fab"><v-icon icon="plus" size="22" /></span>
+          <span class="text-caption">{{ $t('common.new') }}</span>
+        </v-btn>
+        <v-btn value="more" :aria-label="$t('nav.more')" @click="drawer = true">
+          <v-icon icon="menu" size="20" />
+          <span class="text-caption">{{ $t('nav.more') }}</span>
+        </v-btn>
+      </v-bottom-navigation>
+
+      <CommandPalette v-model="palette" />
     </template>
 
-    <v-main>
+    <v-main :class="{ 'shell-main--phone': !isBare && auth.isAuthenticated && display.smAndDown.value }">
       <router-view v-slot="{ Component }">
         <transition name="page" mode="out-in">
           <component :is="Component" />
         </transition>
       </router-view>
     </v-main>
+
+    <ConfirmDialog />
   </v-app>
 </template>
 
 <style>
-.page-enter-active,
-.page-leave-active {
-  transition:
-    opacity 0.25s ease,
-    transform 0.25s ease;
+.shell-drawer {
+  border-inline-end: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)) !important;
 }
-.page-enter-from {
-  opacity: 0;
-  transform: translateY(12px);
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 8px;
+  min-height: 56px;
 }
-.page-leave-to {
-  opacity: 0;
-  transform: translateY(-12px);
+.shell-brand--rail { justify-content: center; padding-inline: 8px; }
+.shell-brand__logo { height: 26px; width: auto; display: block; }
+.shell-brand__text { font-family: var(--font-display); font-size: 14px; white-space: nowrap; }
+.shell-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 20px);
+  margin: 4px 10px 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 10px;
+  background: rgb(var(--v-theme-surface-variant));
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 160ms var(--app-ease), background 160ms var(--app-ease);
 }
+.shell-search:hover { border-color: rgba(var(--v-theme-primary), 0.5); }
+.shell-search--rail { width: 40px; margin-inline: auto; justify-content: center; padding: 8px; }
+.shell-search kbd {
+  font-family: inherit;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgb(var(--v-theme-surface));
+}
+.shell-nav { padding-inline: 10px; }
+.shell-nav__group { padding: 12px 10px 4px; }
+.shell-nav__item { min-height: 40px; }
+.shell-nav__item.v-list-item--active {
+  color: rgb(var(--v-theme-primary));
+  background: rgba(var(--v-theme-primary), 0.1);
+}
+.shell-nav__item.v-list-item--active .v-list-item__overlay { opacity: 0; }
+.shell-nav__item.v-list-item--active::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: -10px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 3px;
+  background: rgb(var(--v-theme-primary));
+  opacity: 1;
+  border: 0;
+}
+.shell-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.shell-user--rail { justify-content: center; border: 0; padding: 4px; }
+.shell-bar {
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)) !important;
+  background: rgba(var(--v-theme-background), 0.85) !important;
+  backdrop-filter: blur(10px);
+}
+.shell-bar__crumbs { display: flex; align-items: center; padding-inline-start: 12px; }
+.shell-bottom {
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)) !important;
+}
+.shell-bottom .v-btn { min-width: 0; }
+.shell-bottom__fab {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+  display: grid;
+  place-items: center;
+  margin-top: -18px;
+  box-shadow: var(--app-shadow-md);
+}
+.shell-main--phone { padding-bottom: 64px !important; }
+[dir='rtl'] .flip-rtl { transform: scaleX(-1); }
 </style>

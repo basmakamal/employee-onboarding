@@ -95,7 +95,7 @@ async function submit() {
       <div class="panel__toggles">
         <LanguageToggle />
         <v-btn
-          :icon="prefs.dark ? 'mdi-weather-sunny' : 'mdi-weather-night'"
+          :icon="prefs.dark ? 'sun' : 'moon'"
           :aria-label="$t('actions.theme')"
           variant="text"
           size="small"
@@ -122,7 +122,7 @@ async function submit() {
               :label="$t('login.email')"
               :placeholder="$t('login.emailPlaceholder')"
               type="email"
-              prepend-inner-icon="mdi-email-outline"
+              prepend-inner-icon="mail"
               autocomplete="username"
               autofocus
               dir="ltr"
@@ -132,8 +132,8 @@ async function submit() {
               v-model="password"
               :label="$t('login.password')"
               :type="showPassword ? 'text' : 'password'"
-              prepend-inner-icon="mdi-lock-outline"
-              :append-inner-icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+              prepend-inner-icon="lock"
+              :append-inner-icon="showPassword ? 'eye-off' : 'eye'"
               autocomplete="current-password"
               dir="ltr"
               @click:append-inner="showPassword = !showPassword"
@@ -148,7 +148,7 @@ async function submit() {
               class="mt-5"
               :loading="loading"
               :disabled="!canSubmit"
-              append-icon="mdi-arrow-right"
+              append-icon="arrow-right"
             >
               {{ $t('login.signIn') }}
             </v-btn>

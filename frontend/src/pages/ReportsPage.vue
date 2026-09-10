@@ -214,7 +214,7 @@ onMounted(async () => {
         variant="tonal"
         color="primary"
         size="small"
-        prepend-icon="mdi-microsoft-excel"
+        prepend-icon="file-spreadsheet"
         :loading="downloading === exp"
         @click="download(exp, exp === 'audit' ? '?days=30' : '')"
       >
@@ -227,10 +227,10 @@ onMounted(async () => {
       <v-row class="mb-1">
         <v-col
           v-for="card in [
-            { key: 'active', value: totals.active, icon: 'mdi-badge-account', color: 'success', filter: 'ACTIVE' },
-            { key: 'onboarding', value: totals.onboarding, icon: 'mdi-school', color: 'primary', filter: 'ONBOARDING' },
-            { key: 'inactive', value: totals.inactive, icon: 'mdi-account-off', color: 'grey', filter: 'INACTIVE' },
-            { key: 'expiring', value: totals.expiring, icon: 'mdi-file-clock', color: 'warning', filter: null },
+            { key: 'active', value: totals.active, icon: 'id-card', color: 'success', filter: 'ACTIVE' },
+            { key: 'onboarding', value: totals.onboarding, icon: 'graduation-cap', color: 'primary', filter: 'ONBOARDING' },
+            { key: 'inactive', value: totals.inactive, icon: 'user-x', color: 'grey', filter: 'INACTIVE' },
+            { key: 'expiring', value: totals.expiring, icon: 'file-clock', color: 'warning', filter: null },
           ]"
           :key="card.key"
           cols="6"
@@ -262,7 +262,7 @@ onMounted(async () => {
       <v-card class="mb-6">
         <v-card-item>
           <v-card-title class="text-subtitle-1 font-weight-bold">
-            <v-icon icon="mdi-account-search" class="me-2" color="primary" />
+            <v-icon icon="user-search" class="me-2" color="primary" />
             {{ $t('reports.people') }}
             <v-chip size="small" variant="tonal" class="ms-2">{{ empTotal }}</v-chip>
           </v-card-title>
@@ -273,7 +273,7 @@ onMounted(async () => {
               <v-text-field
                 v-model="search"
                 :label="$t('reports.filters.search')"
-                prepend-inner-icon="mdi-magnify"
+                prepend-inner-icon="search"
                 density="compact"
                 clearable
                 hide-details
