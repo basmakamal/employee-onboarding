@@ -19,7 +19,14 @@ const DEFAULT_CTA: Record<Locale, string> = { ar: 'فتح الرابط', en: 'Op
 /** Admin-created templates live under this prefix; the catalogue never uses it for its own keys except the generic status message. */
 const CUSTOM_PREFIX = 'custom.';
 /** What a custom template can reference: whatever every trigger / reminder provides. */
-const CUSTOM_PLACEHOLDERS = ['name', 'employeeNo', 'department', 'jobTitle', 'status'];
+const CUSTOM_PLACEHOLDERS = ['name', 'employeeNo', 'department', 'jobTitle', 'status', 'formLink'];
+
+/** The one placeholder that costs something to provide (a link is issued). */
+const FORM_LINK_TOKEN = /\{\{\s*formLink\s*\}\}/;
+
+function mentionsFormLink(row: Pick<EmailTemplate, 'subjectAr' | 'subjectEn' | 'bodyAr' | 'bodyEn'>): boolean {
+  return FORM_LINK_TOKEN.test([row.subjectAr, row.subjectEn, row.bodyAr, row.bodyEn].join('\n'));
+}
 
 export interface TemplateDraft {
   name: string;
@@ -105,8 +112,18 @@ export class TemplateService {
       nameAr: row.name,
       nameEn: row.name,
       placeholders: CUSTOM_PLACEHOLDERS,
-      hasCta: false,
+      // A template that carries the form link gets the button (and its label fields).
+      hasCta: mentionsFormLink(row),
     };
+  }
+
+  /**
+   * Does this admin-created template use {{formLink}}? The trigger asks before
+   * issuing a link, because issuing one invalidates the previous form link.
+   */
+  async usesFormLink(key: string): Promise<boolean> {
+    const row = (await this.rows()).get(key);
+    return !!row && this.isCustom(key, row) && mentionsFormLink(row);
   }
 
   /** Catalogue meta or, for an admin-created template, meta derived from its row. */
@@ -139,6 +156,7 @@ export class TemplateService {
       docNumber: s('docNumber'),
       expiryDate: s('expiryDate'),
       linkUrl: `${this.appUrl}/form/preview-only`,
+      formLink: `${this.appUrl}/form/preview-only`,
     };
   }
 

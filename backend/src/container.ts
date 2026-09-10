@@ -86,7 +86,8 @@ export function buildContainer() {
     (key, locale, params) => templateService.render(key, locale, params),
   );
   // "When X enters status Y, email Z" — fires after each transition commits.
-  const triggerService = new TriggerService(prisma, notifications, templateService);
+  const linkTokenService = new LinkTokenService(linkTokens, config.APP_URL, config.LINK_TTL_HOURS);
+  const triggerService = new TriggerService(prisma, notifications, templateService, linkTokenService);
   onTransition((event) => triggerService.handle(event));
   const dashboardService = new DashboardService(prisma);
   const reportsService = new ReportsService(prisma);
@@ -200,7 +201,6 @@ export function buildContainer() {
     redisEnabled ? new RedisRefreshTokenStore(getSharedRedis()) : undefined,
   );
 
-  const linkTokenService = new LinkTokenService(linkTokens, config.APP_URL, config.LINK_TTL_HOURS);
   const onboardingService = new OnboardingService(
     { employees, documents, contracts, audit },
     onboardingWorkflow,

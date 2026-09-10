@@ -58,6 +58,8 @@ export interface TemplateParams {
   docNumber?: string;
   expiryDate?: string;
   linkUrl?: string;
+  /** Admin-created templates: a fresh data-form link for the employee. */
+  formLink?: string;
   /** Staff invitation only. */
   email?: string;
   tempPassword?: string;
