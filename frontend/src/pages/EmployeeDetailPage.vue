@@ -1001,6 +1001,94 @@ async function startOffboarding() {
   }
 }
 
+
+// ------------------------------------------------------------- header actions
+/**
+ * Everything HR can do from the header, in one list. The most consequential
+ * legal action for the current status becomes the single primary button;
+ * the rest sit in the Actions menu with the destructive ones at the bottom.
+ */
+interface HeaderAction {
+  key: string;
+  label: string;
+  icon: string;
+  color?: string;
+  busyKey?: string;
+  disabled?: boolean;
+  destructive?: boolean;
+  divider?: boolean;
+  run: () => void;
+}
+
+const allActions = computed<HeaderAction[]>(() => {
+  const e = employee.value;
+  if (!e) return [];
+  const out: HeaderAction[] = [];
+  for (const o of contractStatusOptions.value) {
+    out.push({
+      key: `contract:${o.status}`,
+      label: o.label,
+      icon: o.icon,
+      color: o.color,
+      busyKey: 'contract-status',
+      disabled: o.status === 'PENDING_APPROVAL' && !e.contract,
+      run: () => void onContractStatus(o.status),
+    });
+  }
+  for (const b of onboardingButtons.value) {
+    out.push({
+      key: `onb:${b.action}`,
+      label: t(`actions.${b.action}`),
+      icon: b.icon,
+      color: b.color,
+      busyKey: b.endpoint,
+      run: () => onOnboardingAction(b.action),
+    });
+  }
+  if (isPipeline.value && e.status === 'CONTRACT_CREATION' && auth.hasRole('HR')) {
+    out.push({
+      key: 'contract-edit',
+      label: e.contract ? t('contract.edit') : t('contract.createBtn'),
+      icon: 'file-pen-line',
+      color: 'primary',
+      run: openContractDialog,
+    });
+  }
+  if (auth.hasRole('IT') && !isClosed.value) {
+    out.push({ key: 'asset', label: t('assets.newForm'), icon: 'laptop', run: () => { formDialog.value = true; } });
+  }
+  if (!isPipeline.value && !isClosed.value && auth.hasRole('HR')) {
+    out.push({ key: 'doc', label: t('expiryDocs.add'), icon: 'file-clock', run: () => openDocDialog() });
+    out.push({ key: 'req', label: t('requests.new'), icon: 'hand', run: () => openRequest('SALARY_LETTER') });
+  }
+  if (auth.hasRole('HR')) out.push({ key: 'edit', label: t('profile.edit'), icon: 'pencil', run: openEdit });
+  out.push({ key: 'print', label: t('common.print'), icon: 'printer', run: printProfile });
+
+  const danger: HeaderAction[] = [];
+  if (!openOffboarding.value && e.status === 'ACTIVE' && auth.hasRole('HR')) {
+    danger.push({ key: 'offboard', label: t('profile.endContract'), icon: 'log-out', destructive: true, run: () => { offboardingDialog.value = true; } });
+  }
+  if (e.availableActions.includes('WITHDRAW')) {
+    danger.push({ key: 'withdraw', label: t('withdraw.button'), icon: 'user-x', destructive: true, run: () => { withdrawReason.value = ''; withdrawDialog.value = true; } });
+  }
+  if (auth.user?.role === 'ADMIN') {
+    danger.push({ key: 'delete', label: t('profile.delete'), icon: 'trash-2', destructive: true, run: () => { deleteDialog.value = true; } });
+  }
+  if (danger.length) out.push({ key: 'sep', label: '', icon: '', divider: true, run: () => {} }, ...danger);
+  return out;
+});
+
+const primaryAction = computed<HeaderAction | null>(() => {
+  const a = allActions.value;
+  return (
+    a.find((x) => x.key === 'contract:ACTIVE') ??
+    a.find((x) => x.key.startsWith('contract:') || x.key.startsWith('onb:')) ??
+    a.find((x) => x.key === 'contract-edit') ??
+    null
+  );
+});
+const menuActions = computed(() => allActions.value.filter((a) => a.key !== primaryAction.value?.key));
+
 onMounted(load);
 </script>
 
@@ -1014,262 +1102,98 @@ onMounted(load);
       </span>
     </div>
 
-    <!-- Profile card -->
-    <v-card class="mb-6 profile-card" elevation="1">
-      <v-card-text class="pa-6">
-        <div class="d-flex flex-wrap align-start" style="gap: 24px">
-          <!-- Photo -->
-          <div class="position-relative flex-shrink-0">
-            <v-avatar size="96" color="primary" variant="tonal">
-              <v-img v-if="photoUrl" :src="photoUrl" cover />
-              <span v-else class="text-h4 font-weight-bold">{{ initials }}</span>
-            </v-avatar>
-            <v-btn
-              v-if="auth.hasRole('HR')"
-              icon="camera"
-              size="x-small"
-              color="primary"
-              class="photo-edit-btn"
-              :loading="busy === 'photo'"
-              :title="$t('profile.uploadPhoto')"
-              @click="photoInput?.click()"
-            />
-            <input
-              ref="photoInput"
-              type="file"
-              accept="image/jpeg,image/png"
-              class="d-none"
-              @change="onPhotoPicked"
-            />
-          </div>
-
-          <!-- Identity -->
-          <div class="flex-grow-1" style="min-width: 220px">
-            <h1 class="text-h4 font-weight-bold mb-1">
-              {{ employee.firstName }} {{ employee.lastName }}
-            </h1>
-            <div class="text-medium-emphasis">
-              {{ employee.jobTitle ?? '—' }}<template v-if="employee.department">
-                · {{ employee.department }}</template
-              >
-            </div>
-            <div class="mt-2">
-              <StatusChip :status="employee.status" />
-            </div>
-          </div>
-
-          <!-- Status panel (حالة الموظف) -->
-          <v-sheet class="status-panel pa-4 text-center flex-shrink-0" rounded="lg">
-            <div class="text-subtitle-2 font-weight-bold mb-2">
-              {{ $t('profile.statusTitle') }}
-            </div>
-            <v-icon
-              :icon="
-                employee.status === 'ACTIVE'
-                  ? 'circle-check'
-                  : employee.status === 'INACTIVE'
-                    ? 'circle-pause'
-                    : 'clock'
-              "
-              :color="
-                employee.status === 'ACTIVE'
-                  ? 'success'
-                  : employee.status === 'INACTIVE'
-                    ? 'grey'
-                    : 'warning'
-              "
-              size="44"
-            />
-            <div class="mt-2">
-              <StatusChip :status="employee.status" />
-            </div>
-            <div
-              class="text-caption mt-2"
-              :class="missingCount === 0 ? 'text-success' : 'text-warning'"
-            >
-              {{
-                missingCount === 0
-                  ? $t('profile.dataComplete')
-                  : $t('profile.dataMissing', { n: missingCount })
-              }}
-            </div>
-          </v-sheet>
-        </div>
-
-        <v-divider class="my-5" />
-
-        <!-- Info grid -->
-        <v-row dense>
-          <v-col
-            v-for="field in [
-              { icon: 'hash', label: $t('employees.no'), value: employee.employeeNo },
-              { icon: 'network', label: $t('fields.department'), value: employee.department },
-              { icon: 'briefcase', label: $t('employees.project'), value: employee.project },
-              { icon: 'id-card', label: $t('fields.nationalId'), value: employee.nationalId },
-              {
-                icon: 'cake',
-                label: $t('fields.birthDate'),
-                value: employee.birthDate ? new Date(employee.birthDate).toLocaleDateString() : null,
-              },
-              { icon: 'phone', label: $t('fields.phone'), value: employee.phone },
-              { icon: 'mail', label: $t('fields.email'), value: employee.email },
-              {
-                icon: 'calendar-check',
-                label: $t('employees.hireDate'),
-                value: employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : null,
-              },
-              {
-                icon: 'briefcase-business',
-                label: $t('profile.employmentType'),
-                value: $t(`profile.types.${employee.employmentType}`),
-              },
-              { icon: 'user-round', label: $t('profile.directManager'), value: employee.directManager },
-            ]"
-            :key="field.label"
-            cols="6"
-            sm="4"
-            md="2"
-            class="info-cell"
-          >
-            <div class="text-caption text-medium-emphasis">
-              <v-icon :icon="field.icon" size="14" class="me-1" />{{ field.label }}
-            </div>
-            <div class="text-body-2 font-weight-medium">{{ field.value ?? '—' }}</div>
-          </v-col>
-        </v-row>
-
-        <v-divider class="my-5" />
-
-        <!-- Actions -->
-        <div class="d-flex flex-wrap align-center" style="gap: 12px">
-          <!-- Onboarding pipeline actions (server-driven, machine-legal only) -->
-          <v-btn
-            v-for="btn in onboardingButtons"
-            :key="btn.action"
-            :color="btn.color"
-            variant="tonal"
-            :prepend-icon="btn.icon"
-            :loading="busy === btn.endpoint"
-            @click="onOnboardingAction(btn.action)"
-          >
-            {{ $t(`actions.${btn.action}`) }}
-          </v-btn>
-          <v-btn
-            v-if="isPipeline && employee.status === 'CONTRACT_CREATION' && auth.hasRole('HR')"
-            color="indigo"
-            variant="tonal"
-            prepend-icon="file-pen-line"
-            @click="openContractDialog"
-          >
-            {{ employee.contract ? $t('contract.edit') : $t('contract.createBtn') }}
-          </v-btn>
-
-          <!-- Contract status, recorded by hand (external platform) -->
-          <v-btn
-            v-for="opt in contractStatusOptions"
-            :key="opt.status"
-            :color="opt.color"
-            variant="tonal"
-            :prepend-icon="opt.icon"
-            :loading="busy === 'contract-status'"
-            :disabled="opt.status === 'PENDING_APPROVAL' && !employee.contract"
-            @click="onContractStatus(opt.status)"
-          >
-            {{ opt.label }}
-          </v-btn>
-
-          <!-- Custody can start during training (IT) -->
-          <v-btn
-            v-if="isPipeline && auth.hasRole('IT')"
-            color="secondary"
-            variant="tonal"
-            prepend-icon="laptop"
-            @click="formDialog = true"
-          >
-            {{ $t('assets.newForm') }}
-          </v-btn>
-
-          <v-menu v-if="!isPipeline && !isClosed">
-            <template #activator="{ props }">
-              <v-btn v-bind="props" color="primary" variant="tonal" prepend-icon="circle-plus">
-                {{ $t('profile.newAction') }}
-              </v-btn>
-            </template>
-            <v-list density="compact">
-              <v-list-item
-                v-if="auth.hasRole('IT')"
-                prepend-icon="laptop"
-                :title="$t('assets.newForm')"
-                @click="formDialog = true"
-              />
-              <v-list-item
-                v-if="auth.hasRole('HR')"
-                prepend-icon="file-clock"
-                :title="$t('expiryDocs.add')"
-                @click="openDocDialog()"
-              />
-              <v-list-item
-                v-if="auth.hasRole('HR')"
-                prepend-icon="hand"
-                :title="$t('requests.new')"
-                @click="openRequest('SALARY_LETTER')"
-              />
-              <v-list-item
-                v-if="auth.hasRole('HR') && !openOffboarding && employee.status === 'ACTIVE'"
-                prepend-icon="door-open"
-                :title="$t('offboarding.start')"
-                @click="offboardingDialog = true"
-              />
-            </v-list>
-          </v-menu>
+    <!-- Profile header: identity, one primary action, everything else in a menu -->
+    <v-card class="mb-4 profile-head">
+      <div class="profile-head__main">
+        <div class="position-relative flex-shrink-0">
+          <v-avatar size="72" color="primary" variant="tonal" rounded="xl">
+            <v-img v-if="photoUrl" :src="photoUrl" cover />
+            <span v-else class="text-h5 font-weight-bold">{{ initials }}</span>
+          </v-avatar>
           <v-btn
             v-if="auth.hasRole('HR')"
-            variant="outlined"
-            prepend-icon="pencil"
-            @click="openEdit"
-          >
-            {{ $t('profile.edit') }}
-          </v-btn>
-          <v-btn variant="outlined" prepend-icon="printer" @click="printProfile">
-            {{ $t('common.print') }}
-          </v-btn>
-          <v-spacer />
-          <v-btn
-            v-if="!openOffboarding && employee.status === 'ACTIVE' && auth.hasRole('HR')"
-            color="error"
-            variant="outlined"
-            prepend-icon="log-out"
-            @click="offboardingDialog = true"
-          >
-            {{ $t('profile.endContract') }}
-          </v-btn>
-          <v-btn
-            v-if="employee.availableActions.includes('WITHDRAW')"
-            color="error"
-            variant="outlined"
-            prepend-icon="user-x"
-            @click="withdrawReason = ''; withdrawDialog = true"
-          >
-            {{ $t('withdraw.button') }}
-          </v-btn>
-          <v-tooltip
-            v-if="auth.user?.role === 'ADMIN'"
-            location="top"
-            :text="$t('profile.delete')"
-          >
-            <template #activator="{ props }">
-              <v-btn
-                v-bind="props"
-                icon="trash-2"
-                variant="text"
-                color="error"
-                @click="deleteDialog = true"
-              />
-            </template>
-          </v-tooltip>
+            icon="camera"
+            size="x-small"
+            color="primary"
+            class="photo-edit-btn"
+            :loading="busy === 'photo'"
+            :aria-label="$t('profile.uploadPhoto')"
+            @click="photoInput?.click()"
+          />
+          <input ref="photoInput" type="file" accept="image/jpeg,image/png" class="d-none" @change="onPhotoPicked" />
         </div>
-      </v-card-text>
+
+        <div class="flex-grow-1 min-w-0">
+          <div class="d-flex align-center flex-wrap ga-2">
+            <h1 class="text-h5 font-weight-bold">{{ employee.firstName }} {{ employee.lastName }}</h1>
+            <StatusChip :status="employee.status" />
+          </div>
+          <div class="text-body-2 text-medium-emphasis mt-1">
+            {{ [employee.jobTitle, employee.department, employee.project].filter(Boolean).join(' · ') || '—' }}
+          </div>
+          <div class="profile-head__meta text-caption text-medium-emphasis mt-2">
+            <span v-if="employee.employeeNo" class="tnum"><v-icon icon="hash" size="12" />{{ employee.employeeNo }}</span>
+            <span dir="ltr"><v-icon icon="mail" size="12" />{{ employee.email }}</span>
+            <span v-if="employee.phone" dir="ltr"><v-icon icon="phone" size="12" />{{ employee.phone }}</span>
+            <span v-if="employee.hireDate"><v-icon icon="calendar-check" size="12" />{{ new Date(employee.hireDate).toLocaleDateString() }}</span>
+            <span v-if="isPipeline" :class="missingCount === 0 ? 'text-success' : 'text-warning'">
+              <v-icon :icon="missingCount === 0 ? 'circle-check' : 'circle-alert'" size="12" />
+              {{ missingCount === 0 ? $t('profile.dataComplete') : $t('profile.dataMissing', { n: missingCount }) }}
+            </span>
+          </div>
+        </div>
+
+        <div class="profile-head__actions">
+          <v-btn
+            v-if="primaryAction"
+            :color="primaryAction.color ?? 'primary'"
+            variant="flat"
+            :prepend-icon="primaryAction.icon"
+            :loading="!!primaryAction.busyKey && busy === primaryAction.busyKey"
+            :disabled="primaryAction.disabled"
+            @click="primaryAction.run()"
+          >
+            {{ primaryAction.label }}
+          </v-btn>
+          <v-menu v-if="menuActions.length">
+            <template #activator="{ props }">
+              <v-btn v-bind="props" variant="tonal" append-icon="chevron-down">{{ $t('profile.actionsMenu') }}</v-btn>
+            </template>
+            <v-list density="compact" min-width="260">
+              <template v-for="item in menuActions" :key="item.key">
+                <v-divider v-if="item.divider" class="my-1" />
+                <v-list-item
+                  v-else
+                  :prepend-icon="item.icon"
+                  :title="item.label"
+                  :base-color="item.destructive ? 'error' : undefined"
+                  :disabled="item.disabled"
+                  @click="item.run()"
+                />
+              </template>
+            </v-list>
+          </v-menu>
+        </div>
+      </div>
+
+      <!-- Where the hire stands: done · current · next -->
+      <div v-if="isPipeline || isWithdrawn" class="profile-head__steps">
+        <template v-for="(stage, i) in PIPELINE_STAGES" :key="stage">
+          <span
+            class="step"
+            :class="{ 'step--done': PIPELINE_STAGES.indexOf(employee.status) > i, 'step--now': stage === employee.status }"
+          >
+            <v-icon v-if="PIPELINE_STAGES.indexOf(employee.status) > i" icon="check" size="12" />
+            <span v-else class="step__dot" />
+            {{ $t(`status.${stage}`) }}
+          </span>
+          <v-icon icon="chevron-right" size="14" class="step__sep flip-rtl" />
+        </template>
+        <span class="step"><span class="step__dot" />{{ $t('status.ACTIVE') }}</span>
+        <v-chip v-if="isWithdrawn" size="x-small" color="error" class="ms-2">{{ $t('status.WITHDRAWN') }}</v-chip>
+      </div>
     </v-card>
+
 
     <!-- Offboarding banner -->
     <v-alert
@@ -1305,6 +1229,57 @@ onMounted(load);
 
     <v-window v-model="tab" :touch="false">
       <v-window-item value="overview">
+        <!-- Details (البيانات) -->
+        <v-card class="mb-4">
+          <v-card-item>
+            <v-card-title class="text-subtitle-1 font-weight-bold">
+              <v-icon icon="id-card" class="me-2" color="primary" />
+              {{ $t('profile.details') }}
+            </v-card-title>
+          </v-card-item>
+          <v-card-text>
+            <v-row dense>
+              <v-col
+                v-for="field in [
+                  { icon: 'hash', label: $t('employees.no'), value: employee.employeeNo },
+                  { icon: 'network', label: $t('fields.department'), value: employee.department },
+                  { icon: 'briefcase', label: $t('employees.project'), value: employee.project },
+                  { icon: 'id-card', label: $t('fields.nationalId'), value: employee.nationalId },
+                  {
+                    icon: 'cake',
+                    label: $t('fields.birthDate'),
+                    value: employee.birthDate ? new Date(employee.birthDate).toLocaleDateString() : null,
+                  },
+                  { icon: 'phone', label: $t('fields.phone'), value: employee.phone },
+                  { icon: 'mail', label: $t('fields.email'), value: employee.email },
+                  {
+                    icon: 'calendar-check',
+                    label: $t('employees.hireDate'),
+                    value: employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : null,
+                  },
+                  {
+                    icon: 'briefcase-business',
+                    label: $t('profile.employmentType'),
+                    value: $t(`profile.types.${employee.employmentType}`),
+                  },
+                  { icon: 'user-round', label: $t('profile.directManager'), value: employee.directManager },
+                  { icon: 'languages', label: $t('fields.preferredLanguage'), value: $t(`languages.${employee.preferredLanguage ?? 'AR'}`) },
+                ]"
+                :key="field.label"
+                cols="6"
+                sm="4"
+                md="3"
+                class="info-cell"
+              >
+                <div class="text-caption text-medium-emphasis">
+                  <v-icon :icon="field.icon" size="14" class="me-1" />{{ field.label }}
+                </div>
+                <div class="text-body-2 font-weight-medium">{{ field.value ?? '—' }}</div>
+              </v-col>
+            </v-row>
+          </v-card-text>
+        </v-card>
+
     <!-- Onboarding pipeline progress (pre-activation) -->
     <v-card v-if="isPipeline || isWithdrawn" class="mb-6">
       <v-card-item>
@@ -2376,5 +2351,32 @@ onMounted(load);
 .letter-text :deep(textarea) {
   font-family: 'Times New Roman', serif;
   line-height: 1.9;
+}
+
+/* ── profile header ─────────────────────────────────────────────────────── */
+.profile-head { padding: 18px 20px 14px; }
+.profile-head__main { display: flex; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
+.profile-head__meta { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.profile-head__meta > span { display: inline-flex; align-items: center; gap: 5px; }
+.profile-head__actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.profile-head__steps {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.step {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 500;
+  background: rgb(var(--v-theme-surface-variant));
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.step__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .6; }
+.step--done { color: rgb(var(--v-theme-success)); background: rgba(var(--v-theme-success), 0.12); }
+.step--now { color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), 0.12); font-weight: 600; }
+.step--now .step__dot { opacity: 1; }
+.step__sep { color: rgba(var(--v-theme-on-surface), 0.35); }
+@media (max-width: 700px) {
+  .profile-head__actions { width: 100%; }
+  .profile-head__actions .v-btn:first-child { flex: 1; }
 }
 </style>

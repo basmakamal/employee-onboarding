@@ -638,7 +638,9 @@
     "onboardingDocs": "Documents",
     "delete": "Delete employee",
     "deleteWarning": "This permanently deletes the employee and everything attached: documents, contract, processes, custody forms, offboardings and requests. It cannot be undone. For real ex-employees use offboarding instead — delete is for wrongly created or test records.",
-    "deleteConfirm": "Delete permanently"
+    "deleteConfirm": "Delete permanently",
+    "actionsMenu": "Actions",
+    "details": "Details"
   },
   "requests": {
     "title": "Requests & services",
