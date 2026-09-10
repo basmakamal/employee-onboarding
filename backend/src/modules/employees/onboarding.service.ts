@@ -350,6 +350,42 @@ export class OnboardingService {
     throw new NotFoundError('link', 'unsupported purpose');
   }
 
+  /**
+   * The new hire's own decision, straight from the contract link.
+   *
+   * It runs through setContractStatus, the same path HR uses by hand, so an
+   * e-approval and an HR approval leave the record in exactly the same state
+   * (number allocated, Stage-2 tracks opened, everything audited) — with the
+   * actor recorded as the link rather than a staff member. The link is spent
+   * on the way out, so the decision cannot be replayed.
+   */
+  async decideContract(rawToken: string, decision: 'APPROVE' | 'REJECT', rejectReason?: string) {
+    const token = await this.links.verify(rawToken);
+    if (token.purpose !== 'CONTRACT_APPROVAL' || !token.employee) {
+      throw new NotFoundError('link', 'not a contract link');
+    }
+    const employee = token.employee;
+    const result = await this.setContractStatus(
+      employee.id,
+      decision === 'APPROVE' ? 'ACTIVE' : 'REJECTED',
+      { type: 'LINK', id: token.id },
+      rejectReason ? { reason: rejectReason } : {},
+    );
+    await this.links.markUsed(token.id);
+
+    const employeeNo = 'employeeNo' in result ? (result.employeeNo as string) : null;
+    await this.notifications.notifyHr(
+      decision === 'APPROVE' ? 'hr.contract_approved' : 'hr.contract_rejected',
+      {
+        name: `${employee.firstName} ${employee.lastName}`,
+        ...(employeeNo ? { employeeNo } : {}),
+        ...(rejectReason ? { rejectReason } : {}),
+      },
+      { entity: 'EMPLOYEE', entityId: employee.id },
+    );
+    return { decision, employeeNo };
+  }
+
   /** The uploaded contract document, addressed by the employee's signed link. */
   async contractFileKeyByToken(rawToken: string): Promise<string> {
     const token = await this.links.verify(rawToken);

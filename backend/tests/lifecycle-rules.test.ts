@@ -44,7 +44,7 @@ const gates = (over: Partial<OnboardingGates> = {}): OnboardingGates => ({
   ...over,
 });
 
-describe('contract status is recorded by HR, not clicked by the hire', () => {
+describe('the contract decision: HR by hand, or the new hire from their link', () => {
   it('HR submits, approves, rejects and expires the contract', async () => {
     const wf = new Workflow(onboardingMachine(gates()), deps<Employee>());
 
@@ -62,10 +62,23 @@ describe('contract status is recorded by HR, not clicked by the hire', () => {
     );
   });
 
-  it('the signed link can no longer approve a contract', async () => {
+  it('the new hire may accept or reject from their signed link', async () => {
+    const wf = new Workflow(onboardingMachine(gates()), deps<Employee>());
+    expect(
+      (await wf.transition(employee('AWAITING_CONTRACT_APPROVAL'), 'APPROVE_CONTRACT', LINK)).to,
+    ).toBe('ACTIVE');
+    expect(
+      (await wf.transition(employee('AWAITING_CONTRACT_APPROVAL'), 'REJECT_CONTRACT', LINK)).to,
+    ).toBe('CONTRACT_CREATION');
+  });
+
+  it('a link still cannot submit or expire a contract — those stay with HR', async () => {
     const wf = new Workflow(onboardingMachine(gates()), deps<Employee>());
     await expect(
-      wf.transition(employee('AWAITING_CONTRACT_APPROVAL'), 'APPROVE_CONTRACT', LINK),
+      wf.transition(employee('CONTRACT_CREATION'), 'SUBMIT_CONTRACT', LINK),
+    ).rejects.toThrow(/LINK/);
+    await expect(
+      wf.transition(employee('AWAITING_CONTRACT_APPROVAL'), 'EXPIRE', LINK),
     ).rejects.toThrow(/LINK/);
   });
 

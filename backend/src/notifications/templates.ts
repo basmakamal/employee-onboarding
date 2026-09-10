@@ -108,6 +108,8 @@ export interface TemplateParams {
   contractTerms?: string;
   contractRef?: string;
   contractLink?: string;
+  /** Why the new hire sent the contract back. */
+  rejectReason?: string;
   /** Staff invitation only. */
   email?: string;
   tempPassword?: string;
@@ -287,10 +289,11 @@ const T: Record<string, Record<Locale, Template>> = {
           paragraphs: [
             `مرحبًا ${p.name ?? ''},`,
             'تم إعداد عقد العمل الخاص بك. فيما يلي بنوده الأساسية كما سُجّلت لدى الموارد البشرية.',
+            'يرجى مراجعة البنود ثم اعتماد العقد أو رفضه من الرابط أدناه، حيث يمكنك أيضًا تنزيل نسخة المستند.',
           ],
           details: contractRows(p, 'ar'),
           ...(contractCta(p)
-            ? { cta: { label: 'عرض العقد', url: contractCta(p) as string } }
+            ? { cta: { label: 'مراجعة العقد واعتماده', url: contractCta(p) as string } }
             : {}),
           note: LINK_NOTE.ar,
         },
@@ -305,9 +308,12 @@ const T: Record<string, Record<Locale, Template>> = {
           paragraphs: [
             `Hello ${p.name ?? ''},`,
             'Your employment contract has been prepared. Its main terms, as recorded by HR, are below.',
+            'Please review them, then accept or reject the contract from the link below, where you can also download the document.',
           ],
           details: contractRows(p, 'en'),
-          ...(contractCta(p) ? { cta: { label: 'View contract', url: contractCta(p) as string } } : {}),
+          ...(contractCta(p)
+            ? { cta: { label: 'Review and approve', url: contractCta(p) as string } }
+            : {}),
           note: LINK_NOTE.en,
         },
         SIGN_OFF.en,
@@ -470,6 +476,24 @@ const T: Record<string, Record<Locale, Template>> = {
     en: (p) => ({
       subject: `Status update: ${p.name ?? ''} — ${p.status ?? ''}`,
       text: `The record for ${p.name ?? ''} moved to status "${p.status ?? ''}". Open the system for details.`,
+    }),
+  },
+
+  /** HR notice — the new hire rejected the contract from their link. */
+  'hr.contract_rejected': {
+    ar: (p) => ({
+      subject: `رُفض العقد: ${p.name ?? ''}`,
+      text:
+        `لم يعتمد ${p.name ?? ''} عقد العمل` +
+        (p.rejectReason ? `، والسبب: ${p.rejectReason}` : '') +
+        '. عاد السجل إلى مرحلة إعداد العقد لتعديله وإعادة إرساله.',
+    }),
+    en: (p) => ({
+      subject: `Contract rejected: ${p.name ?? ''}`,
+      text:
+        `${p.name ?? ''} did not accept the employment contract` +
+        (p.rejectReason ? `. Reason: ${p.rejectReason}` : '') +
+        '. The record is back at contract creation so it can be corrected and sent again.',
     }),
   },
 

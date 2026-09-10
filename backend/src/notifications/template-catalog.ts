@@ -24,6 +24,7 @@ export const PLACEHOLDERS: Record<string, PlaceholderMeta> = {
   docNumber: { ar: 'رقم المستند', en: 'Document number', sample: { ar: '2382910044', en: '2382910044' } },
   expiryDate: { ar: 'تاريخ الانتهاء', en: 'Expiry date', sample: { ar: '2026-08-25', en: '2026-08-25' } },
   linkUrl: { ar: 'رابط الإجراء', en: 'Action link', sample: { ar: 'https://…/form/…', en: 'https://…/form/…' } },
+  rejectReason: { ar: 'سبب الرفض', en: 'Rejection reason', sample: { ar: 'الراتب غير مطابق', en: 'Salary does not match' } },
   contractSalary: { ar: 'الراتب', en: 'Salary', sample: { ar: '9٬000', en: '9,000' } },
   contractDuration: { ar: 'مدة العقد بالأشهر', en: 'Duration in months', sample: { ar: '12', en: '12' } },
   contractStartDate: { ar: 'تاريخ المباشرة', en: 'Contract start date', sample: { ar: '2026-10-01', en: '2026-10-01' } },
@@ -112,6 +113,10 @@ export const TEMPLATE_CATALOG: Record<string, TemplateMeta> = {
   'staff.invitation': {
     audience: 'staff', nameAr: 'دعوة مستخدم جديد', nameEn: 'Staff invitation',
     placeholders: ['name', 'email', 'tempPassword', 'linkUrl'], hasCta: true,
+  },
+  'hr.contract_rejected': {
+    audience: 'staff', nameAr: 'رفض العقد', nameEn: 'Contract rejected',
+    placeholders: [...EMP, 'rejectReason'], hasCta: false,
   },
   'hr.contract_approved': {
     audience: 'staff', nameAr: 'تم اعتماد العقد', nameEn: 'Contract approved',

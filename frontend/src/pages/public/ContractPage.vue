@@ -2,15 +2,15 @@
 /**
  * The contract page behind a CONTRACT_APPROVAL signed link.
  *
- * Read-only on purpose: contracts are signed and approved on the official
- * contracting platform, and HR records the outcome by hand. What this page
- * adds is the thing the email cannot safely carry — the terms on file and
- * the contract document itself, served through the same token rather than
- * attached to a mailbox.
+ * The new hire reads the terms HR recorded, downloads the contract document
+ * (served through the same token rather than mailed as an attachment), and
+ * accepts or rejects it. Accepting runs the same transition HR performs by
+ * hand, so an e-approval and an HR approval leave the record identical.
  */
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from '../../api/client';
+import { useI18n } from 'vue-i18n';
+import { api, ApiError } from '../../api/client';
 import { usePreferencesStore } from '../../stores/preferences';
 
 interface ContractContext {
@@ -20,6 +20,7 @@ interface ContractContext {
     lastName: string;
     department: string | null;
     jobTitle: string | null;
+    status: string;
     preferredLanguage?: 'AR' | 'EN';
   };
   contract: {
@@ -34,11 +35,17 @@ interface ContractContext {
 }
 
 const route = useRoute();
+const { t } = useI18n();
 const prefs = usePreferencesStore();
 const token = route.params['token'] as string;
 
-const state = ref<'loading' | 'ready' | 'invalid'>('loading');
+const state = ref<'loading' | 'ready' | 'deciding' | 'accepted' | 'rejected' | 'invalid'>('loading');
 const ctx = ref<ContractContext | null>(null);
+const error = ref('');
+const employeeNo = ref<string | null>(null);
+const acceptDialog = ref(false);
+const rejectDialog = ref(false);
+const rejectReason = ref('');
 
 onMounted(async () => {
   try {
@@ -88,8 +95,34 @@ const rows = computed(() => {
   ].filter((r) => r.value);
 });
 
+/** Only a contract actually waiting on this person can be decided. */
+const canDecide = computed(() => ctx.value?.employee.status === 'AWAITING_CONTRACT_APPROVAL');
+
 /** The document is behind the token, so it opens as a normal link. */
 const documentUrl = computed(() => `/api/link/${token}/contract/file`);
+
+async function decide(decision: 'APPROVE' | 'REJECT') {
+  acceptDialog.value = false;
+  rejectDialog.value = false;
+  state.value = 'deciding';
+  error.value = '';
+  try {
+    const res = await api.post<{ decision: string; employeeNo: string | null }>(
+      `/api/link/${token}/contract/decision`,
+      {
+        decision,
+        ...(decision === 'REJECT' && rejectReason.value.trim()
+          ? { rejectReason: rejectReason.value.trim() }
+          : {}),
+      },
+    );
+    employeeNo.value = res.employeeNo;
+    state.value = decision === 'APPROVE' ? 'accepted' : 'rejected';
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : t('common.error');
+    state.value = 'ready';
+  }
+}
 </script>
 
 <template>
@@ -110,6 +143,21 @@ const documentUrl = computed(() => `/api/link/${token}/contract/file`);
       <p class="text-medium-emphasis">{{ $t('contractPage.invalidHint') }}</p>
     </v-card>
 
+    <v-card v-else-if="state === 'accepted'" class="pa-10 text-center">
+      <v-icon icon="circle-check" size="64" color="success" class="mb-4 pop" />
+      <h2 class="text-h5 mb-2">{{ $t('contractPage.acceptedTitle') }}</h2>
+      <p class="text-medium-emphasis mb-1">{{ $t('contractPage.acceptedHint') }}</p>
+      <p v-if="employeeNo" class="text-body-2 font-weight-medium">
+        {{ $t('contractPage.employeeNo', { no: employeeNo }) }}
+      </p>
+    </v-card>
+
+    <v-card v-else-if="state === 'rejected'" class="pa-10 text-center">
+      <v-icon icon="send" size="56" color="warning" class="mb-4 pop" />
+      <h2 class="text-h6 mb-2">{{ $t('contractPage.rejectedTitle') }}</h2>
+      <p class="text-medium-emphasis">{{ $t('contractPage.rejectedHint') }}</p>
+    </v-card>
+
     <v-card v-else-if="ctx">
       <div class="form-head">
         <img src="/riyada-logo.png" alt="Riyada HR" class="form-logo" />
@@ -122,6 +170,8 @@ const documentUrl = computed(() => `/api/link/${token}/contract/file`);
 
       <v-card-text class="pt-5 px-5 px-sm-7">
         <p class="text-body-2 mb-5">{{ $t('contractPage.intro') }}</p>
+
+        <v-alert v-if="error" type="error" variant="tonal" class="mb-5 text-body-2">{{ error }}</v-alert>
 
         <h3 class="sec">{{ $t('contractPage.terms') }}</h3>
         <v-table density="comfortable" class="terms">
@@ -148,7 +198,7 @@ const documentUrl = computed(() => `/api/link/${token}/contract/file`);
             target="_blank"
             rel="noopener"
             color="primary"
-            variant="flat"
+            variant="tonal"
             prepend-icon="file-signature"
           >
             {{ $t('contractPage.open') }}
@@ -158,11 +208,68 @@ const documentUrl = computed(() => `/api/link/${token}/contract/file`);
           {{ $t('contractPage.noDocument') }}
         </v-alert>
 
-        <v-alert type="info" variant="tonal" density="comfortable" class="mt-6 text-body-2">
-          {{ $t('contractPage.statusNote') }}
+        <template v-if="canDecide">
+          <h3 class="sec">{{ $t('contractPage.decide') }}</h3>
+          <p class="text-body-2 text-medium-emphasis mb-4">{{ $t('contractPage.statusNote') }}</p>
+          <div class="d-flex flex-wrap ga-3">
+            <v-btn
+              color="success"
+              size="large"
+              variant="flat"
+              class="px-6"
+              prepend-icon="badge-check"
+              :loading="state === 'deciding'"
+              @click="acceptDialog = true"
+            >
+              {{ $t('contractPage.accept') }}
+            </v-btn>
+            <v-btn
+              color="error"
+              size="large"
+              variant="outlined"
+              prepend-icon="octagon-x"
+              :disabled="state === 'deciding'"
+              @click="rejectDialog = true"
+            >
+              {{ $t('contractPage.reject') }}
+            </v-btn>
+          </div>
+        </template>
+        <v-alert v-else type="info" variant="tonal" density="comfortable" class="mt-6 text-body-2">
+          {{ $t('contractPage.closed') }}
         </v-alert>
       </v-card-text>
     </v-card>
+
+    <!-- Accepting is a signature: it gets its own confirmation. -->
+    <v-dialog v-model="acceptDialog" max-width="440">
+      <v-card :title="$t('contractPage.acceptConfirmTitle')">
+        <v-card-text class="text-body-2">{{ $t('contractPage.acceptConfirm') }}</v-card-text>
+        <v-card-actions class="px-5 pb-4">
+          <v-spacer />
+          <v-btn variant="text" @click="acceptDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="success" variant="flat" class="px-5" @click="decide('APPROVE')">
+            {{ $t('contractPage.accept') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="rejectDialog" max-width="480">
+      <v-card :title="$t('contractPage.rejectTitle')">
+        <v-card-text>
+          <p class="text-body-2 text-medium-emphasis mb-4">{{ $t('contractPage.rejectHint') }}</p>
+          <v-textarea v-model="rejectReason" :label="$t('contractPage.rejectReason')" rows="3" autofocus />
+        </v-card-text>
+        <v-card-actions class="px-5 pb-4">
+          <v-spacer />
+          <v-btn variant="text" @click="rejectDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="error" variant="flat" class="px-5" @click="decide('REJECT')">
+            {{ $t('contractPage.reject') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -215,5 +322,23 @@ const documentUrl = computed(() => `/api/link/${token}/contract/file`);
 .terms :deep(th) {
   width: 42%;
   font-weight: 500;
+}
+.pop {
+  animation: pop 0.4s ease;
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pop {
+    animation: none;
+  }
 }
 </style>

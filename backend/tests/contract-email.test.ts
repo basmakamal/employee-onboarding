@@ -44,7 +44,7 @@ describe('employee.contract_approval_reminder', () => {
     });
     expect(message.text).toContain('Salary: 9000');
     expect(message.text).toContain('End date: 2027-09-30');
-    expect(message.text).toContain('View contract: https://hr.example/contract/tok123');
+    expect(message.text).toContain('Review and approve: https://hr.example/contract/tok123');
     expect(message.html).toContain('https://hr.example/contract/tok123');
     expect(message.html).toContain('C-2026-114');
   });
