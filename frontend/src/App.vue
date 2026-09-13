@@ -49,12 +49,12 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/', icon: 'layout-dashboard', key: 'nav.home', roles: [] },
       { to: '/employees', icon: 'users', key: 'nav.employees', roles: [] },
-      { to: '/emails', icon: 'mail', key: 'nav.emailLog', roles: ['HR'] },
     ],
   },
   {
     key: 'nav.groupInsights',
     items: [
+      { to: '/emails', icon: 'mail', key: 'nav.emailLog', roles: ['HR'] },
       { to: '/reports', icon: 'chart-column', key: 'nav.reports', roles: ['HR'] },
       { to: '/assistant', icon: 'sparkles', key: 'nav.assistant', roles: ['HR'] },
     ],
@@ -341,7 +341,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 }
 .shell-brand--rail { justify-content: center; padding-inline: 8px; }
 .shell-brand__logo { height: 26px; width: auto; display: block; }
-.shell-brand__text { font-family: var(--font-display); font-size: 14px; white-space: nowrap; }
+.shell-brand__text { font-size: 14px; font-weight: 600; white-space: nowrap; }
 .shell-search {
   display: flex;
   align-items: center;
@@ -373,7 +373,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 .shell-nav__item { min-height: 40px; }
 .shell-nav__item.v-list-item--active {
   color: rgb(var(--v-theme-primary));
-  background: rgba(var(--v-theme-primary), 0.1);
+  background: rgba(var(--v-theme-primary), 0.08);
+  font-weight: 600;
 }
 .shell-nav__item.v-list-item--active .v-list-item__overlay { opacity: 0; }
 .shell-nav__item.v-list-item--active::after {
@@ -414,8 +415,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 .shell-user__btn:hover { background: rgba(var(--v-theme-on-surface), 0.04); }
 .shell-bar {
   border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)) !important;
-  background: rgba(var(--v-theme-background), 0.85) !important;
-  backdrop-filter: blur(10px);
+  background: rgb(var(--v-theme-background)) !important;
 }
 .shell-bar__crumbs { display: flex; align-items: center; padding-inline-start: 12px; }
 .shell-bottom {
@@ -425,7 +425,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 .shell-bottom__fab {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
+  border-radius: 12px;
   background: rgb(var(--v-theme-primary));
   color: rgb(var(--v-theme-on-primary));
   display: grid;

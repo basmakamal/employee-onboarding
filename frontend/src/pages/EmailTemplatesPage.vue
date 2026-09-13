@@ -12,6 +12,7 @@ import { computed, nextTick, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
+import PageHeader from '../components/PageHeader.vue';
 
 type Audience = 'employee' | 'staff';
 type Lang = 'ar' | 'en';
@@ -406,12 +407,7 @@ async function removeTrigger(trigger: Trigger) {
 
 <template>
   <v-container class="py-8" style="max-width: 1200px">
-    <div class="d-flex align-center flex-wrap ga-3 mb-6">
-      <div>
-        <h1 class="text-h4 font-weight-bold">{{ $t('emailTemplates.title') }}</h1>
-        <p class="text-medium-emphasis mt-1 mb-0">{{ $t('emailTemplates.subtitle') }}</p>
-      </div>
-      <v-spacer />
+    <PageHeader :title="$t('emailTemplates.title')" :subtitle="$t('emailTemplates.subtitle')">
       <!-- The frequent actions live up here, not under the templates list. -->
       <v-btn variant="tonal" prepend-icon="file-plus" @click="newDialog = true">
         {{ $t('emailTemplates.newTemplate') }}
@@ -419,7 +415,7 @@ async function removeTrigger(trigger: Trigger) {
       <v-btn color="primary" prepend-icon="plus" @click="triggerDialog = true">
         {{ $t('emailTemplates.triggers.add') }}
       </v-btn>
-    </div>
+    </PageHeader>
 
     <template v-if="loaded">
       <!-- ── Templates ─────────────────────────────────────────────────── -->

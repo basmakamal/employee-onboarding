@@ -8,6 +8,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
+import PageHeader from '../components/PageHeader.vue';
 
 interface OwnershipRow {
   id: string;
@@ -104,8 +105,7 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 1000px">
-    <h1 class="text-h4 font-weight-bold mb-1">{{ $t('ownership.title') }}</h1>
-    <p class="text-medium-emphasis mb-6">{{ $t('ownership.subtitle') }}</p>
+    <PageHeader :title="$t('ownership.title')" :subtitle="$t('ownership.subtitle')" />
 
     <template v-if="loaded">
       <!-- Who is RESPONSIBLE (gets the reminders) -->

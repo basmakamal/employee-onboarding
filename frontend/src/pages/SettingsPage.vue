@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
+import PageHeader from '../components/PageHeader.vue';
 
 interface MailSettings {
   provider: 'console' | 'gmail' | 'microsoft' | 'custom';
@@ -97,8 +98,7 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 760px">
-    <h1 class="text-h4 font-weight-bold mb-1">{{ $t('settings.title') }}</h1>
-    <p class="text-medium-emphasis mb-6">{{ $t('settings.subtitle') }}</p>
+    <PageHeader :title="$t('settings.title')" :subtitle="$t('settings.subtitle')" />
 
     <v-card v-if="loaded" :title="$t('settings.mail')">
       <v-card-text>

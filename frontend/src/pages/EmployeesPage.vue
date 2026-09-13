@@ -12,6 +12,8 @@ import { api, ApiError } from '../api/client';
 import StatusChip from '../components/StatusChip.vue';
 import EntityCard from '../components/EntityCard.vue';
 import SkeletonBlock from '../components/SkeletonBlock.vue';
+import PageHeader from '../components/PageHeader.vue';
+import EmptyState from '../components/EmptyState.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 import { useConfirm } from '../composables/useConfirm';
@@ -297,60 +299,53 @@ onMounted(loadOptions);
 <template>
   <v-container class="py-6 py-md-8" style="max-width: 1240px">
     <!-- ───── header ───── -->
-    <div class="d-flex align-center flex-wrap ga-3 mb-5">
-      <div class="flex-grow-1">
-        <h1 class="text-h4 font-weight-bold">{{ $t('employees.title') }}</h1>
-        <p class="text-body-2 text-medium-emphasis mt-1 mb-0">{{ $t('employees.subtitle') }}</p>
-      </div>
+    <PageHeader :title="$t('employees.title')" :subtitle="$t('employees.subtitle')">
       <v-btn v-if="auth.hasRole('HR')" color="primary" prepend-icon="plus" @click="openCreate">
         {{ $t('employees.new') }}
       </v-btn>
-    </div>
+    </PageHeader>
 
-    <!-- ───── filters ───── -->
-    <v-card class="mb-3 pa-3 pa-sm-4">
-      <div class="d-flex flex-wrap align-center ga-2">
-        <v-text-field
-          v-model="search"
-          :placeholder="$t('employees.searchPlaceholder')"
-          prepend-inner-icon="search"
-          density="compact"
-          hide-details
-          clearable
-          class="filters__search"
-        />
-        <v-select
-          v-model="department"
-          :items="[{ title: $t('employees.allDepartments'), value: null }, ...options.departments.map((d) => ({ title: d, value: d }))]"
-          :label="$t('fields.department')"
-          density="compact"
-          hide-details
-          class="filters__dept"
-        />
-        <v-btn v-if="hasFilters" variant="text" size="small" prepend-icon="x" @click="clearFilters">
-          {{ $t('employees.clearFilters') }}
-        </v-btn>
-      </div>
-      <div class="d-flex align-center flex-wrap ga-2 mt-3">
-        <v-chip-group v-model="filter" mandatory selected-class="chip-on" class="filters__tabs">
-          <v-chip v-for="key in FILTERS" :key="key" :value="key" variant="tonal" size="small" class="font-weight-medium">
-            {{ $t(`employees.filters.${key}`) }}
-            <span class="ms-1 text-medium-emphasis tnum">{{ counts[key] }}</span>
-          </v-chip>
-        </v-chip-group>
-        <v-chip v-if="statusFilter" size="small" color="primary" closable @click:close="statusFilter = ''; load()">
-          {{ $t(`status.${statusFilter}`, statusFilter) }}
-        </v-chip>
-        <v-spacer />
-        <span class="text-caption text-medium-emphasis tnum">
-          {{ $t('employees.resultsCount', { n: employees.length, total }) }}
-        </span>
-      </div>
-    </v-card>
+    <!-- ───── lifecycle tabs ───── -->
+    <v-tabs v-model="filter" color="primary" density="comfortable" class="dir-tabs mb-4">
+      <v-tab v-for="key in FILTERS" :key="key" :value="key" class="text-none">
+        {{ $t(`employees.filters.${key}`) }}
+        <span class="dir-tabs__count tnum">{{ counts[key] }}</span>
+      </v-tab>
+    </v-tabs>
+
+    <!-- ───── toolbar ───── -->
+    <div class="dir-tools mb-3">
+      <v-text-field
+        v-model="search"
+        :placeholder="$t('employees.searchPlaceholder')"
+        prepend-inner-icon="search"
+        density="compact"
+        hide-details
+        clearable
+        class="dir-tools__search"
+      />
+      <v-select
+        v-model="department"
+        :items="[{ title: $t('employees.allDepartments'), value: null }, ...options.departments.map((d) => ({ title: lists.label('DEPARTMENT', d) ?? d, value: d }))]"
+        density="compact"
+        hide-details
+        class="dir-tools__dept"
+      />
+      <v-chip v-if="statusFilter" size="small" variant="tonal" closable @click:close="statusFilter = ''; load()">
+        {{ $t(`status.${statusFilter}`, statusFilter) }}
+      </v-chip>
+      <v-btn v-if="hasFilters" variant="text" size="small" @click="clearFilters">
+        {{ $t('employees.clearFilters') }}
+      </v-btn>
+      <v-spacer />
+      <span class="text-caption text-medium-emphasis tnum">
+        {{ $t('employees.resultsCount', { n: employees.length, total }) }}
+      </span>
+    </div>
 
     <!-- ───── bulk bar ───── -->
     <v-slide-y-transition>
-      <v-card v-if="selected.length" class="bulk mb-3 px-4 py-2 d-flex align-center flex-wrap ga-2">
+      <div v-if="selected.length" class="bulk mb-3 px-4 py-2 d-flex align-center flex-wrap ga-2">
         <span class="text-body-2 font-weight-semibold">{{ $t('employees.selected', { n: selected.length }) }}</span>
         <v-btn v-if="auth.hasRole('HR')" size="small" variant="tonal" prepend-icon="send" :loading="bulkBusy" @click="bulkSendForm">
           {{ $t('employees.bulkSendForm') }}
@@ -358,7 +353,7 @@ onMounted(loadOptions);
         <v-btn size="small" variant="tonal" prepend-icon="download" @click="bulkExport">{{ $t('employees.bulkExport') }}</v-btn>
         <v-spacer />
         <v-btn size="small" variant="text" @click="selected = []">{{ $t('common.cancel') }}</v-btn>
-      </v-card>
+      </div>
     </v-slide-y-transition>
 
     <!-- ───── phone: cards ───── -->
@@ -375,7 +370,12 @@ onMounted(loadOptions);
           :chip="{ text: $t(`status.${e.status}`), color: undefined }"
           :meta="e.employeeNo ?? e.email"
         />
-        <div v-if="employees.length === 0" class="text-center text-medium-emphasis py-10">{{ $t('employees.empty') }}</div>
+        <EmptyState
+          v-if="employees.length === 0"
+          icon="users"
+          :title="hasFilters ? $t('employees.noMatchTitle') : $t('employees.emptyTitle')"
+          :hint="hasFilters ? $t('employees.noMatchHint') : $t('employees.emptyHint')"
+        />
         <v-pagination
           v-if="total > itemsPerPage"
           :model-value="page"
@@ -407,8 +407,8 @@ onMounted(loadOptions);
       >
         <template #item.name="{ item }">
           <div class="d-flex align-center ga-3 py-1">
-            <v-avatar size="34" color="secondary" variant="tonal">
-              <span class="text-caption font-weight-bold">{{ initials(item) }}</span>
+            <v-avatar size="34" class="avatar-neutral">
+              <span class="text-caption font-weight-semibold">{{ initials(item) }}</span>
             </v-avatar>
             <div class="min-w-0">
               <div class="text-body-2 font-weight-semibold text-truncate">{{ fullName(item) }}</div>
@@ -417,7 +417,7 @@ onMounted(loadOptions);
           </div>
         </template>
         <template #item.department="{ item }">
-          <span class="text-body-2">{{ item.department ?? '—' }}</span>
+          <span class="text-body-2">{{ (item.department && (lists.label('DEPARTMENT', item.department) ?? item.department)) || '—' }}</span>
         </template>
         <template #item.status="{ item }">
           <StatusChip :status="item.status" />
@@ -446,7 +446,16 @@ onMounted(loadOptions);
           <SkeletonBlock variant="table" :rows="8" class="pa-4" />
         </template>
         <template #no-data>
-          <div class="pa-10 text-center text-medium-emphasis">{{ $t('employees.empty') }}</div>
+          <EmptyState
+            icon="users"
+            :title="hasFilters ? $t('employees.noMatchTitle') : $t('employees.emptyTitle')"
+            :hint="hasFilters ? $t('employees.noMatchHint') : $t('employees.emptyHint')"
+          >
+            <v-btn v-if="!hasFilters && auth.hasRole('HR')" color="primary" size="small" prepend-icon="plus" @click="openCreate">
+              {{ $t('employees.new') }}
+            </v-btn>
+            <v-btn v-else-if="hasFilters" variant="tonal" size="small" @click="clearFilters">{{ $t('employees.clearFilters') }}</v-btn>
+          </EmptyState>
         </template>
       </v-data-table-server>
     </v-card>
@@ -564,17 +573,28 @@ onMounted(loadOptions);
 </template>
 
 <style scoped>
-.filters__search { flex: 1 1 260px; min-width: 200px; }
-.filters__dept { flex: 0 1 220px; min-width: 180px; }
-.filters__tabs :deep(.chip-on) { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary)); }
-.bulk { background: rgba(var(--v-theme-primary), 0.08) !important; border-color: rgba(var(--v-theme-primary), 0.25) !important; }
+.dir-tabs { border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
+.dir-tabs :deep(.v-tab) { font-weight: 500; letter-spacing: 0; }
+.dir-tabs__count {
+  margin-inline-start: 6px;
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.dir-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dir-tools__search { flex: 1 1 260px; min-width: 200px; max-width: 420px; }
+.dir-tools__dept { flex: 0 1 220px; min-width: 180px; }
+.bulk {
+  background: rgba(var(--v-theme-primary), 0.06);
+  border: 1px solid rgba(var(--v-theme-primary), 0.2);
+  border-radius: var(--r-md);
+}
 .grid { overflow: hidden; }
 .grid__table :deep(tbody tr) { cursor: pointer; }
-.grid__table :deep(td) { height: 60px !important; }
+.grid__table :deep(td) { height: 56px !important; }
 
 .stepper { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .stepper__step {
-  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px;
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--r-md);
   background: rgb(var(--v-theme-surface-variant));
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
@@ -590,7 +610,7 @@ onMounted(loadOptions);
 .mode { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .mode__opt {
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; text-align: start;
-  border-radius: 14px; border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: var(--r-md); border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   background: rgb(var(--v-theme-surface)); color: inherit; font: inherit; cursor: pointer;
   transition: border-color 160ms var(--app-ease), background 160ms var(--app-ease);
 }

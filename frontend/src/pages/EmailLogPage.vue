@@ -8,6 +8,8 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
+import PageHeader from '../components/PageHeader.vue';
+import EmptyState from '../components/EmptyState.vue';
 
 interface LogRow {
   id: string;
@@ -126,12 +128,7 @@ async function resend(row: LogRow) {
 
 <template>
   <v-container class="py-8" style="max-width: 1200px">
-    <div class="d-flex flex-wrap align-center ga-4 mb-6">
-      <div>
-        <h1 class="text-h4 font-weight-bold">{{ $t('emailLog.title') }}</h1>
-        <p class="text-medium-emphasis mt-1 mb-0">{{ $t('emailLog.subtitle') }}</p>
-      </div>
-    </div>
+    <PageHeader :title="$t('emailLog.title')" :subtitle="$t('emailLog.subtitle')" />
 
     <v-card class="mb-4">
       <v-card-text class="d-flex flex-wrap ga-3 align-center">
@@ -242,11 +239,7 @@ async function resend(row: LogRow) {
           </div>
         </template>
         <template #no-data>
-          <div class="py-12 text-center">
-            <v-icon icon="mail" size="40" class="mb-3 text-medium-emphasis" />
-            <div class="text-subtitle-1 font-weight-medium">{{ $t('emailLog.empty') }}</div>
-            <div class="text-body-2 text-medium-emphasis">{{ $t('emailLog.emptyHint') }}</div>
-          </div>
+          <EmptyState icon="mail" :title="$t('emailLog.empty')" :hint="$t('emailLog.emptyHint')" />
         </template>
       </v-data-table-server>
     </v-card>

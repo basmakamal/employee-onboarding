@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
 import YearCalendar from '../components/YearCalendar.vue';
+import PageHeader from '../components/PageHeader.vue';
 
 interface HolidayRow {
   id: string;
@@ -106,8 +107,7 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 1100px">
-    <h1 class="text-h4 font-weight-bold mb-1">{{ $t('calendar.title') }}</h1>
-    <p class="text-medium-emphasis mb-6">{{ $t('calendar.subtitle') }}</p>
+    <PageHeader :title="$t('calendar.title')" :subtitle="$t('calendar.subtitle')" />
 
     <v-card v-if="loaded">
       <v-card-text>

@@ -42,7 +42,10 @@ export class DashboardService {
     const expiryUntil = new Date(now.getTime() + EXPIRY_WINDOW_DAYS * 86_400_000);
     const trendStart = new Date(now.getTime() - TREND_WEEKS * 7 * 86_400_000);
 
-    const [byStatus, gosi, medical, criminal, assetForms, offboardings, recent, stalled, expiring, custody, hires, intakes] =
+    const [
+      byStatus, gosi, medical, criminal, assetForms, offboardings, recent, stalled, expiring, custody, hires, intakes,
+      joiners,
+    ] =
       await Promise.all([
         this.prisma.employee.groupBy({ by: ['status'], _count: { _all: true } }),
         this.prisma.gosiProcess.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -91,7 +94,17 @@ export class DashboardService {
           where: { createdAt: { gte: trendStart } },
           select: { createdAt: true },
         }),
+        // The newest colleagues — the human face of "how are we growing".
+        this.prisma.employee.findMany({
+          where: { status: 'ACTIVE', hireDate: { not: null } },
+          orderBy: { hireDate: 'desc' },
+          take: 5,
+          select: { id: true, firstName: true, lastName: true, jobTitle: true, department: true, hireDate: true },
+        }),
       ]);
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const joinedThisMonth = hires.filter((h) => h.hireDate && h.hireDate >= monthStart).length;
 
     const toMap = (rows: Array<{ status: string; _count: { _all: number } }>) =>
       Object.fromEntries(rows.map((r) => [r.status, r._count._all]));
@@ -165,7 +178,15 @@ export class DashboardService {
         stalled: stalled.length,
         expiringDocs: expiring.length,
         custodyWaiting: custody.length,
+        joinedThisMonth,
       },
+      recentJoiners: joiners.map((j) => ({
+        id: j.id,
+        name: `${j.firstName} ${j.lastName}`,
+        jobTitle: j.jobTitle,
+        department: j.department,
+        hireDate: j.hireDate,
+      })),
       trends: {
         weeks: TREND_WEEKS,
         hires: bucket(hires.map((h) => h.hireDate)),

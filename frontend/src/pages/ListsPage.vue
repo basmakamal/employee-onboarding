@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
 import { useListsStore, type ListDto, type ListValueDto } from '../stores/lists';
 import { useConfirm } from '../composables/useConfirm';
+import PageHeader from '../components/PageHeader.vue';
 
 const { t } = useI18n();
 const lists = useListsStore();
@@ -153,12 +154,7 @@ async function remove(row: ListValueDto) {
 
 <template>
   <v-container fluid class="pa-4 pa-md-6">
-    <div class="d-flex flex-wrap align-center justify-space-between ga-3 mb-5">
-      <div>
-        <h1 class="text-h5 font-weight-bold mb-1">{{ $t('lists.title') }}</h1>
-        <p class="text-body-2 text-medium-emphasis mb-0">{{ $t('lists.subtitle') }}</p>
-      </div>
-    </div>
+    <PageHeader :title="$t('lists.title')" :subtitle="$t('lists.subtitle')" />
 
     <v-row>
       <!-- Which list -->

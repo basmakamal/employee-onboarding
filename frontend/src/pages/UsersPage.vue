@@ -5,6 +5,7 @@ import { api, ApiError } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
+import PageHeader from '../components/PageHeader.vue';
 
 interface UserRow {
   id: string;
@@ -195,16 +196,11 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 1100px">
-    <div class="d-flex align-center mb-6">
-      <div>
-        <h1 class="text-h4 font-weight-bold">{{ $t('users.title') }}</h1>
-        <p class="text-medium-emphasis mt-1">{{ $t('users.subtitle') }}</p>
-      </div>
-      <v-spacer />
+    <PageHeader :title="$t('users.title')" :subtitle="$t('users.subtitle')">
       <v-btn color="primary" prepend-icon="user-plus" @click="createDialog = true">
         {{ $t('users.new') }}
       </v-btn>
-    </div>
+    </PageHeader>
 
     <v-card>
       <v-data-table :headers="headers" :items="users" :loading="loading">

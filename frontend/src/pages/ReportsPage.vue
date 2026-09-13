@@ -189,6 +189,7 @@ async function download(kind: string, extra = '') {
 // The api client keeps the token privately; for blob downloads we go
 // through a normal fetch and reuse its refresh cookie via credentials.
 import { getAccessToken } from '../api/client';
+import PageHeader from '../components/PageHeader.vue';
 function authHeader(): Record<string, string> {
   const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -202,12 +203,7 @@ onMounted(async () => {
 
 <template>
   <v-container class="py-8" style="max-width: 1200px">
-    <div class="d-flex align-center flex-wrap mb-6" style="gap: 8px">
-      <div>
-        <h1 class="text-h4 font-weight-bold">{{ $t('reports.title') }}</h1>
-        <p class="text-medium-emphasis mt-1">{{ $t('reports.subtitle') }}</p>
-      </div>
-      <v-spacer />
+    <PageHeader :title="$t('reports.title')" :subtitle="$t('reports.subtitle')">
       <v-btn
         v-for="exp in ['employees', 'onboarding', 'expiring-documents', 'audit']"
         :key="exp"
@@ -220,7 +216,7 @@ onMounted(async () => {
       >
         {{ $t(`reports.exports.${exp}`) }}
       </v-btn>
-    </div>
+    </PageHeader>
 
     <template v-if="data">
       <!-- Clickable totals -->
@@ -237,23 +233,12 @@ onMounted(async () => {
           md="3"
         >
           <v-card
-            class="pa-1"
-            :variant="card.filter && statusFilter === card.filter ? 'tonal' : 'elevated'"
-            :color="card.filter && statusFilter === card.filter ? card.color : undefined"
-            hover
+            class="total"
+            :class="{ 'total--on': card.filter && statusFilter === card.filter, 'card-interactive': !!card.filter }"
             @click="card.filter ? toggleStatus(card.filter) : undefined"
           >
-            <v-card-text class="d-flex align-center" style="gap: 14px">
-              <v-avatar :color="card.color" variant="tonal" size="48">
-                <v-icon :icon="card.icon" size="26" />
-              </v-avatar>
-              <div>
-                <div class="text-h4 font-weight-bold">{{ card.value }}</div>
-                <div class="text-caption text-medium-emphasis">
-                  {{ $t(`reports.totals.${card.key}`) }}
-                </div>
-              </div>
-            </v-card-text>
+            <div class="total__label text-caption text-medium-emphasis">{{ $t(`reports.totals.${card.key}`) }}</div>
+            <div class="total__value tnum">{{ card.value }}</div>
           </v-card>
         </v-col>
       </v-row>
@@ -483,6 +468,10 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.total { padding: 14px 16px; }
+.total__value { font-size: 1.375rem; font-weight: 600; line-height: 1.2; margin-top: 2px; }
+.total--on { border-color: rgb(var(--v-theme-primary)) !important; background: rgba(var(--v-theme-primary), 0.05) !important; }
+
 .funnel-row {
   cursor: pointer;
 }
