@@ -965,16 +965,18 @@ function printProfile() {
 }
 
 /**
- * The custody form as a document: what was handed over, to whom, and when
- * the employee approved it through their signed link. Opens the browser's
- * print dialog, where "Save as PDF" produces the file HR asked for — the
- * same route the profile print-out takes, so nothing is generated server-side.
+ * The custody form as a PDF file.
+ *
+ * The document is laid out as HTML in an off-screen box, so Arabic letters
+ * join and the page flows right-to-left exactly as the browser draws them,
+ * then rendered to A4 pages and saved. Nothing is generated on the server
+ * and no print dialog is involved; the library loads only when the button
+ * is pressed.
  */
-function printAssetForm(form: AssetFormRow) {
+async function downloadAssetForm(form: AssetFormRow) {
   if (!employee.value) return;
   const e = employee.value;
-  const w = window.open('', '_blank', 'width=900,height=1000');
-  if (!w) return;
+  busy.value = `pdf:${form.id}`;
   const rtl = locale.value.startsWith('ar');
   const esc = (v: unknown) =>
     String(v ?? '—')
@@ -995,12 +997,7 @@ function printAssetForm(form: AssetFormRow) {
     ...(approved ? [[t('assets.approvedOn'), when(form.decidedAt)] as [string, unknown]] : []),
   ];
   const metaRows = meta
-    .map(
-      ([label, v]) => `<tr>
-        <td class="k">${esc(label)}</td>
-        <td>${esc(v)}</td>
-      </tr>`,
-    )
+    .map(([label, v]) => `<tr><td class="k">${esc(label)}</td><td>${esc(v)}</td></tr>`)
     .join('');
   const itemRows = form.items
     .map(
@@ -1019,47 +1016,42 @@ function printAssetForm(form: AssetFormRow) {
     .map((label) => `<div class="sig"><div class="line"></div><div>${esc(label)}</div></div>`)
     .join('');
 
-  w.document.write(`<!doctype html>
-<html dir="${rtl ? 'rtl' : 'ltr'}" lang="${rtl ? 'ar' : 'en'}">
-<head>
-<meta charset="utf-8">
-<title>${esc(t('assets.docTitle'))} — ${esc(`${e.firstName} ${e.lastName}`)}</title>
+  const host = document.createElement('div');
+  // A4 at 96 dpi is 794px wide; the box sits off-screen while it renders.
+  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;z-index:-1;';
+  host.innerHTML = `
+<div class="cust" dir="${rtl ? 'rtl' : 'ltr'}" lang="${rtl ? 'ar' : 'en'}">
 <style>
-  @page { size: A4; margin: 18mm; }
-  body { margin: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #1f2933; font-size: 13px; }
-  .head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 3px solid #35708f; }
-  .head img { height: 40px; }
-  .head h1 { margin: 0; font-size: 20px; }
-  .head .sub { color: #667; font-size: 12px; margin-top: 2px; }
-  .ref { color: #667; font-size: 11px; text-align: end; }
-  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-  td, th { border: 1px solid #cfd6dc; padding: 7px 10px; text-align: start; vertical-align: top; }
-  th { background: #eef3f5; font-weight: 600; font-size: 12px; }
-  td.k { background: #f6f8f9; width: 32%; font-weight: 600; }
-  td.c, th.c { text-align: center; }
-  .note { margin-top: 18px; padding: 10px 12px; border-inline-start: 3px solid #4e9e8f; background: #f4f9f8; font-size: 12.5px; line-height: 1.6; }
-  .sigs { display: flex; gap: 40px; margin-top: 56px; }
-  .sig { flex: 1; text-align: center; font-size: 12px; color: #445; }
-  .sig .line { border-bottom: 1px solid #333; height: 40px; margin-bottom: 6px; }
-  .foot { margin-top: 28px; color: #889; font-size: 11px; display: flex; justify-content: space-between; }
-  @media print { .noprint { display: none; } }
-  .noprint { margin-bottom: 14px; }
-  .noprint button { font: inherit; padding: 8px 16px; border: 0; border-radius: 6px; background: #35708f; color: #fff; cursor: pointer; }
+  .cust { box-sizing: border-box; width: 794px; padding: 34px 38px; background: #fff; color: #1f2933;
+          font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; line-height: 1.5; }
+  .cust * { box-sizing: border-box; }
+  .cust .head { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+                padding-bottom: 12px; border-bottom: 3px solid #35708f; }
+  .cust .head img { height: 40px; }
+  .cust h1 { margin: 0; font-size: 20px; }
+  .cust .sub { color: #667; font-size: 12px; margin-top: 2px; }
+  .cust .ref { color: #667; font-size: 11px; text-align: end; margin-top: 8px; }
+  .cust table { width: 100%; border-collapse: collapse; margin-top: 18px; page-break-inside: avoid; }
+  .cust td, .cust th { border: 1px solid #cfd6dc; padding: 7px 10px; text-align: start; vertical-align: top; }
+  .cust th { background: #eef3f5; font-weight: 600; font-size: 12px; }
+  .cust td.k { background: #f6f8f9; width: 32%; font-weight: 600; }
+  .cust td.c, .cust th.c { text-align: center; }
+  .cust .note { margin-top: 18px; padding: 10px 12px; border-inline-start: 3px solid #4e9e8f;
+                background: #f4f9f8; font-size: 12.5px; line-height: 1.6; page-break-inside: avoid; }
+  .cust .sigs { display: flex; gap: 40px; margin-top: 56px; page-break-inside: avoid; }
+  .cust .sig { flex: 1; text-align: center; font-size: 12px; color: #445; }
+  .cust .sig .line { border-bottom: 1px solid #333; height: 40px; margin-bottom: 6px; }
+  .cust .foot { margin-top: 28px; color: #889; font-size: 11px; display: flex; justify-content: space-between; }
 </style>
-</head>
-<body>
-  <div class="noprint"><button onclick="window.print()">${esc(t('assets.printOrSave'))}</button></div>
   <div class="head">
     <div>
       <h1>${esc(t('assets.docTitle'))}</h1>
       <div class="sub">${esc(t('assets.docSubtitle'))}</div>
     </div>
-    <img src="${location.origin}/riyada-logo.png" alt="Riyada">
+    <img src="/riyada-logo.png" alt="Riyada">
   </div>
-  <div class="ref" style="margin-top:8px">${esc(t('assets.formRef'))}: ${esc(form.id)}</div>
-
+  <div class="ref">${esc(t('assets.formRef'))}: ${esc(form.id)}</div>
   <table>${metaRows}</table>
-
   <table>
     <thead><tr>
       <th class="c">#</th>
@@ -1072,18 +1064,38 @@ function printAssetForm(form: AssetFormRow) {
     </tr></thead>
     <tbody>${itemRows}</tbody>
   </table>
-
   <div class="note">${esc(approved ? t('assets.docApprovedNote', { at: when(form.decidedAt) }) : t('assets.docPendingNote'))}</div>
-
   <div class="sigs">${signatures}</div>
-
   <div class="foot">
     <span>${esc(t('login.foot'))}</span>
     <span>${esc(t('assets.printedAt'))}: ${esc(new Date().toLocaleString())}</span>
   </div>
-</body>
-</html>`);
-  w.document.close();
+</div>`;
+  document.body.appendChild(host);
+
+  try {
+    // The logo must be painted before the page is rasterised.
+    const logo = host.querySelector('img');
+    if (logo) await logo.decode().catch(() => undefined);
+    const { default: html2pdf } = await import('html2pdf.js');
+    const who = e.employeeNo ?? `${e.firstName}-${e.lastName}`.replace(/[^\p{L}\p{N}-]+/gu, '-');
+    await html2pdf()
+      .set({
+        margin: [10, 8, 12, 8],
+        filename: `custody-${who}-${new Date().toISOString().slice(0, 10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.96 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] },
+      })
+      .from(host.firstElementChild as HTMLElement)
+      .save();
+  } catch {
+    notify(t('common.error'), 'error');
+  } finally {
+    host.remove();
+    busy.value = '';
+  }
 }
 
 // -------------------------------------------------- AI document extraction
@@ -1917,7 +1929,8 @@ onMounted(load);
                     :variant="form.status === 'APPROVED' ? 'flat' : 'tonal'"
                     :color="form.status === 'APPROVED' ? 'primary' : undefined"
                     prepend-icon="download"
-                    @click="printAssetForm(form)"
+                    :loading="busy === `pdf:${form.id}`"
+                    @click="downloadAssetForm(form)"
                   >
                     {{ $t('assets.download') }}
                   </v-btn>
