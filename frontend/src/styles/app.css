@@ -168,6 +168,33 @@ select:-webkit-autofill {
   transition: background-color 100000s ease-in-out 0s;
 }
 
+/*
+ * Outlined fields: one continuous border.
+ * Vuetify draws the outline from three pieces (rounded start, straight notch
+ * lines under the label, rounded end). On 125% / 150% displays each piece
+ * snaps to its own device pixel, so the straight lines land a pixel off the
+ * rounded ones and the field reads as two borders. One border on the outline
+ * box cannot misalign with itself; the floating label masks the line it
+ * crosses with the surface colour.
+ */
+.v-field--variant-outlined .v-field__outline {
+  border: var(--v-field-border-width) solid;
+  border-color: color-mix(in srgb, currentColor calc(var(--v-field-border-opacity) * 100%), transparent);
+  border-radius: inherit;
+  transition: border-color var(--app-duration) var(--app-ease);
+}
+.v-field--variant-outlined .v-field__outline__start,
+.v-field--variant-outlined .v-field__outline__end,
+.v-field--variant-outlined .v-field__outline__notch::before,
+.v-field--variant-outlined .v-field__outline__notch::after {
+  border-width: 0 !important;
+}
+.v-field--variant-outlined .v-label.v-field-label--floating {
+  background: rgb(var(--v-theme-surface));
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
 /* Tables: quieter headers, roomier rows, a hover that guides the eye. */
 .v-data-table thead th {
   font-weight: 600 !important;
