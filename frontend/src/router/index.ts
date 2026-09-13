@@ -75,6 +75,12 @@ export const router = createRouter({
       meta: { roles: ['ADMIN'] },
     },
     {
+      path: '/lists',
+      name: 'lists',
+      component: () => import('../pages/ListsPage.vue'),
+      meta: { roles: ['ADMIN'] },
+    },
+    {
       path: '/users',
       name: 'users',
       component: () => import('../pages/UsersPage.vue'),

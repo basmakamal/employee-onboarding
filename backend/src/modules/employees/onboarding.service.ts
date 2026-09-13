@@ -102,9 +102,14 @@ export class OnboardingService {
     private readonly halter?: OpenWorkHalter,
     /** Named primary owners of the onboarding pipeline — they get every team notice in addition to HR. */
     private readonly responsibility?: { get(processKey: string): Promise<string[]> },
+    /** Remembers a department / project / title typed on a new record as a list value. */
+    private readonly lists?: { ensureValue(key: string, value: string | null | undefined): Promise<void> },
   ) {}
 
   async create(input: CreateOnboardingData, actor: Actor) {
+    await this.lists?.ensureValue('DEPARTMENT', input.department);
+    await this.lists?.ensureValue('PROJECT', input.project);
+    await this.lists?.ensureValue('JOB_TITLE', input.jobTitle);
     return this.transact(async (s) => {
       const employee = await s.employees.createOnboarding(input);
       await s.audit.append({

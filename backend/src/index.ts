@@ -17,6 +17,7 @@ import { notificationRouter } from './notifications/notification.routes.js';
 import { emailTemplatesRouter, emailTriggersRouter } from './notifications/email-admin.routes.js';
 import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
+import { listsRouter, publicListsRouter } from './modules/lists/lists.routes.js';
 import { asyncHandler } from './common/http.js';
 import { requireRole } from './auth/require-auth.middleware.js';
 import { statfsSync } from 'node:fs';
@@ -26,6 +27,12 @@ import { subscribeNotify } from './notifications/realtime.js';
 import type { Response } from 'express';
 
 const container = buildContainer();
+
+// The dropdown lists: whatever is missing is inserted at boot, so a fresh
+// install and a live database offer the same choices without a manual step.
+void container.listService
+  .ensureDefaults()
+  .catch((err: unknown) => logger.error({ err }, 'list values could not be seeded'));
 
 // Any active staff member may enter; ownership per status is enforced by
 // the state machines (roles on transitions) and per-route gates below.
@@ -52,6 +59,11 @@ staffApi.use(
   ),
 );
 staffApi.use('/users', usersRouter(container.repos.users, container.notifications, config.APP_URL));
+staffApi.use('/lists', listsRouter(container.listService));
+
+// No sign-in: the data form's dropdowns.
+const publicApi = Router();
+publicApi.use('/lists', publicListsRouter(container.listService));
 staffApi.use(
   '/notifications',
   notificationRouter(container.repos.notificationRepo, container.notifications),
@@ -188,6 +200,7 @@ const app = createApp({
   },
   authRouter: authRouter(container.authService),
   staffRouter: staffApi,
+  publicRouter: publicApi,
   linkRouter: linkRouter(
     container.onboardingService,
     container.assetService,

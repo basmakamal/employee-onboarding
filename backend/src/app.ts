@@ -16,6 +16,8 @@ export interface AppDeps {
   staffRouter?: Router;
   /** Public signed-link surface — token IS the auth. */
   linkRouter?: Router;
+  /** Read-only lookups a signed-link page needs before any sign-in (dropdown lists). */
+  publicRouter?: Router;
 }
 
 export function createApp(deps: AppDeps = {}) {
@@ -40,6 +42,7 @@ export function createApp(deps: AppDeps = {}) {
   );
   /** Token guessing on public signed links. */
   app.use('/api/link', rateLimit({ ...limiterDefaults, windowMs: 15 * 60_000, limit: 120 }));
+  app.use('/api/public', rateLimit({ ...limiterDefaults, windowMs: 15 * 60_000, limit: 240 }));
 
   // Liveness: the process is up.
   app.get('/api/health', (_req, res) => {
@@ -63,6 +66,7 @@ export function createApp(deps: AppDeps = {}) {
 
   if (deps.authRouter) app.use('/api/auth', deps.authRouter);
   if (deps.linkRouter) app.use('/api/link', deps.linkRouter);
+  if (deps.publicRouter) app.use('/api/public', deps.publicRouter);
   if (deps.staffRouter) app.use('/api', deps.staffRouter);
 
   app.use(errorHandler);

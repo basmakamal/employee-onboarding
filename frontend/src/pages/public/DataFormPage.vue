@@ -20,6 +20,7 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api/client';
 import { usePreferencesStore } from '../../stores/preferences';
+import { useListsStore } from '../../stores/lists';
 
 interface FormDoc {
   id: string;
@@ -57,6 +58,11 @@ interface FormContext {
 const route = useRoute();
 const { t } = useI18n();
 const prefs = usePreferencesStore();
+const lists = useListsStore();
+
+/** "Other" on a list the new hire may extend: the typed value is what gets stored. */
+const OTHER = '__OTHER__';
+const nationalityOther = ref('');
 const token = route.params['token'] as string;
 
 const state = ref<'loading' | 'ready' | 'submitting' | 'done' | 'invalid'>('loading');
@@ -95,39 +101,15 @@ const EXAMPLE = {
 };
 
 // ── Option lists ────────────────────────────────────────────────────────────
-// Values are the Prisma enums; labels come from i18n so they follow the
-// page language.
-const genderOptions = computed(() =>
-  (['MALE', 'FEMALE'] as const).map((v) => ({ value: v, title: t(`enums.gender.${v}`) })),
-);
-
-/**
- * Arabic marital status is gendered (أعزب / عزباء), so the label set follows
- * the selected gender rather than using an awkward أعزب(ة).
- */
-const maritalOptions = computed(() => {
-  const suffix = fields.value.gender === 'FEMALE' ? 'F' : 'M';
-  return (['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED'] as const).map((v) => ({
-    value: v,
-    title: t(`enums.marital.${v}_${suffix}`),
-  }));
-});
-
-const qualificationOptions = computed(() =>
-  (['HIGH_SCHOOL', 'DIPLOMA', 'BACHELOR', 'MASTER', 'PHD', 'OTHER'] as const).map((v) => ({
-    value: v,
-    title: t(`enums.qualification.${v}`),
-  })),
-);
-
-/** Saudi first, then the nationalities most common in KSA employment. */
-const nationalityOptions = computed(() =>
-  [
-    'SA', 'YE', 'EG', 'SD', 'SY', 'JO', 'PS', 'LB', 'IQ', 'KW', 'BH', 'QA', 'AE', 'OM',
-    'PK', 'IN', 'BD', 'PH', 'LK', 'NP', 'ID', 'MA', 'TN', 'DZ', 'SO', 'ET', 'ER', 'TR',
-    'OTHER',
-  ].map((code) => ({ value: code, title: t(`nationalities.${code}`) })),
-);
+// Admin-managed in Lists; labels follow the page language. Nationality may
+// be extended by the new hire through "Other", the others are fixed codes.
+const genderOptions = computed(() => lists.items('GENDER'));
+const maritalOptions = computed(() => lists.items('MARITAL_STATUS'));
+const qualificationOptions = computed(() => lists.items('QUALIFICATION'));
+const nationalityOptions = computed(() => [
+  ...lists.items('NATIONALITY'),
+  ...(lists.allowOther('NATIONALITY') ? [{ title: t('publicForm.other'), value: OTHER }] : []),
+]);
 
 // ── Validation — mirrors backend/src/modules/employees/data-form.schema.ts ──
 const SAUDI_MOBILE = /^(?:\+?966|0)5\d{8}$/;
@@ -171,6 +153,7 @@ const problems = computed<Partial<Record<FieldKey, string>>>(() => {
   check('email', (v) => EMAIL.test(v), t('validation.email'));
   check('splAddress', (v) => SPL_ADDRESS.test(v), t('validation.spl'));
   check('iban', (v) => ibanValid(v), t('validation.iban'));
+  if (f.nationality === OTHER && !nationalityOther.value.trim()) out.nationality = t('validation.required');
   return out;
 });
 
@@ -206,6 +189,8 @@ const maxBirthDate = computed(() => {
 });
 
 onMounted(async () => {
+  // The dropdowns first, so a returning value can be matched against them.
+  await lists.loadPublic().catch(() => undefined);
   try {
     const data = await api.get<FormContext>(`/api/link/${token}`);
     if (data.purpose !== 'DATA_FORM') throw new Error();
@@ -222,7 +207,13 @@ onMounted(async () => {
     fields.value.nationalId = e.nationalId ?? '';
     fields.value.birthDate = e.birthDate?.slice(0, 10) ?? '';
     fields.value.gender = e.gender ?? '';
-    fields.value.nationality = e.nationality ?? '';
+    // A nationality typed through "Other" comes back as that free text.
+    if (e.nationality && !lists.values('NATIONALITY').some((v) => v.code === e.nationality)) {
+      fields.value.nationality = OTHER;
+      nationalityOther.value = e.nationality;
+    } else {
+      fields.value.nationality = e.nationality ?? '';
+    }
     fields.value.maritalStatus = e.maritalStatus ?? '';
     fields.value.splAddress = e.splAddress ?? '';
     fields.value.iban = e.iban ?? '';
@@ -257,7 +248,11 @@ async function submit() {
   state.value = 'submitting';
   error.value = '';
   const body = new FormData();
-  for (const [k, v] of Object.entries(fields.value)) if (v) body.append(k, String(v));
+  const values = {
+    ...fields.value,
+    nationality: fields.value.nationality === OTHER ? nationalityOther.value.trim() : fields.value.nationality,
+  };
+  for (const [k, v] of Object.entries(values)) if (v) body.append(k, String(v));
   // The language the person actually used becomes the language of every later email.
   body.append('locale', prefs.locale);
   for (const [docId, file] of Object.entries(files.value)) if (file) body.append(docId, file);
@@ -368,6 +363,13 @@ async function submit() {
             <v-col cols="12" sm="6">
               <label class="fld-label" for="f-nationality">{{ $t('fields.nationality') }}<span class="req">*</span></label>
               <v-select id="f-nationality" v-model="fields.nationality" :items="nationalityOptions" :placeholder="$t('publicForm.choose')" :error-messages="errorsFor('nationality')" />
+              <v-text-field
+                v-if="fields.nationality === OTHER"
+                v-model="nationalityOther"
+                :placeholder="$t('publicForm.otherPlaceholder')"
+                class="mt-2"
+                :error-messages="showErrors && !nationalityOther.trim() ? [$t('validation.required')] : []"
+              />
             </v-col>
 
             <v-col cols="12" sm="6">

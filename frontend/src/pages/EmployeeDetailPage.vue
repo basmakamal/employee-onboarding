@@ -7,6 +7,7 @@ import { useConfirm } from '../composables/useConfirm';
 import ProcessCard from '../components/ProcessCard.vue';
 import StatusChip from '../components/StatusChip.vue';
 import { useAuthStore } from '../stores/auth';
+import { useListsStore } from '../stores/lists';
 
 interface ProcessData {
   status: string;
@@ -156,6 +157,7 @@ interface ExpiryDoc {
 }
 
 const DOC_TYPES = ['IQAMA', 'NATIONAL_ID', 'PASSPORT', 'CONTRACT', 'WORK_PERMIT', 'DRIVING_LICENSE'];
+const lists = useListsStore();
 
 const GOSI_REASONS = [
   'OPTIONAL_SUBSCRIPTION',
@@ -1967,7 +1969,9 @@ onMounted(load);
           />
           <div v-for="(item, i) in newForm.items" :key="i" class="item-row mb-2">
             <v-row dense>
-              <v-col cols="6" sm="2"><v-text-field v-model="item.type" :label="$t('assets.type')" density="compact" /></v-col>
+              <v-col cols="6" sm="2">
+                <v-combobox v-model="item.type" :items="lists.items('ASSET_TYPE')" item-title="title" item-value="value" :return-object="false" :label="$t('assets.type')" density="compact" />
+              </v-col>
               <v-col cols="6" sm="3"><v-text-field v-model="item.name" :label="$t('assets.name')" density="compact" /></v-col>
               <v-col cols="6" sm="3"><v-text-field v-model="item.serialNumber" :label="$t('assets.serial')" density="compact" /></v-col>
               <v-col cols="3" sm="1"><v-text-field v-model.number="item.quantity" :label="$t('assets.qty')" type="number" min="1" density="compact" /></v-col>
@@ -2113,10 +2117,10 @@ onMounted(load);
           <v-select
             v-model="docForm.type"
             :items="[
-              ...DOC_TYPES.map((type) => ({
-                title: $t(`expiryDocs.types.${type}`),
-                value: type,
-                props: { prependIcon: DOC_ICON[type] },
+              ...lists.items('DOC_TYPE').map((o) => ({
+                title: o.title,
+                value: o.value,
+                props: { prependIcon: DOC_ICON[o.value] ?? 'file-text' },
               })),
               {
                 title: $t('expiryDocs.types.CUSTOM'),
@@ -2364,7 +2368,10 @@ onMounted(load);
             <v-col cols="12" sm="6">
               <v-combobox
                 v-model="editForm.department"
-                :items="fieldOptions.departments"
+                :items="lists.items('DEPARTMENT')"
+                item-title="title"
+                item-value="value"
+                :return-object="false"
                 :label="$t('fields.department')"
                 :hint="$t('fields.comboHint')"
                 persistent-hint
@@ -2373,7 +2380,10 @@ onMounted(load);
             <v-col cols="12" sm="6">
               <v-combobox
                 v-model="editForm.project"
-                :items="fieldOptions.projects"
+                :items="lists.items('PROJECT')"
+                item-title="title"
+                item-value="value"
+                :return-object="false"
                 :label="$t('employees.project')"
                 :hint="$t('fields.comboHint')"
                 persistent-hint
@@ -2383,7 +2393,10 @@ onMounted(load);
             <v-col cols="12" sm="6">
               <v-combobox
                 v-model="editForm.jobTitle"
-                :items="fieldOptions.jobTitles"
+                :items="lists.items('JOB_TITLE')"
+                item-title="title"
+                item-value="value"
+                :return-object="false"
                 :label="$t('fields.jobTitle')"
                 :hint="$t('fields.comboHint')"
                 persistent-hint

@@ -28,6 +28,8 @@ import {
 } from './workflow/sla-watchers.js';
 import { EmployeeDocumentRepository } from './modules/employees/employee-document.repository.js';
 import { OwnershipService } from './workflow/ownership.service.js';
+import { ListValueRepository } from './modules/lists/list.repository.js';
+import { ListService } from './modules/lists/list.service.js';
 import { OnboardingService, type OnboardingTxScope } from './modules/employees/onboarding.service.js';
 import { EmployeeService, type EmployeeTxScope } from './modules/employees/employee.service.js';
 import { AssetRepository } from './modules/assets/asset.repository.js';
@@ -206,6 +208,9 @@ export function buildContainer() {
     redisEnabled ? new RedisRefreshTokenStore(getSharedRedis()) : undefined,
   );
 
+  const listValues = new ListValueRepository(prisma);
+  const listService = new ListService(listValues);
+
   const onboardingService = new OnboardingService(
     { employees, documents, contracts, audit },
     onboardingWorkflow,
@@ -214,6 +219,7 @@ export function buildContainer() {
     unitOfWork(onboardingScope),
     openWorkHalter,
     responsibilityService,
+    listService,
   );
 
   const employeeService = new EmployeeService(
@@ -221,6 +227,7 @@ export function buildContainer() {
     unitOfWork(employeeScope),
     ownershipService,
     onboardingWorkflow,
+    listService,
   );
 
   const assetService = new AssetService(
@@ -280,6 +287,7 @@ export function buildContainer() {
     ownershipService,
     responsibilityService,
     openWorkHalter,
+    listService,
   };
 }
 

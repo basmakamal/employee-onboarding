@@ -55,6 +55,12 @@ export interface EmployeeTxScope {
  * Hold reasons/certificates travel alongside the guarded status move.
  * Every write pairs with its audit row inside one transaction.
  */
+/** The dropdown lists: options to offer, and a way to remember a value staff typed. */
+interface ListsLike {
+  codes(key: string): Promise<string[]>;
+  ensureValue(key: string, value: string | null | undefined): Promise<void>;
+}
+
 export class EmployeeService {
   constructor(
     private readonly repos: {
@@ -69,7 +75,20 @@ export class EmployeeService {
     private readonly ownership?: OwnershipLookup,
     /** The onboarding pipeline machine — drives the profile's action buttons. */
     private readonly onboarding?: Workflow<Employee>,
+    private readonly lists?: ListsLike,
   ) {}
+
+  /** A department, project or title typed by staff becomes a choice for everyone. */
+  private async remember(input: {
+    department?: string | null;
+    project?: string | null;
+    jobTitle?: string | null;
+  }): Promise<void> {
+    if (!this.lists) return;
+    await this.lists.ensureValue('DEPARTMENT', input.department);
+    await this.lists.ensureValue('PROJECT', input.project);
+    await this.lists.ensureValue('JOB_TITLE', input.jobTitle);
+  }
 
   /** One server-side page plus the tab badge counts, in parallel. */
   async list(query: EmployeeListQuery) {
@@ -84,8 +103,15 @@ export class EmployeeService {
     return this.repos.employees.timelinePage(employeeId, page, limit);
   }
 
-  fieldOptions() {
-    return this.repos.employees.fieldOptions();
+  /** Dropdown choices for the employee forms — the admin-managed lists when present. */
+  async fieldOptions() {
+    if (!this.lists) return this.repos.employees.fieldOptions();
+    const [departments, jobTitles, projects] = await Promise.all([
+      this.lists.codes('DEPARTMENT'),
+      this.lists.codes('JOB_TITLE'),
+      this.lists.codes('PROJECT'),
+    ]);
+    return { departments, jobTitles, projects };
   }
 
   /**
@@ -110,6 +136,7 @@ export class EmployeeService {
     },
     actor: Actor,
   ) {
+    await this.remember(input);
     return this.transact(async (s) => {
       const employeeNo = await s.employees.allocateEmployeeNo();
       const employee = await s.employees.createDirect({
@@ -139,6 +166,7 @@ export class EmployeeService {
   async update(id: string, input: UpdateEmployeeData, actor: Actor) {
     const existing = await this.repos.employees.findById(id);
     if (!existing) throw new NotFoundError('employee', id);
+    await this.remember(input);
 
     return this.transact(async (s) => {
       const updated = await s.employees.update(id, input);

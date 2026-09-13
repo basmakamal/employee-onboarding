@@ -32,7 +32,7 @@ const palette = ref(false);
 
 /** Pages that render without the staff chrome (signed links, login, first password). */
 const isBare = computed(() =>
-  ['/form/', '/approve-assets/', '/exit-interview/', '/login', '/change-password'].some((p) =>
+  ['/form/', '/contract/', '/approve-assets/', '/exit-interview/', '/login', '/change-password'].some((p) =>
     route.path.startsWith(p),
   ),
 );
@@ -64,6 +64,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/users', icon: 'user-cog', key: 'nav.users', roles: ['ADMIN'] },
       { to: '/ownership', icon: 'network', key: 'nav.ownership', roles: ['ADMIN'] },
+      { to: '/lists', icon: 'list-checks', key: 'nav.lists', roles: ['ADMIN'] },
       { to: '/automation', icon: 'zap', key: 'nav.automation', roles: ['ADMIN'] },
       { to: '/email-templates', icon: 'mail-open', key: 'nav.emailTemplates', roles: ['ADMIN'] },
       { to: '/calendar', icon: 'calendar-days', key: 'nav.calendar', roles: ['ADMIN'] },
