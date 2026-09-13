@@ -13,6 +13,8 @@ import type { LinkTokenService } from '../../auth/link-token.service.js';
 import type { NotificationService } from '../../notifications/notification.service.js';
 import { REQUIRED_DOCUMENT_TYPES, type DataFormInput } from './data-form.schema.js';
 import { languageFromLocale, localeOf } from '../../notifications/locale.js';
+import { contractParams } from '../../notifications/contract-params.js';
+import type { TemplateParams } from '../../notifications/templates.js';
 
 /** What a signed link may see of the record — no ids, no internals. */
 /**
@@ -21,6 +23,10 @@ import { languageFromLocale, localeOf } from '../../notifications/locale.js';
  * form collects is returned: the page reopens fully filled and fully
  * editable rather than making someone retype a submission to fix one field.
  */
+function fullName(e: Pick<Employee, 'firstName' | 'lastName'>): string {
+  return `${e.firstName} ${e.lastName}`.trim();
+}
+
 function publicEmployee(e: Employee) {
   return {
     firstName: e.firstName,
@@ -94,6 +100,8 @@ export class OnboardingService {
     private readonly transact: UnitOfWork<OnboardingTxScope>,
     /** Stops links / custody forms / process cards when a trainee withdraws. */
     private readonly halter?: OpenWorkHalter,
+    /** Named primary owners of the onboarding pipeline — they get every team notice in addition to HR. */
+    private readonly responsibility?: { get(processKey: string): Promise<string[]> },
   ) {}
 
   async create(input: CreateOnboardingData, actor: Actor) {
@@ -118,17 +126,38 @@ export class OnboardingService {
     return this.sendDataFormLink(employee, actor);
   }
 
+  /**
+   * Something is missing from the submission: the form reopens, the trainee
+   * is told exactly what to complete (HR's note), and the team gets a copy.
+   */
   async requestMissing(id: string, actor: Actor, notes?: string) {
     const employee = await this.mustFind(id);
-    await this.transact((s) =>
+    const result = await this.transact((s) =>
       s.workflow.transition(employee, 'REQUEST_MISSING', actor, notes ? { notes } : undefined),
     );
-    return this.sendDataFormLink(employee, actor);
+    const link = await this.links.issue('DATA_FORM', { employeeId: employee.id });
+    const name = fullName(employee);
+    const missing = notes ? { missingItems: notes } : {};
+    await this.notifications.notifyExternal(
+      employee.email,
+      'employee.form_missing',
+      { name, linkUrl: link.url, ...missing },
+      { entity: 'EMPLOYEE', entityId: employee.id },
+      localeOf(employee),
+    );
+    await this.auditLinkSent(employee.id, 'DATA_FORM', actor);
+    await this.notifyTeam('staff.form_missing', { name, ...missing }, employee.id);
+    return { ...result, url: link.url };
   }
 
+  /** Documents accepted — the file is ready for the contract; the team is told. */
   async acceptDocuments(id: string, actor: Actor) {
     const employee = await this.mustFind(id);
-    return this.transact((s) => s.workflow.transition(employee, 'ACCEPT_DOCUMENTS', actor));
+    const result = await this.transact((s) =>
+      s.workflow.transition(employee, 'ACCEPT_DOCUMENTS', actor),
+    );
+    await this.notifyTeam('hr.ready_for_contract', { name: fullName(employee) }, employee.id);
+    return result;
   }
 
   /** Contract details may only change while the record sits in CONTRACT_CREATION. */
@@ -213,6 +242,8 @@ export class OnboardingService {
     }
     const now = new Date();
 
+    const name = fullName(employee);
+
     if (status === 'ACTIVE') {
       const { result, employeeNo } = await this.transact(async (s) => {
         const r = await s.workflow.transition(employee, 'APPROVE_CONTRACT', actor);
@@ -232,6 +263,9 @@ export class OnboardingService {
         });
         return { result: r, employeeNo };
       });
+      // Memo rows 11 and 13: the status moved to Active, and the employee file exists.
+      await this.notifyTeam('hr.contract_status_active', { name, employeeNo }, employee.id);
+      await this.notifyTeam('hr.employee_activated', { name, employeeNo }, employee.id);
       return { ...result, contractStatus: status, employeeNo };
     }
 
@@ -261,6 +295,26 @@ export class OnboardingService {
       await s.contracts.setStatus(contract.id, status);
       return r;
     });
+    if (status === 'PENDING_APPROVAL') {
+      // Memo row 8: the contract went out — the trainee gets the terms and their link.
+      const link = await this.links.issue('CONTRACT_APPROVAL', { employeeId: employee.id });
+      await this.notifications.notifyExternal(
+        employee.email,
+        'employee.contract_ready',
+        { name, ...contractParams(contract), contractLink: link.url, linkUrl: link.url },
+        { entity: 'EMPLOYEE', entityId: employee.id },
+        localeOf(employee),
+      );
+      await this.auditLinkSent(employee.id, 'CONTRACT_APPROVAL', actor);
+    }
+    if (status === 'REJECTED') {
+      // Memo row 12 — whether HR recorded the platform's decision or the trainee declined.
+      await this.notifyTeam(
+        'hr.contract_rejected',
+        { name, ...(opts.reason ? { rejectReason: opts.reason } : {}) },
+        employee.id,
+      );
+    }
     return { ...result, contractStatus: status };
   }
 
@@ -373,16 +427,9 @@ export class OnboardingService {
     );
     await this.links.markUsed(token.id);
 
+    // The team notices (Active / Rejected) are sent by setContractStatus, so
+    // a decision from the link and one recorded by HR produce the same mail.
     const employeeNo = 'employeeNo' in result ? (result.employeeNo as string) : null;
-    await this.notifications.notifyHr(
-      decision === 'APPROVE' ? 'hr.contract_approved' : 'hr.contract_rejected',
-      {
-        name: `${employee.firstName} ${employee.lastName}`,
-        ...(employeeNo ? { employeeNo } : {}),
-        ...(rejectReason ? { rejectReason } : {}),
-      },
-      { entity: 'EMPLOYEE', entityId: employee.id },
-    );
     return { decision, employeeNo };
   }
 
@@ -469,10 +516,27 @@ export class OnboardingService {
       return r;
     });
 
+    // Memo row 3: the team is told the form is in, with a link to the file.
+    await this.notifyTeam('hr.form_submitted', { name: fullName(employee) }, employee.id);
     return { ...result, orphanedKeys: [...replacedKeys, ...unknown.map((u) => u.storageKey)] };
   }
 
   // ------------------------------------------------------------------ private
+
+  /**
+   * A team notice about this employee: the HR group always, plus the named
+   * primary owners of the pipeline (Responsibility settings) when configured.
+   * Names steer notifications only — anyone authorised may still act.
+   */
+  private async notifyTeam(templateKey: string, params: TemplateParams, employeeId: string) {
+    const ref = { entity: 'EMPLOYEE', entityId: employeeId };
+    const owners = (await this.responsibility?.get('EMPLOYEE')) ?? [];
+    if (owners.length > 0) {
+      await this.notifications.notifyRoleAndUsers('HR', owners, templateKey, params, ref);
+    } else {
+      await this.notifications.notifyHr(templateKey, params, ref);
+    }
+  }
 
   private async mustFind(id: string): Promise<Employee> {
     const employee = await this.repos.employees.findById(id);

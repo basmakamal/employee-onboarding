@@ -52,7 +52,26 @@ export class NotificationService {
     private readonly onInApp?: (userId: string) => void,
     /** Template resolution — defaults to the built-in code templates. */
     private readonly render: RenderFn = renderFromCode,
+    /** Public URL of the app — staff messages link to the employee's file. */
+    private readonly appUrl?: string,
   ) {}
+
+  /** The employee's file in the system, for staff-facing messages. */
+  employeeLink(employeeId: string): string | undefined {
+    return this.appUrl ? `${this.appUrl.replace(/\/+$/, '')}/employees/${employeeId}` : undefined;
+  }
+
+  /**
+   * A team message about an employee always carries the link to their file.
+   * Callers that know the employee pass it; for messages anchored on the
+   * employee record itself it is derived here so no sender can forget it.
+   * Employee-facing sends never get it — that link is internal.
+   */
+  private withLinks(params: TemplateParams, ref?: EntityRef): TemplateParams {
+    if (params.employeeLink || ref?.entity !== 'EMPLOYEE') return params;
+    const employeeLink = this.employeeLink(ref.entityId);
+    return employeeLink ? { ...params, employeeLink } : params;
+  }
 
   /** Email an external person (trainee / employee). Arabic by default. */
   async notifyExternal(
@@ -145,7 +164,7 @@ export class NotificationService {
     locale: Locale,
   ): Promise<void> {
     if (staff.length === 0) return;
-    const message = await this.render(templateKey, locale, params);
+    const message = await this.render(templateKey, locale, this.withLinks(params, ref));
     const stamp = {
       templateKey: message.templateKey ?? templateKey,
       templateVersion: message.templateVersion ?? null,

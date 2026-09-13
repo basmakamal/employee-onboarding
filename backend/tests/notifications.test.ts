@@ -55,7 +55,7 @@ describe('NotificationService', () => {
   it('notifyHr creates an in-app row AND an email per active HR user', async () => {
     const { service, notifications } = makeService();
 
-    await service.notifyHr('hr.contract_approved', { name: 'Sara' });
+    await service.notifyHr('hr.form_submitted', { name: 'Sara' });
 
     const channels = notifications.create.mock.calls.map(
       (c) => (c[0] as { channel: string }).channel,

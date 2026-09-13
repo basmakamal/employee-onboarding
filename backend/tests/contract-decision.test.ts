@@ -75,8 +75,14 @@ describe('OnboardingService.decideContract', () => {
     );
     expect(repos.employees.completeActivation).toHaveBeenCalledWith('e1', 'EMP-0042', expect.any(Date));
     expect(links.markUsed).toHaveBeenCalledWith('tok1');
+    // Memo rows 11 and 13, sent from the same path HR's manual approval uses.
     expect(notifications.notifyHr).toHaveBeenCalledWith(
-      'hr.contract_approved',
+      'hr.contract_status_active',
+      expect.objectContaining({ name: 'Nora Khalid', employeeNo: 'EMP-0042' }),
+      expect.anything(),
+    );
+    expect(notifications.notifyHr).toHaveBeenCalledWith(
+      'hr.employee_activated',
       expect.objectContaining({ name: 'Nora Khalid', employeeNo: 'EMP-0042' }),
       expect.anything(),
     );

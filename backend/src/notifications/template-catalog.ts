@@ -24,6 +24,16 @@ export const PLACEHOLDERS: Record<string, PlaceholderMeta> = {
   docNumber: { ar: 'رقم المستند', en: 'Document number', sample: { ar: '2382910044', en: '2382910044' } },
   expiryDate: { ar: 'تاريخ الانتهاء', en: 'Expiry date', sample: { ar: '2026-08-25', en: '2026-08-25' } },
   linkUrl: { ar: 'رابط الإجراء', en: 'Action link', sample: { ar: 'https://…/form/…', en: 'https://…/form/…' } },
+  employeeLink: {
+    ar: 'رابط ملف الموظف',
+    en: 'Employee file link',
+    sample: { ar: 'https://…/employees/…', en: 'https://…/employees/…' },
+  },
+  missingItems: {
+    ar: 'النواقص المطلوبة',
+    en: 'Missing items',
+    sample: { ar: 'صورة الهوية، خطاب الآيبان', en: 'ID copy, IBAN letter' },
+  },
   rejectReason: { ar: 'سبب الرفض', en: 'Rejection reason', sample: { ar: 'الراتب غير مطابق', en: 'Salary does not match' } },
   contractSalary: { ar: 'الراتب', en: 'Salary', sample: { ar: '9٬000', en: '9,000' } },
   contractDuration: { ar: 'مدة العقد بالأشهر', en: 'Duration in months', sample: { ar: '12', en: '12' } },
@@ -56,6 +66,8 @@ export interface TemplateMeta {
 }
 
 const EMP = ['name', 'employeeNo', 'department', 'jobTitle'];
+/** Staff-facing messages always carry the employee's file. */
+const STAFF = [...EMP, 'employeeLink'];
 const CONTRACT = [
   'contractSalary',
   'contractDuration',
@@ -66,21 +78,34 @@ const CONTRACT = [
 ];
 
 export const TEMPLATE_CATALOG: Record<string, TemplateMeta> = {
+  // ── the trainee / employee ──────────────────────────────────────────────
   'employee.form_invite': {
-    audience: 'employee', nameAr: 'دعوة نموذج البيانات', nameEn: 'Data form invite',
+    audience: 'employee', nameAr: 'دعوة استكمال بيانات التوظيف', nameEn: 'Employment details invite',
     placeholders: [...EMP, 'linkUrl'], hasCta: true,
   },
   'employee.form_reminder': {
-    audience: 'employee', nameAr: 'تذكير بنموذج البيانات', nameEn: 'Data form reminder',
+    audience: 'employee', nameAr: 'تذكير باستكمال البيانات', nameEn: 'Employment details reminder',
     placeholders: [...EMP, 'daysWaiting', 'linkUrl'], hasCta: true,
   },
+  'employee.form_missing': {
+    audience: 'employee', nameAr: 'طلب استكمال نواقص', nameEn: 'Missing details or documents',
+    placeholders: [...EMP, 'missingItems', 'linkUrl'], hasCta: true,
+  },
+  'employee.contract_ready': {
+    audience: 'employee', nameAr: 'عقد العمل بانتظار موافقتك', nameEn: 'Contract awaiting your approval',
+    placeholders: [...EMP, ...CONTRACT, 'contractLink'], hasCta: true,
+  },
   'employee.contract_approval_reminder': {
-    audience: 'employee', nameAr: 'عقد العمل', nameEn: 'Employment contract',
+    audience: 'employee', nameAr: 'تذكير – عقد بانتظار الموافقة', nameEn: 'Reminder – contract awaiting approval',
     placeholders: [...EMP, 'daysWaiting', ...CONTRACT, 'contractLink'], hasCta: true,
   },
   'employee.asset_approval': {
-    audience: 'employee', nameAr: 'اعتماد العهدة', nameEn: 'Asset custody approval',
+    audience: 'employee', nameAr: 'اعتماد استلام العهدة', nameEn: 'Confirm receipt of assets',
     placeholders: [...EMP, 'linkUrl'], hasCta: true,
+  },
+  'employee.asset_reminder': {
+    audience: 'employee', nameAr: 'تذكير – نموذج العهدة', nameEn: 'Reminder – custody form',
+    placeholders: [...EMP, 'daysWaiting', 'linkUrl'], hasCta: true,
   },
   'employee.exit_interview': {
     audience: 'employee', nameAr: 'مقابلة إنهاء الخدمة', nameEn: 'Exit interview',
@@ -90,47 +115,97 @@ export const TEMPLATE_CATALOG: Record<string, TemplateMeta> = {
     audience: 'employee', nameAr: 'إشعار إنهاء الخدمة', nameEn: 'Termination notice',
     placeholders: EMP, hasCta: false,
   },
+
+  // ── the team: onboarding pipeline ───────────────────────────────────────
+  'staff.form_pending': {
+    audience: 'staff', nameAr: 'تذكير – بيانات التوظيف بانتظار الاستكمال', nameEn: 'Reminder – employment details pending',
+    placeholders: [...STAFF, 'daysWaiting'], hasCta: true,
+  },
+  'hr.form_submitted': {
+    audience: 'staff', nameAr: 'تم استكمال بيانات المتدرب', nameEn: 'Trainee details completed',
+    placeholders: STAFF, hasCta: true,
+  },
+  'staff.form_missing': {
+    audience: 'staff', nameAr: 'طلب استكمال نواقص (نسخة الفريق)', nameEn: 'Missing items requested (team copy)',
+    placeholders: [...STAFF, 'missingItems'], hasCta: true,
+  },
+  'staff.form_expired': {
+    audience: 'staff', nameAr: 'انتهاء مهلة استكمال البيانات', nameEn: 'Details deadline expired',
+    placeholders: STAFF, hasCta: true,
+  },
+  'hr.ready_for_contract': {
+    audience: 'staff', nameAr: 'جاهز لإنشاء عقد العمل', nameEn: 'Ready for contract creation',
+    placeholders: STAFF, hasCta: true,
+  },
+  'staff.contract_pending_creation': {
+    audience: 'staff', nameAr: 'تذكير – عقد بانتظار الإنشاء', nameEn: 'Reminder – contract awaiting creation',
+    placeholders: [...STAFF, 'daysWaiting'], hasCta: true,
+  },
+  'staff.contract_approval_pending': {
+    audience: 'staff', nameAr: 'تذكير – عقد بانتظار الموافقة (الفريق)', nameEn: 'Reminder – contract awaiting approval (team)',
+    placeholders: [...STAFF, 'daysWaiting'], hasCta: true,
+  },
+  'staff.contract_approval_expired': {
+    audience: 'staff', nameAr: 'انتهاء مهلة الموافقة على العقد', nameEn: 'Contract approval deadline expired',
+    placeholders: STAFF, hasCta: true,
+  },
+  'hr.contract_status_active': {
+    audience: 'staff', nameAr: 'تم تحديث حالة العقد إلى Active', nameEn: 'Contract status updated to Active',
+    placeholders: STAFF, hasCta: true,
+  },
+  'hr.contract_rejected': {
+    audience: 'staff', nameAr: 'تم رفض العقد', nameEn: 'Contract rejected',
+    placeholders: [...STAFF, 'rejectReason'], hasCta: true,
+  },
+  'hr.employee_activated': {
+    audience: 'staff', nameAr: 'تم إنشاء ملف الموظف', nameEn: 'Employee file created',
+    placeholders: STAFF, hasCta: true,
+  },
+
+  // ── the team: custody ───────────────────────────────────────────────────
+  'staff.asset_pending': {
+    audience: 'staff', nameAr: 'تذكير – نموذج العهدة بانتظار الاعتماد (الفريق)', nameEn: 'Reminder – custody form pending (team)',
+    placeholders: [...STAFF, 'daysWaiting'], hasCta: true,
+  },
+  'hr.asset_approved': {
+    audience: 'staff', nameAr: 'تم اعتماد نموذج العهدة', nameEn: 'Custody form confirmed',
+    placeholders: STAFF, hasCta: true,
+  },
+  'hr.asset_rejected': {
+    audience: 'staff', nameAr: 'تم رفض نموذج العهدة', nameEn: 'Custody form rejected',
+    placeholders: [...STAFF, 'rejectReason'], hasCta: true,
+  },
+
+  // ── the team: generic automation, documents, offboarding, system ────────
   'staff.record_stalled': {
-    audience: 'staff', nameAr: 'تذكير: سجل متوقف', nameEn: 'Reminder: record stalled',
-    placeholders: [...EMP, 'status', 'daysWaiting'], hasCta: false,
+    audience: 'staff', nameAr: 'تذكير عام: سجل متوقف', nameEn: 'Generic reminder: record stalled',
+    placeholders: [...STAFF, 'status', 'daysWaiting'], hasCta: true,
   },
   'staff.escalation': {
     audience: 'staff', nameAr: 'تصعيد', nameEn: 'Escalation',
-    placeholders: [...EMP, 'status', 'daysWaiting'], hasCta: false,
+    placeholders: [...STAFF, 'status', 'daysWaiting'], hasCta: true,
   },
   'staff.record_expired': {
-    audience: 'staff', nameAr: 'انتهت المهلة', nameEn: 'Deadline expired',
-    placeholders: [...EMP, 'status'], hasCta: false,
+    audience: 'staff', nameAr: 'انتهت المهلة (عام)', nameEn: 'Deadline expired (generic)',
+    placeholders: [...STAFF, 'status'], hasCta: true,
   },
   'staff.document_expiring': {
     audience: 'staff', nameAr: 'مستند يقارب الانتهاء', nameEn: 'Document expiring',
-    placeholders: [...EMP, 'docType', 'docNumber', 'expiryDate', 'daysLeft'], hasCta: false,
+    placeholders: [...STAFF, 'docType', 'docNumber', 'expiryDate', 'daysLeft'], hasCta: true,
   },
   'staff.document_expiry_escalation': {
     audience: 'staff', nameAr: 'تصعيد: انتهاء مستند', nameEn: 'Escalation: document expiry',
-    placeholders: [...EMP, 'docType', 'expiryDate'], hasCta: false,
+    placeholders: [...STAFF, 'docType', 'expiryDate'], hasCta: true,
+  },
+  'hr.exit_interview_done': {
+    audience: 'staff', nameAr: 'اكتملت مقابلة إنهاء الخدمة', nameEn: 'Exit interview completed',
+    placeholders: STAFF, hasCta: true,
   },
   'staff.invitation': {
     audience: 'staff', nameAr: 'دعوة مستخدم جديد', nameEn: 'Staff invitation',
     placeholders: ['name', 'email', 'tempPassword', 'linkUrl'], hasCta: true,
   },
-  'hr.contract_rejected': {
-    audience: 'staff', nameAr: 'رفض العقد', nameEn: 'Contract rejected',
-    placeholders: [...EMP, 'rejectReason'], hasCta: false,
-  },
-  'hr.contract_approved': {
-    audience: 'staff', nameAr: 'تم اعتماد العقد', nameEn: 'Contract approved',
-    placeholders: EMP, hasCta: false,
-  },
-  'hr.asset_decided': {
-    audience: 'staff', nameAr: 'قرار العهدة', nameEn: 'Asset custody decision',
-    placeholders: EMP, hasCta: false,
-  },
-  'hr.exit_interview_done': {
-    audience: 'staff', nameAr: 'اكتملت مقابلة إنهاء الخدمة', nameEn: 'Exit interview completed',
-    placeholders: EMP, hasCta: false,
-  },
-  /** Free-form template for admin-defined triggers (no built-in default). */
+  /** Free-form template for admin-defined triggers — often addressed to the employee, so no internal link. */
   'custom.status_change': {
     audience: 'employee', nameAr: 'رسالة عند تغيّر الحالة', nameEn: 'Status-change message',
     placeholders: [...EMP, 'status'], hasCta: false,

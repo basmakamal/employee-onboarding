@@ -198,6 +198,9 @@ export class TriggerService {
       ...(employee?.department ? { department: employee.department } : {}),
       ...(employee?.jobTitle ? { jobTitle: employee.jobTitle } : {}),
       status: event.to,
+      ...(employeeId && this.notifications.employeeLink?.(employeeId)
+        ? { employeeLink: this.notifications.employeeLink(employeeId) as string }
+        : {}),
       ...contractParams(employee?.contract),
       ...(formLink ? { formLink, linkUrl: formLink } : {}),
       ...(contractLink ? { contractLink, ...(formLink ? {} : { linkUrl: contractLink }) } : {}),

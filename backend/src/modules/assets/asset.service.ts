@@ -50,6 +50,8 @@ export class AssetService {
     private readonly notifications: NotificationService,
     private readonly transact: UnitOfWork<AssetTxScope>,
     private readonly ownership?: OwnershipLookup,
+    /** Named primary owners of custody — they get every team notice in addition to IT. */
+    private readonly responsibility?: { get(processKey: string): Promise<string[]> },
   ) {
     // Guards read through the root client — they run before the guarded
     // move, exactly as a pre-check, so they don't need the transaction.
@@ -242,11 +244,22 @@ export class AssetService {
       return r;
     });
 
-    await this.notifications.notifyHr(
-      'hr.asset_decided',
-      { name: `${form.employee.firstName} ${form.employee.lastName}` },
-      { entity: 'ASSET_FORM', entityId: form.id },
-    );
+    // Memo rows 16 / 17: custody is IT's (Rawan's) process; HR is not the default audience.
+    const params = {
+      name: `${form.employee.firstName} ${form.employee.lastName}`,
+      ...(decision === 'REJECT' && rejectReason ? { rejectReason } : {}),
+      ...(this.notifications.employeeLink?.(form.employeeId)
+        ? { employeeLink: this.notifications.employeeLink(form.employeeId) as string }
+        : {}),
+    };
+    const ref = { entity: 'ASSET_FORM', entityId: form.id };
+    const template = decision === 'APPROVE' ? 'hr.asset_approved' : 'hr.asset_rejected';
+    const owners = (await this.responsibility?.get('ASSET_FORM')) ?? [];
+    if (owners.length > 0) {
+      await this.notifications.notifyRoleAndUsers('IT', owners, template, params, ref);
+    } else {
+      await this.notifications.notifyRole('IT', template, params, ref);
+    }
     return result;
   }
 

@@ -33,6 +33,8 @@ const CUSTOM_PLACEHOLDERS = [
   'contractRef',
   'formLink',
   'contractLink',
+  'employeeLink',
+  'missingItems',
 ];
 
 /** The placeholders that cost something to provide: each one issues a signed link. */
@@ -185,6 +187,9 @@ export class TemplateService {
       linkUrl: `${this.appUrl}/form/preview-only`,
       formLink: `${this.appUrl}/form/preview-only`,
       contractLink: `${this.appUrl}/contract/preview-only`,
+      employeeLink: `${this.appUrl}/employees/preview-only`,
+      missingItems: s('missingItems'),
+      rejectReason: s('rejectReason'),
       contractSalary: s('contractSalary'),
       contractDuration: s('contractDuration'),
       contractStartDate: s('contractStartDate'),
@@ -271,6 +276,9 @@ export class TemplateService {
       contractEndDate: '{{contractEndDate}}',
       contractTerms: '{{contractTerms}}',
       contractRef: '{{contractRef}}',
+      employeeLink: '{{employeeLink}}',
+      missingItems: '{{missingItems}}',
+      rejectReason: '{{rejectReason}}',
       // Numeric fields drive conditionals in code templates; give them values.
       // linkUrl is left out on purpose: the editor adds the button itself.
       daysWaiting: 3,
