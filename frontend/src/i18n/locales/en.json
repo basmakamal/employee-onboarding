@@ -228,7 +228,7 @@
     },
     "trainee": "Custody can be issued during training; it follows the person into their employee file.",
     "closed": "No new custody for someone who has left.",
-    "download": "Download document",
+    "download": "Download PDF",
     "docTitle": "Asset custody form",
     "docSubtitle": "Company property handed to the employee, acknowledged electronically.",
     "docStatus": "Form status",
