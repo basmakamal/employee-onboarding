@@ -11,7 +11,7 @@ const SIGN_OFF: Record<Locale, string> = {
   en: 'HR Department — Riyada HR',
 };
 const LINK_NOTE: Record<Locale, string> = {
-  ar: 'الرابط صالح لفترة محدودة ومخصص لك وحدك، يُرجى عدم مشاركته.',
+  ar: 'الرابط صالح لفترة محدودة، يُرجى عدم مشاركته مع أي شخص.',
   en: 'This link is valid for a limited time and is personal to you — please do not share it.',
 };
 const DEFAULT_CTA: Record<Locale, string> = { ar: 'فتح الرابط', en: 'Open the link' };
