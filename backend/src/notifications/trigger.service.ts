@@ -198,14 +198,15 @@ export class TriggerService {
       ...(employee?.department ? { department: employee.department } : {}),
       ...(employee?.jobTitle ? { jobTitle: employee.jobTitle } : {}),
       status: event.to,
-      ...(employeeId && this.notifications.employeeLink?.(employeeId)
-        ? { employeeLink: this.notifications.employeeLink(employeeId) as string }
-        : {}),
       ...contractParams(employee?.contract),
       ...(formLink ? { formLink, linkUrl: formLink } : {}),
       ...(contractLink ? { contractLink, ...(formLink ? {} : { linkUrl: contractLink }) } : {}),
     };
     const ref = { entity: event.entity, entityId: event.entityId };
+    // The team (and copy addresses) get the employee's file; the employee's own
+    // message never carries that internal link.
+    const employeeLink = employeeId ? this.notifications.employeeLink?.(employeeId) : undefined;
+    const staffParams = employeeLink ? { ...params, employeeLink } : params;
 
     // Every send is isolated: a failure for the group, the employee or one
     // copy address is logged and the rest still go out.
@@ -228,14 +229,14 @@ export class TriggerService {
         }
       } else {
         await attempt('role', trigger.id, () =>
-          this.notifications.notifyRole(trigger.role ?? 'HR', trigger.templateKey, params, ref),
+          this.notifications.notifyRole(trigger.role ?? 'HR', trigger.templateKey, staffParams, ref),
         );
       }
       // Copies: each address gets its own row in the email history, so the
       // person checking can see exactly what went out and remove themselves later.
       for (const cc of splitCc(trigger.ccEmails)) {
         await attempt(`cc:${cc}`, trigger.id, () =>
-          this.notifications.notifyExternal(cc, trigger.templateKey, params, ref),
+          this.notifications.notifyExternal(cc, trigger.templateKey, staffParams, ref),
         );
       }
     }
