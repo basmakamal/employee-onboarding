@@ -45,6 +45,7 @@ function makeService(formOverrides: Partial<Record<string, unknown>> = {}, itemC
   const notifications = {
     notifyExternal: vi.fn().mockResolvedValue(undefined),
     notifyHr: vi.fn().mockResolvedValue(undefined),
+    notifyRole: vi.fn().mockResolvedValue(undefined),
   };
   // Unit of work under test = the same fakes; the consumed link's stamp
   // delegates to the fake links service so assertions stay in one place.
@@ -93,7 +94,7 @@ describe('AssetService', () => {
     expect(ctx.employee.employeeNo).toBe('EMP-0001');
   });
 
-  it('REJECT records the reason, burns the token, and notifies HR', async () => {
+  it('REJECT records the reason, burns the token, and tells the custody team why', async () => {
     const { service, repos, links, notifications } = makeService({
       status: 'PENDING_EMPLOYEE_APPROVAL',
     });
@@ -108,9 +109,11 @@ describe('AssetService', () => {
       expect.objectContaining({ rejectReason: 'wrong laptop model' }),
     );
     expect(links.markUsed).toHaveBeenCalled();
-    expect(notifications.notifyHr).toHaveBeenCalledWith(
-      'hr.asset_decided',
-      expect.objectContaining({ name: 'Nora Khalid' }),
+    // Custody is IT's process (memo row 17); the reason travels with the notice.
+    expect(notifications.notifyRole).toHaveBeenCalledWith(
+      'IT',
+      'hr.asset_rejected',
+      expect.objectContaining({ name: 'Nora Khalid', rejectReason: 'wrong laptop model' }),
       { entity: 'ASSET_FORM', entityId: 'f1' },
     );
   });

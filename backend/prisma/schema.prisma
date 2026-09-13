@@ -753,3 +753,25 @@ model AuditLog {
   @@index([at])
   @@map("audit_logs")
 }
+
+/// One choice in a dropdown list (department, nationality, asset type, …),
+/// editable by admins in both languages. `list` names the list; `code` is
+/// what records store. Lists backed by a Prisma enum keep their codes fixed
+/// (only labels and order change); free lists grow as staff type new values.
+model ListValue {
+  id        String   @id @default(cuid())
+  list      String
+  code      String
+  labelAr   String
+  labelEn   String
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  /// Seeded by the system — codes the workflow or a Prisma enum depends on.
+  system    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([list, code])
+  @@index([list, active, sortOrder])
+  @@map("list_values")
+}

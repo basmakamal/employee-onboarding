@@ -69,8 +69,8 @@ const SLA_RULES: Array<{
     afterValue: 5,
     afterUnit: SlaUnit.WORKING_DAYS,
     action: SlaAction.REMIND_DAILY,
-    // Approval happens on the external platform — nothing for the hire to click.
-    notifySubject: false,
+    // Memo row 9: the trainee is reminded too, with a fresh contract link.
+    notifySubject: true,
     notifyHr: true,
   },
   {
@@ -81,6 +81,29 @@ const SLA_RULES: Array<{
     action: SlaAction.EXPIRE,
     notifySubject: false,
     notifyHr: true,
+  },
+  // Memo row 15: a custody form undecided for 24h — the employee and IT are reminded.
+  {
+    key: 'custody-24h-reminder-sent',
+    processKey: 'ASSET_FORM',
+    status: 'SENT',
+    afterValue: 24,
+    afterUnit: SlaUnit.HOURS,
+    action: SlaAction.REMIND,
+    notifySubject: true,
+    notifyHr: true,
+    notifyRole: 'IT',
+  },
+  {
+    key: 'custody-24h-reminder-opened',
+    processKey: 'ASSET_FORM',
+    status: 'PENDING_EMPLOYEE_APPROVAL',
+    afterValue: 24,
+    afterUnit: SlaUnit.HOURS,
+    action: SlaAction.REMIND,
+    notifySubject: true,
+    notifyHr: true,
+    notifyRole: 'IT',
   },
   // Escalation: form still incomplete after 5 days despite reminders → ADMIN.
   {
@@ -170,9 +193,17 @@ const SLA_RULES: Array<{
   },
 ];
 
+/**
+ * `--rules-only`: for a live database. Skips the demo staff accounts, creates
+ * any automation rule that is missing, and switches the trainee reminder on
+ * where the memo wants it — but never touches timings, groups or copy
+ * addresses an admin has already tuned.
+ */
+const RULES_ONLY = process.argv.includes('--rules-only');
+
 async function main() {
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
-  for (const user of STAFF) {
+  for (const user of RULES_ONLY ? [] : STAFF) {
     // Never overwrite an existing password — only fill it when missing.
     const existing = await prisma.user.findUnique({ where: { email: user.email } });
     await prisma.user.upsert({
@@ -193,7 +224,12 @@ async function main() {
     const existing = await prisma.slaRule.findFirst({
       where: { processKey, status: data.status, action: data.action },
     });
-    if (existing) {
+    if (existing && RULES_ONLY) {
+      if (data.notifySubject && !existing.notifySubject) {
+        await prisma.slaRule.update({ where: { id: existing.id }, data: { notifySubject: true } });
+        console.log(`switched on the subject reminder for ${rule.key}`);
+      }
+    } else if (existing) {
       await prisma.slaRule.update({ where: { id: existing.id }, data: { ...data, processKey } });
     } else {
       await prisma.slaRule.create({ data: { ...data, processKey } });

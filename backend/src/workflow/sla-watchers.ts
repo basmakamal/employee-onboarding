@@ -8,6 +8,8 @@ import type { OffboardingRepository } from '../modules/offboarding/offboarding.r
 import type { GosiRepository } from '../modules/processes/gosi.repository.js';
 import type { MedicalInsuranceRepository } from '../modules/processes/medical-insurance.repository.js';
 import type { EmployeeDocumentRepository } from '../modules/employees/employee-document.repository.js';
+import type { AssetFormRepository } from '../modules/assets/asset-form.repository.js';
+import type { AssetFormStatus } from '../generated/prisma/enums.js';
 import { localeOf } from '../notifications/locale.js';
 import { contractParams } from '../notifications/contract-params.js';
 
@@ -18,7 +20,29 @@ import { contractParams } from '../notifications/contract-params.js';
  */
 const ONBOARDING_SUBJECT_TEMPLATES: Record<string, string> = {
   AWAITING_FORM: 'employee.form_reminder',
+  AWAITING_CONTRACT_APPROVAL: 'employee.contract_approval_reminder',
 };
+
+/** The memo's team-side wording per status (rows 2, 5, 7, 9, 10). */
+const ONBOARDING_STAFF_TEMPLATES: Record<'stalled' | 'expired', Record<string, string>> = {
+  stalled: {
+    AWAITING_FORM: 'staff.form_pending',
+    CONTRACT_CREATION: 'staff.contract_pending_creation',
+    AWAITING_CONTRACT_APPROVAL: 'staff.contract_approval_pending',
+  },
+  expired: {
+    AWAITING_FORM: 'staff.form_expired',
+    AWAITING_CONTRACT_APPROVAL: 'staff.contract_approval_expired',
+  },
+};
+
+/** The one thing a watcher needs from the link service. */
+interface SignedLinks {
+  issue(
+    purpose: 'DATA_FORM' | 'CONTRACT_APPROVAL' | 'ASSET_APPROVAL',
+    anchors: { employeeId: string; assetFormId?: string },
+  ): Promise<{ url: string }>;
+}
 
 /** Which signed link (if any) the subject's email for a status needs. */
 const LINK_FOR_STATUS: Record<string, 'DATA_FORM' | 'CONTRACT_APPROVAL'> = {
@@ -34,12 +58,7 @@ export function onboardingWatcher(
   workflow: Workflow<Employee>,
   contracts?: ContractRepository,
   /** Issues the link the reminder carries; without it the mail is text only. */
-  links?: {
-    issue(
-      purpose: 'DATA_FORM' | 'CONTRACT_APPROVAL',
-      anchors: { employeeId: string },
-    ): Promise<{ url: string }>;
-  },
+  links?: SignedLinks,
 ): SlaWatcher {
   return {
     processKey: 'EMPLOYEE',
@@ -55,6 +74,8 @@ export function onboardingWatcher(
       }));
     },
     subjectTemplate: (status) => ONBOARDING_SUBJECT_TEMPLATES[status],
+    staffTemplate: (kind, status) =>
+      kind === 'escalation' ? undefined : ONBOARDING_STAFF_TEMPLATES[kind][status],
     /**
      * The terms HR recorded, plus a working link. Each reminder issues a new
      * token (only its hash is stored, so an existing link cannot be rebuilt),
@@ -87,6 +108,38 @@ export function onboardingWatcher(
       if (employee.status === 'AWAITING_CONTRACT_APPROVAL' && contracts) {
         await contracts.setStatusByEmployee(employee.id, 'EXPIRED');
       }
+    },
+  };
+}
+
+/**
+ * Custody forms the employee has not decided (memo row 15): the employee is
+ * reminded with a fresh link, and the team copy names them.
+ */
+export function assetFormWatcher(forms: AssetFormRepository, links?: SignedLinks): SlaWatcher {
+  return {
+    processKey: 'ASSET_FORM',
+    async listInStatusSince(status, threshold, limit): Promise<WatchedRecord[]> {
+      const rows = await forms.listInStatusSince(status as AssetFormStatus, threshold, limit);
+      return rows.map((f) => ({
+        id: f.id,
+        name: `${f.employee.firstName} ${f.employee.lastName}`,
+        email: f.employee.email,
+        locale: localeOf(f.employee),
+        anchorAt: f.sentAt ?? f.updatedAt,
+        employeeId: f.employeeId,
+      }));
+    },
+    subjectTemplate: (status) =>
+      status === 'SENT' || status === 'PENDING_EMPLOYEE_APPROVAL' ? 'employee.asset_reminder' : undefined,
+    staffTemplate: (kind) => (kind === 'stalled' ? 'staff.asset_pending' : undefined),
+    async subjectParams(record) {
+      if (!links || !record.employeeId) return {};
+      const { url } = await links.issue('ASSET_APPROVAL', {
+        employeeId: record.employeeId,
+        assetFormId: record.id,
+      });
+      return { linkUrl: url };
     },
   };
 }

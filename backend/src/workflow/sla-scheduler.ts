@@ -51,6 +51,12 @@ export interface SlaWatcher {
   subjectParams?(record: WatchedRecord, status: string): Promise<Record<string, string | number>>;
   /** Override the generic staff templates (stalled/escalation wording). */
   templates?: { stalled?: string; escalation?: string };
+  /**
+   * Per-status staff wording — the memo has a different message for "the form
+   * is late" and "the contract is late". Falls back to `templates`, then the
+   * generic ones. An admin's choice on the rule beats both.
+   */
+  staffTemplate?(kind: 'stalled' | 'escalation' | 'expired', status: string): string | undefined;
   /** EXPIRE support — transition through the machine (guarded + audited). */
   expire?(record: WatchedRecord, ruleId: string): Promise<void>;
 }
@@ -132,7 +138,13 @@ export class SlaScheduler {
       if (rule.action === 'EXPIRE') {
         if (!watcher.expire) continue;
         await watcher.expire(record, rule.id);
-        await this.notifyStaff(rule, record, now, rule.notifyRole, 'staff.record_expired');
+        await this.notifyStaff(
+          rule,
+          record,
+          now,
+          rule.notifyRole,
+          rule.staffTemplateKey ?? watcher.staffTemplate?.('expired', rule.status) ?? 'staff.record_expired',
+        );
       } else if (rule.action === 'ESCALATE') {
         // Escalation deliberately goes to the higher GROUP, never the owners
         // who were already reminded.
@@ -141,7 +153,10 @@ export class SlaScheduler {
           record,
           now,
           rule.escalateToRole ?? 'ADMIN',
-          rule.staffTemplateKey ?? watcher.templates?.escalation ?? 'staff.escalation',
+          rule.staffTemplateKey ??
+            watcher.staffTemplate?.('escalation', rule.status) ??
+            watcher.templates?.escalation ??
+            'staff.escalation',
           false,
         );
         await this.audit(rule, record, 'SLA_ESCALATION');
@@ -199,7 +214,10 @@ export class SlaScheduler {
         record,
         now,
         rule.notifyRole,
-        rule.staffTemplateKey ?? watcher.templates?.stalled ?? 'staff.record_stalled',
+        rule.staffTemplateKey ??
+          watcher.staffTemplate?.('stalled', rule.status) ??
+          watcher.templates?.stalled ??
+          'staff.record_stalled',
       );
     }
   }
@@ -218,10 +236,14 @@ export class SlaScheduler {
     template: string,
     preferOwners = true,
   ) {
+    const employeeLink = record.employeeId
+      ? this.deps.notifications.employeeLink?.(record.employeeId)
+      : undefined;
     const params = {
       name: record.name,
       status: rule.status,
       daysWaiting: Math.floor((now.getTime() - record.anchorAt.getTime()) / 86_400_000),
+      ...(employeeLink ? { employeeLink } : {}),
       ...record.meta,
     };
     const ref = this.ref(rule, record);

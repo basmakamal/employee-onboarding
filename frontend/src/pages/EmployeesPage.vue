@@ -13,6 +13,7 @@ import StatusChip from '../components/StatusChip.vue';
 import EntityCard from '../components/EntityCard.vue';
 import SkeletonBlock from '../components/SkeletonBlock.vue';
 import { useAuthStore } from '../stores/auth';
+import { useListsStore } from '../stores/lists';
 import { useConfirm } from '../composables/useConfirm';
 
 interface EmployeeRow {
@@ -79,6 +80,7 @@ const SORT_KEYS: Record<string, string> = {
 /** Known departments / projects / job titles — a value typed once joins the list for everyone. */
 type FieldOptions = { departments: string[]; jobTitles: string[]; projects: string[] };
 const options = ref<FieldOptions>({ departments: [], jobTitles: [], projects: [] });
+const lists = useListsStore();
 
 function notify(text: string, color = 'success') {
   snackbar.value = { show: true, text, color };
@@ -497,13 +499,13 @@ onMounted(loadOptions);
             <v-window-item :value="2">
               <v-row dense>
                 <v-col cols="12" sm="6">
-                  <v-combobox v-model="form.department" :items="options.departments" :label="$t('fields.department')" :hint="$t('fields.comboHint')" persistent-hint clearable />
+                  <v-combobox v-model="form.department" :items="lists.items('DEPARTMENT')" item-title="title" item-value="value" :return-object="false" :label="$t('fields.department')" :hint="$t('fields.comboHint')" persistent-hint clearable />
                 </v-col>
                 <v-col cols="12" sm="6">
-                  <v-combobox v-model="form.jobTitle" :items="options.jobTitles" :label="$t('fields.jobTitle')" :hint="$t('fields.comboHint')" persistent-hint clearable />
+                  <v-combobox v-model="form.jobTitle" :items="lists.items('JOB_TITLE')" item-title="title" item-value="value" :return-object="false" :label="$t('fields.jobTitle')" :hint="$t('fields.comboHint')" persistent-hint clearable />
                 </v-col>
                 <v-col cols="12">
-                  <v-combobox v-model="form.project" :items="options.projects" :label="$t('employees.project')" :hint="$t('fields.comboHint')" persistent-hint clearable />
+                  <v-combobox v-model="form.project" :items="lists.items('PROJECT')" item-title="title" item-value="value" :return-object="false" :label="$t('employees.project')" :hint="$t('fields.comboHint')" persistent-hint clearable />
                 </v-col>
               </v-row>
             </v-window-item>

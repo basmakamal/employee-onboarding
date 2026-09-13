@@ -22,7 +22,8 @@
     "more": "More",
     "people": "People",
     "inbox": "Inbox",
-    "newEmployee": "New employee"
+    "newEmployee": "New employee",
+    "lists": "Lists"
   },
   "users": {
     "title": "Staff & roles",
@@ -420,7 +421,9 @@
     "chooseFile": "Choose a file…",
     "replaceFile": "Replace the file…",
     "replaceHint": "A file is already on file. Choose a new one only if it needs replacing.",
-    "reopened": "Your form was sent back for corrections. Everything you submitted is here — change what you need and submit again."
+    "reopened": "Your form was sent back for corrections. Everything you submitted is here — change what you need and submit again.",
+    "other": "Other…",
+    "otherPlaceholder": "Please specify"
   },
   "approval": {
     "title": "Your employment contract",
@@ -1017,5 +1020,30 @@
     "emailQueued": "Email queued",
     "to": "To {name}",
     "by": "by {name}"
+  },
+  "lists": {
+    "title": "Lists",
+    "subtitle": "Every dropdown in the system, with its labels in Arabic and English.",
+    "kindFree": "Open list",
+    "kindEnum": "Fixed list",
+    "publicForm": "Shown on the data form",
+    "freeHint": "Add values here, or simply type a new one in a form. Switching a value off hides it from new choices; records that already use it are unchanged.",
+    "fixedHint": "These codes are part of the workflow, so they cannot be added or removed. Rename them in either language and change their order.",
+    "otherHint": "The data form offers \"Other\" so a new hire can type a value not in the list.",
+    "code": "Code",
+    "labelAr": "Arabic label",
+    "labelEn": "English label",
+    "active": "Offered",
+    "valuesCount": "{n} values",
+    "addValue": "Add a value",
+    "add": "Add",
+    "added": "Value added.",
+    "addHint": "Fill either language; the other is copied until you translate it.",
+    "deleteTitle": "Remove this value?",
+    "deleteConfirm": "\"{name}\" disappears from the dropdown. Records already using it keep their text.",
+    "deleted": "Value removed.",
+    "empty": "No values yet.",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
   }
 }

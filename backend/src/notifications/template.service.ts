@@ -15,6 +15,7 @@ const LINK_NOTE: Record<Locale, string> = {
   en: 'This link is valid for a limited time and is personal to you — please do not share it.',
 };
 const DEFAULT_CTA: Record<Locale, string> = { ar: 'فتح الرابط', en: 'Open the link' };
+const FILE_CTA: Record<Locale, string> = { ar: 'فتح ملف الموظف', en: 'Open the employee file' };
 
 /** Admin-created templates live under this prefix; the catalogue never uses it for its own keys except the generic status message. */
 const CUSTOM_PREFIX = 'custom.';
@@ -33,6 +34,8 @@ const CUSTOM_PLACEHOLDERS = [
   'contractRef',
   'formLink',
   'contractLink',
+  'employeeLink',
+  'missingItems',
 ];
 
 /** The placeholders that cost something to provide: each one issues a signed link. */
@@ -185,6 +188,9 @@ export class TemplateService {
       linkUrl: `${this.appUrl}/form/preview-only`,
       formLink: `${this.appUrl}/form/preview-only`,
       contractLink: `${this.appUrl}/contract/preview-only`,
+      employeeLink: `${this.appUrl}/employees/preview-only`,
+      missingItems: s('missingItems'),
+      rejectReason: s('rejectReason'),
       contractSalary: s('contractSalary'),
       contractDuration: s('contractDuration'),
       contractStartDate: s('contractStartDate'),
@@ -271,6 +277,9 @@ export class TemplateService {
       contractEndDate: '{{contractEndDate}}',
       contractTerms: '{{contractTerms}}',
       contractRef: '{{contractRef}}',
+      employeeLink: '{{employeeLink}}',
+      missingItems: '{{missingItems}}',
+      rejectReason: '{{rejectReason}}',
       // Numeric fields drive conditionals in code templates; give them values.
       // linkUrl is left out on purpose: the editor adds the button itself.
       daysWaiting: 3,
@@ -421,8 +430,14 @@ export class TemplateService {
       .split(/\n\s*\n/)
       .map((p) => p.trim())
       .filter(Boolean);
-    const ctaLabel = (locale === 'ar' ? draft.ctaLabelAr : draft.ctaLabelEn) || DEFAULT_CTA[locale];
-    const cta = params.linkUrl ? { label: ctaLabel, url: params.linkUrl } : undefined;
+    // The button opens the personal link when there is one; a team message
+    // with no personal link gets the employee's file instead, so an admin's
+    // "form submitted" template carries [رابط الملف] without any extra work.
+    const url = params.linkUrl ?? params.employeeLink;
+    const ctaLabel =
+      (locale === 'ar' ? draft.ctaLabelAr : draft.ctaLabelEn) ||
+      (params.linkUrl ? DEFAULT_CTA[locale] : FILE_CTA[locale]);
+    const cta = url ? { label: ctaLabel, url } : undefined;
 
     const text =
       paragraphs.join('\n\n') +
@@ -433,7 +448,8 @@ export class TemplateService {
       {
         title: subject,
         paragraphs,
-        ...(cta ? { cta, note: LINK_NOTE[locale] } : {}),
+        // The do-not-share note belongs to personal links only.
+        ...(cta ? { cta, ...(params.linkUrl ? { note: LINK_NOTE[locale] } : {}) } : {}),
       },
       locale,
     );

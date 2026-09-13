@@ -24,9 +24,12 @@ import {
   offboardingWatcher,
   processWatcher,
   documentExpiryWatcher,
+  assetFormWatcher,
 } from './workflow/sla-watchers.js';
 import { EmployeeDocumentRepository } from './modules/employees/employee-document.repository.js';
 import { OwnershipService } from './workflow/ownership.service.js';
+import { ListValueRepository } from './modules/lists/list.repository.js';
+import { ListService } from './modules/lists/list.service.js';
 import { OnboardingService, type OnboardingTxScope } from './modules/employees/onboarding.service.js';
 import { EmployeeService, type EmployeeTxScope } from './modules/employees/employee.service.js';
 import { AssetRepository } from './modules/assets/asset.repository.js';
@@ -84,6 +87,7 @@ export function buildContainer() {
     redisEnabled ? (job) => getMailQueue().add('send', job) : undefined,
     publishNotify,
     (key, locale, params) => templateService.render(key, locale, params),
+    config.APP_URL,
   );
   // "When X enters status Y, email Z" — fires after each transition commits.
   const linkTokenService = new LinkTokenService(linkTokens, config.APP_URL, config.LINK_TTL_HOURS);
@@ -172,6 +176,8 @@ export function buildContainer() {
 
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
   const slaFirings = new SlaFiringRepository(prisma);
+  const assets = new AssetRepository(prisma);
+  const assetForms = new AssetFormRepository(prisma);
   const slaScheduler = new SlaScheduler(
     {
       rules: slaRules,
@@ -184,6 +190,7 @@ export function buildContainer() {
     },
     [
       onboardingWatcher(employees, onboardingWorkflow, contracts, linkTokenService),
+      assetFormWatcher(assetForms, linkTokenService),
       offboardingWatcher(new OffboardingRepository(prisma)),
       processWatcher('GOSI', gosi),
       processWatcher('MEDICAL_INSURANCE', medical),
@@ -201,6 +208,9 @@ export function buildContainer() {
     redisEnabled ? new RedisRefreshTokenStore(getSharedRedis()) : undefined,
   );
 
+  const listValues = new ListValueRepository(prisma);
+  const listService = new ListService(listValues);
+
   const onboardingService = new OnboardingService(
     { employees, documents, contracts, audit },
     onboardingWorkflow,
@@ -208,6 +218,8 @@ export function buildContainer() {
     notifications,
     unitOfWork(onboardingScope),
     openWorkHalter,
+    responsibilityService,
+    listService,
   );
 
   const employeeService = new EmployeeService(
@@ -215,16 +227,16 @@ export function buildContainer() {
     unitOfWork(employeeScope),
     ownershipService,
     onboardingWorkflow,
+    listService,
   );
 
-  const assets = new AssetRepository(prisma);
-  const assetForms = new AssetFormRepository(prisma);
   const assetService = new AssetService(
     { assets, forms: assetForms, employees, audit },
     linkTokenService,
     notifications,
     unitOfWork(assetScope),
     ownershipService,
+    responsibilityService,
   );
 
   const offboardings = new OffboardingRepository(prisma);
@@ -275,6 +287,7 @@ export function buildContainer() {
     ownershipService,
     responsibilityService,
     openWorkHalter,
+    listService,
   };
 }
 

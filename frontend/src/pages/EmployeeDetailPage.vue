@@ -7,6 +7,7 @@ import { useConfirm } from '../composables/useConfirm';
 import ProcessCard from '../components/ProcessCard.vue';
 import StatusChip from '../components/StatusChip.vue';
 import { useAuthStore } from '../stores/auth';
+import { useListsStore } from '../stores/lists';
 
 interface ProcessData {
   status: string;
@@ -114,6 +115,15 @@ interface EmployeeDetail {
   project: string | null;
   jobTitle: string | null;
   directManager: string | null;
+  gender: 'MALE' | 'FEMALE' | null;
+  nationality: string | null;
+  maritalStatus: 'SINGLE' | 'MARRIED' | 'DIVORCED' | 'WIDOWED' | null;
+  splAddress: string | null;
+  iban: string | null;
+  qualification: string | null;
+  major: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
   employmentType: string;
   /** Language of every email this person receives. */
   preferredLanguage: 'AR' | 'EN';
@@ -147,6 +157,7 @@ interface ExpiryDoc {
 }
 
 const DOC_TYPES = ['IQAMA', 'NATIONAL_ID', 'PASSPORT', 'CONTRACT', 'WORK_PERMIT', 'DRIVING_LICENSE'];
+const lists = useListsStore();
 
 const GOSI_REASONS = [
   'OPTIONAL_SUBSCRIPTION',
@@ -1167,16 +1178,35 @@ const allActions = computed<HeaderAction[]>(() => {
   return out;
 });
 
-const primaryAction = computed<HeaderAction | null>(() => {
-  const a = allActions.value;
-  return (
-    a.find((x) => x.key === 'contract:ACTIVE') ??
-    a.find((x) => x.key.startsWith('contract:') || x.key.startsWith('onb:')) ??
-    a.find((x) => x.key === 'contract-edit') ??
-    null
-  );
-});
-const menuActions = computed(() => allActions.value.filter((a) => a.key !== primaryAction.value?.key));
+/**
+ * The pipeline actions (status moves, contract) stay visible as buttons so
+ * nobody has to open a menu to find the next step. The one that moves the
+ * record forward is the solid button; the others (send back, reject, expire)
+ * sit beside it in a quieter style. Everything else lives in the menu.
+ */
+const isMainAction = (a: HeaderAction) =>
+  a.key.startsWith('contract:') || a.key.startsWith('onb:') || a.key === 'contract-edit';
+
+/** Forward-moving actions first, so "accept" is never the quiet button next to "send back". */
+const MAIN_ACTION_ORDER = [
+  'contract:ACTIVE',
+  'onb:ACCEPT_DOCUMENTS',
+  'onb:SEND_FORM',
+  'onb:REOPEN',
+  'contract:PENDING_APPROVAL',
+  'contract-edit',
+  'onb:REQUEST_MISSING',
+  'contract:REJECTED',
+  'contract:EXPIRED',
+];
+const rank = (a: HeaderAction) => {
+  const i = MAIN_ACTION_ORDER.indexOf(a.key);
+  return i === -1 ? MAIN_ACTION_ORDER.length : i;
+};
+
+const mainActions = computed(() => allActions.value.filter(isMainAction).sort((a, b) => rank(a) - rank(b)));
+const primaryAction = computed<HeaderAction | null>(() => mainActions.value[0] ?? null);
+const menuActions = computed(() => allActions.value.filter((a) => !isMainAction(a)));
 
 onMounted(load);
 </script>
@@ -1234,15 +1264,17 @@ onMounted(load);
 
         <div class="profile-head__actions">
           <v-btn
-            v-if="primaryAction"
-            :color="primaryAction.color ?? 'primary'"
-            variant="flat"
-            :prepend-icon="primaryAction.icon"
-            :loading="!!primaryAction.busyKey && busy === primaryAction.busyKey"
-            :disabled="primaryAction.disabled"
-            @click="primaryAction.run()"
+            v-for="action in mainActions"
+            :key="action.key"
+            :color="action.color ?? 'primary'"
+            :variant="action.key === primaryAction?.key ? 'flat' : 'tonal'"
+            :size="action.key === primaryAction?.key ? 'default' : 'small'"
+            :prepend-icon="action.icon"
+            :loading="!!action.busyKey && busy === action.busyKey"
+            :disabled="action.disabled"
+            @click="action.run()"
           >
-            {{ primaryAction.label }}
+            {{ action.label }}
           </v-btn>
           <v-menu v-if="menuActions.length">
             <template #activator="{ props }">
@@ -1352,6 +1384,22 @@ onMounted(load);
                     value: $t(`profile.types.${employee.employmentType}`),
                   },
                   { icon: 'user-round', label: $t('profile.directManager'), value: employee.directManager },
+                  // What the employee filled in on the data form.
+                  { icon: 'user', label: $t('fields.gender'), value: employee.gender ? $t(`enums.gender.${employee.gender}`) : null },
+                  { icon: 'flag', label: $t('fields.nationality'), value: employee.nationality ? $t(`nationalities.${employee.nationality}`, employee.nationality) : null },
+                  {
+                    icon: 'heart',
+                    label: $t('fields.maritalStatus'),
+                    value: employee.maritalStatus
+                      ? $t(`enums.marital.${employee.maritalStatus}_${employee.gender === 'FEMALE' ? 'F' : 'M'}`)
+                      : null,
+                  },
+                  { icon: 'map-pin', label: $t('fields.splAddress'), value: employee.splAddress, ltr: true },
+                  { icon: 'landmark', label: $t('fields.iban'), value: employee.iban, ltr: true },
+                  { icon: 'graduation-cap', label: $t('fields.qualification'), value: employee.qualification ? $t(`enums.qualification.${employee.qualification}`) : null },
+                  { icon: 'book-open', label: $t('fields.major'), value: employee.major },
+                  { icon: 'contact', label: $t('fields.emergencyContactName'), value: employee.emergencyContactName },
+                  { icon: 'phone-call', label: $t('fields.emergencyContactPhone'), value: employee.emergencyContactPhone, ltr: true },
                   { icon: 'languages', label: $t('fields.preferredLanguage'), value: $t(`languages.${employee.preferredLanguage ?? 'AR'}`) },
                 ]"
                 :key="field.label"
@@ -1363,7 +1411,9 @@ onMounted(load);
                 <div class="text-caption text-medium-emphasis">
                   <v-icon :icon="field.icon" size="14" class="me-1" />{{ field.label }}
                 </div>
-                <div class="text-body-2 font-weight-medium">{{ field.value ?? '—' }}</div>
+                <div class="text-body-2 font-weight-medium" :dir="field.ltr && field.value ? 'ltr' : undefined">
+                  {{ field.value ?? '—' }}
+                </div>
               </v-col>
             </v-row>
           </v-card-text>
@@ -1919,7 +1969,9 @@ onMounted(load);
           />
           <div v-for="(item, i) in newForm.items" :key="i" class="item-row mb-2">
             <v-row dense>
-              <v-col cols="6" sm="2"><v-text-field v-model="item.type" :label="$t('assets.type')" density="compact" /></v-col>
+              <v-col cols="6" sm="2">
+                <v-combobox v-model="item.type" :items="lists.items('ASSET_TYPE')" item-title="title" item-value="value" :return-object="false" :label="$t('assets.type')" density="compact" />
+              </v-col>
               <v-col cols="6" sm="3"><v-text-field v-model="item.name" :label="$t('assets.name')" density="compact" /></v-col>
               <v-col cols="6" sm="3"><v-text-field v-model="item.serialNumber" :label="$t('assets.serial')" density="compact" /></v-col>
               <v-col cols="3" sm="1"><v-text-field v-model.number="item.quantity" :label="$t('assets.qty')" type="number" min="1" density="compact" /></v-col>
@@ -2065,10 +2117,10 @@ onMounted(load);
           <v-select
             v-model="docForm.type"
             :items="[
-              ...DOC_TYPES.map((type) => ({
-                title: $t(`expiryDocs.types.${type}`),
-                value: type,
-                props: { prependIcon: DOC_ICON[type] },
+              ...lists.items('DOC_TYPE').map((o) => ({
+                title: o.title,
+                value: o.value,
+                props: { prependIcon: DOC_ICON[o.value] ?? 'file-text' },
               })),
               {
                 title: $t('expiryDocs.types.CUSTOM'),
@@ -2316,7 +2368,10 @@ onMounted(load);
             <v-col cols="12" sm="6">
               <v-combobox
                 v-model="editForm.department"
-                :items="fieldOptions.departments"
+                :items="lists.items('DEPARTMENT')"
+                item-title="title"
+                item-value="value"
+                :return-object="false"
                 :label="$t('fields.department')"
                 :hint="$t('fields.comboHint')"
                 persistent-hint
@@ -2325,7 +2380,10 @@ onMounted(load);
             <v-col cols="12" sm="6">
               <v-combobox
                 v-model="editForm.project"
-                :items="fieldOptions.projects"
+                :items="lists.items('PROJECT')"
+                item-title="title"
+                item-value="value"
+                :return-object="false"
                 :label="$t('employees.project')"
                 :hint="$t('fields.comboHint')"
                 persistent-hint
@@ -2335,7 +2393,10 @@ onMounted(load);
             <v-col cols="12" sm="6">
               <v-combobox
                 v-model="editForm.jobTitle"
-                :items="fieldOptions.jobTitles"
+                :items="lists.items('JOB_TITLE')"
+                item-title="title"
+                item-value="value"
+                :return-object="false"
                 :label="$t('fields.jobTitle')"
                 :hint="$t('fields.comboHint')"
                 persistent-hint

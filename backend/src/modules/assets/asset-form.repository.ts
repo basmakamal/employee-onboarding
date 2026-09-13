@@ -70,6 +70,16 @@ export class AssetFormRepository {
     return result.count === 1;
   }
 
+  /** SLA scan input — forms sitting in a status since before the threshold. */
+  listInStatusSince(status: AssetFormStatus, threshold: Date, limit = 500) {
+    return this.db.assetForm.findMany({
+      where: { status, updatedAt: { lt: threshold } },
+      include: { employee: true },
+      orderBy: { updatedAt: 'asc' },
+      take: limit,
+    });
+  }
+
   /** Forms still undecided — the ones a withdrawal or offboarding must stop. */
   listOpenByEmployee(employeeId: string) {
     return this.db.assetForm.findMany({

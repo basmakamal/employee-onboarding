@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
 import { useAuthStore } from '../stores/auth';
+import { useListsStore } from '../stores/lists';
 
 interface UserRow {
   id: string;
@@ -30,6 +31,9 @@ function when(iso: string): string {
 }
 
 const ROLES = ['HR', 'INSURANCE', 'IT', 'FINANCE', 'ADMIN'];
+const lists = useListsStore();
+/** The admin's name for a group in the current language, else the built-in one. */
+const roleLabel = (role: string) => lists.label('ROLE', role);
 
 const { t } = useI18n();
 const confirm = useConfirm();
@@ -224,7 +228,7 @@ onMounted(load);
         <template #item.role="{ item }">
           <!-- Your own row: read-only — you cannot demote or deactivate yourself. -->
           <template v-if="item.id === auth.user?.id">
-            <span>{{ $t(`roles.${item.role}`) }}</span>
+            <span>{{ (roleLabel(item.role) ?? $t(`roles.${item.role}`)) }}</span>
             <v-chip size="x-small" color="primary" variant="tonal" class="ms-2 font-weight-bold">
               {{ $t('users.you') }}
             </v-chip>
@@ -232,7 +236,7 @@ onMounted(load);
           <v-select
             v-else
             :model-value="item.role"
-            :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
+            :items="ROLES.map((r) => ({ title: roleLabel(r) ?? $t(`roles.${r}`), value: r }))"
             density="compact"
             hide-details
             variant="plain"
@@ -336,7 +340,7 @@ onMounted(load);
           <v-text-field v-model="createForm.email" :label="$t('fields.email')" type="email" />
           <v-select
             v-model="createForm.role"
-            :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
+            :items="ROLES.map((r) => ({ title: roleLabel(r) ?? $t(`roles.${r}`), value: r }))"
             :label="$t('users.role')"
           />
           <v-text-field
@@ -431,7 +435,7 @@ onMounted(load);
           />
           <v-select
             v-model="editDialog.role"
-            :items="ROLES.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
+            :items="ROLES.map((r) => ({ title: roleLabel(r) ?? $t(`roles.${r}`), value: r }))"
             :label="$t('users.role')"
             prepend-inner-icon="shield-check"
             :disabled="isSelf"
