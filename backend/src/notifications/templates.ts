@@ -51,7 +51,7 @@ const SIGN_OFF: Record<Locale, string> = {
 };
 
 const LINK_NOTE: Record<Locale, string> = {
-  ar: 'الرابط صالح لفترة محدودة ومخصص لك وحدك، يُرجى عدم مشاركته.',
+  ar: 'الرابط صالح لفترة محدودة، يُرجى عدم مشاركته مع أي شخص.',
   en: 'This link is valid for a limited time and is personal to you — please do not share it.',
 };
 
@@ -889,7 +889,7 @@ const T: Record<string, Record<Locale, Template>> = {
           'عند أول تسجيل دخول سيُطلب منك اختيار كلمة مرور خاصة بك قبل المتابعة.',
         ],
         ...(p.linkUrl ? { cta: { label: 'تسجيل الدخول', url: p.linkUrl } } : {}),
-        note: 'هذه الرسالة مخصصة لك وحدك — لا تشاركها مع أي شخص.',
+        note: 'يُرجى الاحتفاظ بكلمة المرور المؤقتة سرّية وعدم مشاركتها مع أي شخص.',
       }, SIGN_OFF.ar),
     en: (p) =>
       branded('en', 'Your Riyada HR account is ready', {
@@ -902,7 +902,7 @@ const T: Record<string, Record<Locale, Template>> = {
           'The first time you sign in you will be asked to choose your own password before continuing.',
         ],
         ...(p.linkUrl ? { cta: { label: 'Sign in', url: p.linkUrl } } : {}),
-        note: 'This message is personal to you — please do not share it.',
+        note: 'Please keep the temporary password to yourself and do not share it with anyone.',
       }, SIGN_OFF.en),
   },
 
