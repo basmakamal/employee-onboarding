@@ -3,23 +3,23 @@
  * props: type rendering, motion, focus, and the small corrections that keep
  * Arabic and English feeling equally deliberate.
  *
- * Design intent: soft off-white in light, deep slate in dark, no pure black or
- * blinding white anywhere; nothing sharp-edged; motion always present but
- * never showy.
+ * Design intent: a warm off-white page in light, layered slate in dark, no
+ * pure black anywhere; hairlines instead of shadows; motion only where it
+ * confirms an action.
  */
 
 :root {
   --app-ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --app-duration: 200ms;
-  /* Shadows carry the elevation, not dark outlines. */
-  --app-shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
-  --app-shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.07), 0 2px 4px -2px rgb(15 23 42 / 0.05);
-  --app-shadow-lg: 0 12px 24px -6px rgb(15 23 42 / 0.12), 0 4px 8px -4px rgb(15 23 42 / 0.06);
+  --app-duration: 160ms;
+  /* Depth is for things that float over the page: menus, dialogs, the palette. */
+  --app-shadow-sm: none;
+  --app-shadow-md: 0 4px 12px -2px rgb(31 41 51 / 0.1), 0 1px 3px rgb(31 41 51 / 0.06);
+  --app-shadow-lg: 0 16px 32px -8px rgb(31 41 51 / 0.16), 0 4px 10px -4px rgb(31 41 51 / 0.08);
 }
 
 .v-theme--dark {
   /* In dark mode a lifted surface reads better than a shadow. */
-  --app-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.28);
+  --app-shadow-sm: none;
   --app-shadow-md: 0 4px 10px -2px rgb(0 0 0 / 0.38);
   --app-shadow-lg: 0 16px 32px -8px rgb(0 0 0 / 0.48);
 }
@@ -99,20 +99,15 @@ body {
     transform var(--app-duration) var(--app-ease) !important;
 }
 
-/* Interactive cards lift a little; static ones must not pretend to. */
+/* Interactive surfaces answer with a tint, not by moving. */
 .card-interactive {
   cursor: pointer;
 }
 .card-interactive:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--app-shadow-md) !important;
-}
-
-.v-btn:not(.v-btn--disabled):hover {
-  transform: translateY(-1px);
+  background: rgba(var(--v-theme-on-surface), 0.02);
 }
 .v-btn:not(.v-btn--disabled):active {
-  transform: translateY(0);
+  opacity: 0.85;
 }
 
 /* ── surfaces ─────────────────────────────────────────────────────────────
@@ -120,8 +115,8 @@ body {
    theme so it inverts correctly. */
 .v-card--variant-elevated,
 .v-card--variant-flat {
-  border: 1px solid rgba(var(--v-border-color), 0.06);
-  box-shadow: var(--app-shadow-sm) !important;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  box-shadow: none !important;
 }
 
 .v-theme--dark .v-card--variant-elevated,
@@ -197,14 +192,7 @@ select:-webkit-autofill {
 
 /* Tables: quieter headers, roomier rows, a hover that guides the eye. */
 .v-data-table thead th {
-  font-weight: 600 !important;
-  font-size: 0.8125rem !important;
-  letter-spacing: 0.01em;
   white-space: nowrap;
-}
-
-.v-data-table tbody tr:hover > td {
-  background: rgba(var(--v-theme-primary), 0.035);
 }
 
 /* Scrollbars, so they belong to the palette rather than the OS. */

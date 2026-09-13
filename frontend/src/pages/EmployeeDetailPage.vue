@@ -1362,7 +1362,7 @@ onMounted(load);
     <v-card class="mb-4 profile-head">
       <div class="profile-head__main">
         <div class="position-relative flex-shrink-0">
-          <v-avatar size="72" color="primary" variant="tonal" rounded="xl">
+          <v-avatar size="72" class="avatar-neutral" rounded="lg">
             <v-img v-if="photoUrl" :src="photoUrl" cover />
             <span v-else class="text-h5 font-weight-bold">{{ initials }}</span>
           </v-avatar>
@@ -1545,9 +1545,7 @@ onMounted(load);
                 md="3"
                 class="info-cell"
               >
-                <div class="text-caption text-medium-emphasis">
-                  <v-icon :icon="field.icon" size="14" class="me-1" />{{ field.label }}
-                </div>
+                <div class="text-caption text-medium-emphasis">{{ field.label }}</div>
                 <div class="text-body-2 font-weight-medium" :dir="field.ltr && field.value ? 'ltr' : undefined">
                   {{ field.value ?? '—' }}
                 </div>
@@ -2719,14 +2717,13 @@ onMounted(load);
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 .step {
-  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: var(--r-sm);
   font-size: 12px; font-weight: 500;
-  background: rgb(var(--v-theme-surface-variant));
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 .step__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .6; }
-.step--done { color: rgb(var(--v-theme-success)); background: rgba(var(--v-theme-success), 0.12); }
-.step--now { color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), 0.12); font-weight: 600; }
+.step--done { color: rgb(var(--v-theme-success)); }
+.step--now { color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), 0.08); font-weight: 600; }
 .step--now .step__dot { opacity: 1; }
 .step__sep { color: rgba(var(--v-theme-on-surface), 0.35); }
 @media (max-width: 700px) {

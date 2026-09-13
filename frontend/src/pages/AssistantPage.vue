@@ -2,6 +2,7 @@
 import { nextTick, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
+import PageHeader from '../components/PageHeader.vue';
 
 interface ChatTurn {
   role: 'user' | 'assistant';
@@ -46,13 +47,7 @@ async function scrollDown() {
 
 <template>
   <v-container class="py-8 d-flex flex-column" style="max-width: 860px; height: calc(100vh - 64px)">
-    <div class="mb-4">
-      <h1 class="text-h4 font-weight-bold">
-        <v-icon icon="bot" color="primary" class="me-2" />
-        {{ $t('ai.assistantTitle') }}
-      </h1>
-      <p class="text-medium-emphasis mt-1">{{ $t('ai.assistantSubtitle') }}</p>
-    </div>
+    <PageHeader :title="$t('ai.assistantTitle')" :subtitle="$t('ai.assistantSubtitle')" />
 
     <v-card class="flex-grow-1 d-flex flex-column" style="min-height: 0">
       <div ref="scroller" class="flex-grow-1 overflow-y-auto pa-4">

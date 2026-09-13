@@ -178,9 +178,9 @@ function confirmHold() {
 
 <style scoped>
 .process-card {
-  transition: transform 0.2s ease;
+  transition: border-color var(--app-duration) var(--app-ease);
 }
 .process-card:hover {
-  transform: translateY(-2px);
+  border-color: rgba(var(--v-border-color), calc(var(--v-border-opacity) * 2));
 }
 </style>

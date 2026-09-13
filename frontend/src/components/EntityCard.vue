@@ -22,7 +22,7 @@ const emit = defineEmits<{ action: [] }>();
 <template>
   <component :is="to ? 'router-link' : 'div'" :to="to" class="entity-card">
     <div class="entity-card__row">
-      <v-avatar v-if="initials" size="36" color="secondary" variant="tonal">
+      <v-avatar v-if="initials" size="36" class="avatar-neutral">
         <span class="text-caption font-weight-bold">{{ initials }}</span>
       </v-avatar>
       <div class="min-w-0 flex-grow-1">
@@ -46,7 +46,7 @@ const emit = defineEmits<{ action: [] }>();
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   color: inherit;

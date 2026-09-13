@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api/client';
+import PageHeader from '../components/PageHeader.vue';
 
 interface SlaRuleRow {
   id: string;
@@ -142,16 +143,11 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 1100px">
-    <div class="d-flex align-center flex-wrap mb-6" style="gap: 8px">
-      <div>
-        <h1 class="text-h4 font-weight-bold">{{ $t('sla.title') }}</h1>
-        <p class="text-medium-emphasis mt-1">{{ $t('sla.subtitle') }}</p>
-      </div>
-      <v-spacer />
+    <PageHeader :title="$t('sla.title')" :subtitle="$t('sla.subtitle')">
       <v-btn color="primary" prepend-icon="plus" @click="newDialog = true">
         {{ $t('sla.addRule') }}
       </v-btn>
-    </div>
+    </PageHeader>
 
     <v-card v-if="loaded">
       <v-table density="comfortable">

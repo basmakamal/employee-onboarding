@@ -255,9 +255,8 @@ async function submit() {
   font-weight: 500;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(6px);
+  background: rgba(11, 58, 70, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 .hero__eyebrow i {
   width: 8px;

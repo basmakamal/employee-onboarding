@@ -1,28 +1,32 @@
 /**
- * Design tokens the component library cannot express through props:
- * the display face for headings and numbers, soft status tints, radii,
- * depth, and the Lucide icon sizing. Loaded after app.css.
+ * Design tokens the component library cannot express through props.
+ *
+ * The product's voice: one typeface (Inter, IBM Plex Sans Arabic for Arabic),
+ * hairline borders instead of shadows, small radii, colour only where it
+ * carries meaning. Nothing here decorates; everything sets a default the
+ * pages inherit so they stay consistent without restyling each one.
+ * Loaded after app.css.
  */
 :root {
-  --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-ar: 'IBM Plex Sans Arabic', 'Inter', system-ui, sans-serif;
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 22px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
 }
 
-/* Headings and big numbers speak in the display face; Arabic keeps Plex. */
+/* ── type scale ──────────────────────────────────────────────────────────
+   Headings are the body face, a step or two larger and a shade heavier.
+   The tracking stays neutral; Arabic gets its own face and never tightens. */
 .v-application .text-h1,
 .v-application .text-h2,
 .v-application .text-h3,
 .v-application .text-h4,
 .v-application .text-h5,
-.v-application .text-h6,
-.v-application .display-number {
-  font-family: var(--font-display) !important;
-  letter-spacing: -0.01em !important;
+.v-application .text-h6 {
+  font-family: var(--font-body) !important;
+  letter-spacing: -0.005em !important;
+  font-weight: 600 !important;
   text-wrap: balance;
 }
 [dir='rtl'] .v-application .text-h1,
@@ -34,67 +38,80 @@
   font-family: var(--font-ar) !important;
   letter-spacing: 0 !important;
 }
-.v-application .text-h4 { font-size: 1.75rem !important; line-height: 1.2 !important; }
-.v-application .text-h5 { font-size: 1.375rem !important; }
+.v-application .text-h4 { font-size: 1.5rem !important; line-height: 1.25 !important; }
+.v-application .text-h5 { font-size: 1.25rem !important; line-height: 1.3 !important; }
+.v-application .text-h6 { font-size: 1.0625rem !important; line-height: 1.35 !important; }
 
 /* Lucide icons size with the surrounding text and sit on the baseline. */
 .lucide-icon { display: inline-block; vertical-align: -0.125em; flex: none; }
 .v-icon .lucide-icon { width: 1em; height: 1em; }
 
-/* Section labels: small caps with a touch of tracking. */
+/* Section labels: small, medium weight, sentence case — no shouting. */
 .label-caps {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
-/* Soft wells inside cards (access panels, hints, previews). */
+/* A quiet well inside a surface (hints, previews, review blocks). */
 .well {
   background: rgb(var(--v-theme-surface-variant));
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: var(--r-md);
 }
 
-/* Cards get a hairline and a whisper of depth; hover lifts interactive ones. */
+/* ── surfaces ────────────────────────────────────────────────────────────
+   Three levels: page → section → content. A card is a content surface with
+   a hairline; depth is reserved for things that float (menus, dialogs). */
 .v-card.v-card--variant-flat {
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  box-shadow: var(--app-shadow-sm);
+  box-shadow: none;
 }
 .v-dialog .v-card,
 .v-menu .v-card,
 .v-menu .v-list {
   box-shadow: var(--app-shadow-lg) !important;
 }
+.v-menu .v-list,
+.v-menu .v-card {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
 
-/* Inputs: a calm hairline at rest, one clean 1px accent line on focus — no rings. */
-.v-field--variant-outlined .v-field__outline { --v-field-border-opacity: 0.18; }
-.v-field--variant-outlined:hover .v-field__outline { --v-field-border-opacity: 0.32; }
+/* ── inputs ──────────────────────────────────────────────────────────────
+   A calm hairline at rest, a single 1px line in the accent on focus. */
+.v-field--variant-outlined .v-field__outline { --v-field-border-opacity: 0.22; }
+.v-field--variant-outlined:hover .v-field__outline { --v-field-border-opacity: 0.4; }
 .v-field--variant-outlined.v-field--focused .v-field__outline { --v-field-border-opacity: 1; --v-field-border-width: 1px; }
 /* Floating labels sit above the field; never let a stepper or window clip them. */
 .v-dialog .v-window, .v-dialog .v-window__container, .v-dialog .v-window-item { overflow: visible !important; }
 .v-dialog .v-window-item { padding-top: 6px; }
 
-/* Tables: sticky header, quieter header text, soft row hover. */
+/* ── tables ──────────────────────────────────────────────────────────────
+   Sticky header in sentence case, quiet separators, a soft hover. */
 .v-table thead th,
 .v-data-table thead th {
   position: sticky;
   top: 0;
   z-index: 1;
   background: rgb(var(--v-theme-surface));
-  font-size: 11.5px !important;
+  font-size: 12.5px !important;
   font-weight: 600 !important;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)) !important;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)) !important;
+}
+.v-table tbody td,
+.v-data-table tbody td {
+  border-bottom-color: rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.7)) !important;
 }
 .v-table tbody tr:hover td,
 .v-data-table tbody tr:hover td {
   background: rgba(var(--v-theme-on-surface), 0.03);
 }
 
-/* Chips: a dot before the label reads as status even without colour vision. */
+/* Chips that carry status keep a dot so colour is never the only signal. */
 .v-chip.status-dot::before {
   content: '';
   width: 6px;
@@ -105,12 +122,62 @@
   opacity: 0.9;
 }
 
-/* Page enter: fade + 8px rise, one duration. */
+/* ── layout helpers shared by pages ──────────────────────────────────── */
+/* A section: small title row, then its content. Sections stack with air between. */
+.sec { margin-bottom: 28px; }
+.sec__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.sec__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0;
+}
+.sec__hint {
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+/* A list surface: rows separated by hairlines, the whole thing on a content surface. */
+.rows {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.rows__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  color: inherit;
+  text-decoration: none;
+  border-top: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.8));
+  transition: background var(--app-duration) var(--app-ease);
+}
+.rows__item:first-child { border-top: 0; }
+a.rows__item:hover, .rows__item--link:hover { background: rgba(var(--v-theme-on-surface), 0.03); }
+.rows__empty {
+  padding: 22px 16px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.875rem;
+}
+
+/* Page transition: a short fade, no movement. */
 .page-enter-active,
-.page-leave-active { transition: opacity 0.22s var(--app-ease), transform 0.22s var(--app-ease); }
-.page-enter-from { opacity: 0; transform: translateY(8px); }
-.page-leave-to { opacity: 0; transform: translateY(-6px); }
+.page-leave-active { transition: opacity 0.14s var(--app-ease); }
+.page-enter-from,
+.page-leave-to { opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .page-enter-active, .page-leave-active { transition: none; }
+}
+
+/* People avatars: neutral by default, so colour stays reserved for status. */
+.avatar-neutral {
+  background: rgb(var(--v-theme-surface-variant)) !important;
+  color: rgba(var(--v-theme-on-surface), 0.8) !important;
 }
