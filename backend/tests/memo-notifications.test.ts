@@ -87,7 +87,7 @@ describe('the memo templates', () => {
         const personal = key.startsWith('employee.contract') ? SAMPLE.contractLink : SAMPLE.linkUrl;
         expect(en.html, key).toContain(personal);
         // A personal link always comes with the do-not-share note.
-        expect(en.text, key).toContain('personal to you');
+        expect(en.text, key).toContain('do not share it');
       }
     }
   });

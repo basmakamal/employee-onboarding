@@ -12,7 +12,7 @@ const SIGN_OFF: Record<Locale, string> = {
 };
 const LINK_NOTE: Record<Locale, string> = {
   ar: 'الرابط صالح لفترة محدودة، يُرجى عدم مشاركته مع أي شخص.',
-  en: 'This link is valid for a limited time and is personal to you — please do not share it.',
+  en: 'This link is valid for a limited time, please do not share it with anyone.',
 };
 const DEFAULT_CTA: Record<Locale, string> = { ar: 'فتح الرابط', en: 'Open the link' };
 const FILE_CTA: Record<Locale, string> = { ar: 'فتح ملف الموظف', en: 'Open the employee file' };
