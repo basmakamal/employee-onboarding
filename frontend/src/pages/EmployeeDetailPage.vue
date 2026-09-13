@@ -32,6 +32,9 @@ interface AssetFormRow {
   deliveryDate: string | null;
   rejectReason: string | null;
   createdAt: string;
+  sentAt?: string | null;
+  /** When the employee approved or rejected it through their signed link. */
+  decidedAt?: string | null;
   items: AssetFormItem[];
 }
 
@@ -961,6 +964,128 @@ function printProfile() {
   w.print();
 }
 
+/**
+ * The custody form as a document: what was handed over, to whom, and when
+ * the employee approved it through their signed link. Opens the browser's
+ * print dialog, where "Save as PDF" produces the file HR asked for — the
+ * same route the profile print-out takes, so nothing is generated server-side.
+ */
+function printAssetForm(form: AssetFormRow) {
+  if (!employee.value) return;
+  const e = employee.value;
+  const w = window.open('', '_blank', 'width=900,height=1000');
+  if (!w) return;
+  const rtl = locale.value.startsWith('ar');
+  const esc = (v: unknown) =>
+    String(v ?? '—')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  const date = (v: string | null | undefined) => (v ? new Date(v).toLocaleDateString() : '—');
+  const when = (v: string | null | undefined) => (v ? new Date(v).toLocaleString() : '—');
+  const approved = form.status === 'APPROVED';
+
+  const meta: Array<[string, unknown]> = [
+    [t('fields.name'), `${e.firstName} ${e.lastName}`],
+    [t('employees.no'), e.employeeNo],
+    [t('fields.department'), e.department],
+    [t('fields.jobTitle'), e.jobTitle],
+    [t('assets.deliveryDate'), date(form.deliveryDate)],
+    [t('assets.docStatus'), t(`assetStatus.${form.status}`)],
+    ...(approved ? [[t('assets.approvedOn'), when(form.decidedAt)] as [string, unknown]] : []),
+  ];
+  const metaRows = meta
+    .map(
+      ([label, v]) => `<tr>
+        <td class="k">${esc(label)}</td>
+        <td>${esc(v)}</td>
+      </tr>`,
+    )
+    .join('');
+  const itemRows = form.items
+    .map(
+      (it, i) => `<tr>
+        <td class="c">${i + 1}</td>
+        <td>${esc(lists.label('ASSET_TYPE', it.type) ?? it.type)}</td>
+        <td>${esc(it.name)}</td>
+        <td dir="ltr">${esc(it.serialNumber ?? '—')}</td>
+        <td class="c">${esc(it.quantity)}</td>
+        <td>${esc(t(`conditions.${it.condition}`))}</td>
+        <td>${esc(it.notes ?? '')}</td>
+      </tr>`,
+    )
+    .join('');
+  const signatures = [t('assets.signEmployee'), t('assets.signIssuer')]
+    .map((label) => `<div class="sig"><div class="line"></div><div>${esc(label)}</div></div>`)
+    .join('');
+
+  w.document.write(`<!doctype html>
+<html dir="${rtl ? 'rtl' : 'ltr'}" lang="${rtl ? 'ar' : 'en'}">
+<head>
+<meta charset="utf-8">
+<title>${esc(t('assets.docTitle'))} — ${esc(`${e.firstName} ${e.lastName}`)}</title>
+<style>
+  @page { size: A4; margin: 18mm; }
+  body { margin: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #1f2933; font-size: 13px; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 3px solid #35708f; }
+  .head img { height: 40px; }
+  .head h1 { margin: 0; font-size: 20px; }
+  .head .sub { color: #667; font-size: 12px; margin-top: 2px; }
+  .ref { color: #667; font-size: 11px; text-align: end; }
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  td, th { border: 1px solid #cfd6dc; padding: 7px 10px; text-align: start; vertical-align: top; }
+  th { background: #eef3f5; font-weight: 600; font-size: 12px; }
+  td.k { background: #f6f8f9; width: 32%; font-weight: 600; }
+  td.c, th.c { text-align: center; }
+  .note { margin-top: 18px; padding: 10px 12px; border-inline-start: 3px solid #4e9e8f; background: #f4f9f8; font-size: 12.5px; line-height: 1.6; }
+  .sigs { display: flex; gap: 40px; margin-top: 56px; }
+  .sig { flex: 1; text-align: center; font-size: 12px; color: #445; }
+  .sig .line { border-bottom: 1px solid #333; height: 40px; margin-bottom: 6px; }
+  .foot { margin-top: 28px; color: #889; font-size: 11px; display: flex; justify-content: space-between; }
+  @media print { .noprint { display: none; } }
+  .noprint { margin-bottom: 14px; }
+  .noprint button { font: inherit; padding: 8px 16px; border: 0; border-radius: 6px; background: #35708f; color: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+  <div class="noprint"><button onclick="window.print()">${esc(t('assets.printOrSave'))}</button></div>
+  <div class="head">
+    <div>
+      <h1>${esc(t('assets.docTitle'))}</h1>
+      <div class="sub">${esc(t('assets.docSubtitle'))}</div>
+    </div>
+    <img src="${location.origin}/riyada-logo.png" alt="Riyada">
+  </div>
+  <div class="ref" style="margin-top:8px">${esc(t('assets.formRef'))}: ${esc(form.id)}</div>
+
+  <table>${metaRows}</table>
+
+  <table>
+    <thead><tr>
+      <th class="c">#</th>
+      <th>${esc(t('assets.type'))}</th>
+      <th>${esc(t('assets.name'))}</th>
+      <th>${esc(t('assets.serial'))}</th>
+      <th class="c">${esc(t('assets.qty'))}</th>
+      <th>${esc(t('assets.condition'))}</th>
+      <th>${esc(t('assets.notes'))}</th>
+    </tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+
+  <div class="note">${esc(approved ? t('assets.docApprovedNote', { at: when(form.decidedAt) }) : t('assets.docPendingNote'))}</div>
+
+  <div class="sigs">${signatures}</div>
+
+  <div class="foot">
+    <span>${esc(t('login.foot'))}</span>
+    <span>${esc(t('assets.printedAt'))}: ${esc(new Date().toLocaleString())}</span>
+  </div>
+</body>
+</html>`);
+  w.document.close();
+}
+
 // -------------------------------------------------- AI document extraction
 const scanInput = ref<HTMLInputElement | null>(null);
 
@@ -1786,7 +1911,16 @@ onMounted(load);
                     </tr>
                   </tbody>
                 </v-table>
-                <div class="d-flex mt-3" style="gap: 8px">
+                <div class="d-flex flex-wrap mt-3" style="gap: 8px">
+                  <v-btn
+                    size="small"
+                    :variant="form.status === 'APPROVED' ? 'flat' : 'tonal'"
+                    :color="form.status === 'APPROVED' ? 'primary' : undefined"
+                    prepend-icon="download"
+                    @click="printAssetForm(form)"
+                  >
+                    {{ $t('assets.download') }}
+                  </v-btn>
                   <v-btn
                     v-for="action in formActions(form.status)"
                     :key="action"

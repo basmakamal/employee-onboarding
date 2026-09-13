@@ -227,7 +227,19 @@
       "revise": "Revise"
     },
     "trainee": "Custody can be issued during training; it follows the person into their employee file.",
-    "closed": "No new custody for someone who has left."
+    "closed": "No new custody for someone who has left.",
+    "download": "Download document",
+    "docTitle": "Asset custody form",
+    "docSubtitle": "Company property handed to the employee, acknowledged electronically.",
+    "docStatus": "Form status",
+    "approvedOn": "Approved by the employee on",
+    "formRef": "Form reference",
+    "docApprovedNote": "The employee reviewed the items listed above and approved receipt electronically on {at} through their personal signed link. The custody is registered on their file.",
+    "docPendingNote": "This form has not yet been approved by the employee. The items remain unconfirmed until it is.",
+    "signEmployee": "Employee signature",
+    "signIssuer": "Issued by (IT / HR)",
+    "printOrSave": "Print or save as PDF",
+    "printedAt": "Printed"
   },
   "assetStatus": {
     "DRAFT": "Draft",
