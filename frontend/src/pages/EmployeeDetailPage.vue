@@ -311,6 +311,14 @@ const initials = computed(() => {
   const e = employee.value;
   return e ? `${e.firstName[0] ?? ''}${e.lastName[0] ?? ''}`.toUpperCase() : '';
 });
+/** The same soft tint this person carries in the directory. */
+const avatarTone = computed(() => {
+  const e = employee.value;
+  if (!e) return 'avatar-neutral';
+  let h = 0;
+  for (const ch of `${e.firstName}${e.lastName}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `avatar-tone avatar-tone-${h % 6}`;
+});
 
 /** The reference's "employee status" panel: is anything still missing? */
 const missingCount = computed(() => {
@@ -1362,9 +1370,9 @@ onMounted(load);
     <v-card class="mb-4 profile-head">
       <div class="profile-head__main">
         <div class="position-relative flex-shrink-0">
-          <v-avatar size="72" class="avatar-neutral" rounded="lg">
+          <v-avatar size="64" :class="avatarTone" rounded="lg">
             <v-img v-if="photoUrl" :src="photoUrl" cover />
-            <span v-else class="text-h5 font-weight-bold">{{ initials }}</span>
+            <span v-else style="font-size: 20px">{{ initials }}</span>
           </v-avatar>
           <v-btn
             v-if="auth.hasRole('HR')"
@@ -1381,7 +1389,7 @@ onMounted(load);
 
         <div class="flex-grow-1 min-w-0">
           <div class="d-flex align-center flex-wrap ga-2">
-            <h1 class="text-h5 font-weight-bold">{{ employee.firstName }} {{ employee.lastName }}</h1>
+            <h1 class="profile-head__name">{{ employee.firstName }} {{ employee.lastName }}</h1>
             <StatusChip :status="employee.status" />
           </div>
           <div class="text-body-2 text-medium-emphasis mt-1">
@@ -1445,7 +1453,7 @@ onMounted(load);
             <span v-else class="step__dot" />
             {{ $t(`status.${stage}`) }}
           </span>
-          <v-icon icon="chevron-right" size="14" class="step__sep flip-rtl" />
+          <span class="step__sep" aria-hidden="true" />
         </template>
         <span class="step"><span class="step__dot" />{{ $t('status.ACTIVE') }}</span>
         <v-chip v-if="isWithdrawn" size="x-small" color="error" class="ms-2">{{ $t('status.WITHDRAWN') }}</v-chip>
@@ -2706,7 +2714,9 @@ onMounted(load);
 }
 
 /* ── profile header ─────────────────────────────────────────────────────── */
-.profile-head { padding: 18px 20px 14px; }
+.profile-head { padding: 22px 24px 16px; }
+.profile-head__name { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin: 0; }
+[dir='rtl'] .profile-head__name { letter-spacing: 0; }
 .profile-head__main { display: flex; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
 .profile-head__meta { display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .profile-head__meta > span { display: inline-flex; align-items: center; gap: 5px; }
@@ -2725,7 +2735,7 @@ onMounted(load);
 .step--done { color: rgb(var(--v-theme-success)); }
 .step--now { color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), 0.08); font-weight: 600; }
 .step--now .step__dot { opacity: 1; }
-.step__sep { color: rgba(var(--v-theme-on-surface), 0.35); }
+.step__sep { width: 18px; height: 1px; background: rgba(var(--v-border-color), calc(var(--v-border-opacity) * 2)); flex: none; }
 @media (max-width: 700px) {
   .profile-head__actions { width: 100%; }
   .profile-head__actions .v-btn:first-child { flex: 1; }

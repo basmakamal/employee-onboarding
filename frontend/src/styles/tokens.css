@@ -224,13 +224,13 @@ a.rows__item:hover, .rows__item--link:hover { background: rgba(var(--v-theme-on-
 
 /* ── tabs ────────────────────────────────────────────────────────────────
    Text tabs on a hairline: quiet at rest, weighty when active, a 2px mark. */
-.v-tabs.tabs-line { --v-tabs-height: 40px; border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
-.v-tabs.tabs-line .v-tab { min-width: 0; padding: 0 4px; margin-inline-end: 22px; font-size: 0.875rem; font-weight: 500; letter-spacing: 0;
+.v-tabs:not(.filter-pills) { --v-tabs-height: 40px; border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
+.v-tabs:not(.filter-pills) .v-tab { min-width: 0; padding: 0 4px; margin-inline-end: 22px; font-size: 0.875rem; font-weight: 500; letter-spacing: 0;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); text-transform: none; }
-.v-tabs.tabs-line .v-tab:hover { color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)); }
-.v-tabs.tabs-line .v-tab .v-btn__overlay { display: none; }
-.v-tabs.tabs-line .v-tab--selected { color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)); font-weight: 600; }
-.v-tabs.tabs-line .v-tab__slider { height: 2px; border-radius: 2px 2px 0 0; background: rgb(var(--v-theme-primary)); }
+.v-tabs:not(.filter-pills) .v-tab:hover { color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)); }
+.v-tabs:not(.filter-pills) .v-tab .v-btn__overlay { display: none; }
+.v-tabs:not(.filter-pills) .v-tab--selected { color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)); font-weight: 600; }
+.v-tabs:not(.filter-pills) .v-tab__slider { height: 2px; border-radius: 2px 2px 0 0; background: rgb(var(--v-theme-primary)); }
 .tab-count { display: inline-flex; align-items: center; min-width: 20px; height: 18px; padding: 0 6px; margin-inline-start: 8px;
   border-radius: 999px; font-size: 0.7rem; font-weight: 600; background: rgba(var(--v-theme-on-surface), 0.07);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
@@ -301,3 +301,38 @@ tr:hover .v-avatar, .rows__item:hover .v-avatar { transform: scale(1.06); }
   box-shadow: 0 2px 8px -2px rgba(var(--v-theme-primary), 0.5);
 }
 .filter-pills .pill-count { margin-inline-start: 8px; font-size: 0.75rem; font-weight: 600; opacity: 0.75; }
+
+/* ── cards, chips, dialogs, alerts: one voice ───────────────────────────
+   Card titles are section titles; body copy is 14px; chips are quiet
+   labels; dialogs open with a clear heading and generous padding. */
+.v-card .v-card-title { font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.005em; line-height: 1.4; padding-bottom: 2px; }
+.v-card .v-card-subtitle { font-size: 0.8125rem; opacity: 1; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); white-space: normal; }
+.v-card .v-card-item { padding: 16px 20px 8px; }
+.v-card .v-card-text { font-size: 0.875rem; line-height: 1.55; padding: 12px 20px 20px; }
+.v-card .v-card-item + .v-card-text { padding-top: 6px; }
+.v-card .v-card-actions { padding: 8px 16px 16px; }
+.v-dialog .v-card .v-card-title { font-size: 1.125rem; font-weight: 700; letter-spacing: -0.015em; }
+.v-dialog .v-card { border-radius: var(--r-xl) !important; }
+.v-chip.v-chip--variant-tonal { font-weight: 500; }
+.v-chip.v-chip--size-small { font-size: 0.75rem; height: 24px; }
+.v-chip.v-chip--size-x-small { font-size: 0.6875rem; height: 20px; }
+.v-alert { font-size: 0.875rem; line-height: 1.55; }
+.v-alert .v-alert-title { font-size: 0.9375rem; font-weight: 600; }
+.v-list-item-title { font-size: 0.875rem; }
+.v-menu .v-list { padding: 6px; border-radius: var(--r-lg) !important; }
+.v-menu .v-list-item { min-height: 36px; border-radius: var(--r-md); }
+.v-expansion-panel { border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: var(--r-lg) !important; box-shadow: none !important; }
+.v-expansion-panel::after { display: none; }
+.v-expansion-panels { gap: 8px; }
+.v-expansion-panel-title { font-size: 0.875rem; font-weight: 500; min-height: 48px; }
+.v-switch .v-label, .v-checkbox .v-label { font-size: 0.875rem; }
+.v-snackbar__wrapper { border-radius: var(--r-lg) !important; }
+
+/* A toolbar row of controls sitting directly on the page, no card around it. */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.toolbar .v-input { flex: 0 1 auto; }
+.toolbar__grow { flex: 1 1 260px !important; min-width: 200px; max-width: 460px; }
+
+/* Definition grids on profile-type screens: label over value, no icons. */
+.info-cell .text-caption { font-size: 0.75rem; font-weight: 500; letter-spacing: 0.01em; margin-bottom: 2px; }
+.info-cell .text-body-2 { font-size: 0.875rem; }

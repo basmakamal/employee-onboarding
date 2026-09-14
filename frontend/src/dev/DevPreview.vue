@@ -89,6 +89,106 @@ const dashboard = {
   ],
 };
 
+// One active employee's whole file, for the profile page.
+const profile = {
+  ...employees[0],
+  project: 'Riyada',
+  directManager: 'Faisal Alharbi',
+  employmentType: 'FULL_TIME',
+  preferredLanguage: 'EN',
+  photoKey: null,
+  nationalId: '1098765432',
+  birthDate: '1994-03-12T00:00:00.000Z',
+  phone: '0551234567',
+  gender: 'MALE',
+  nationality: 'SA',
+  maritalStatus: 'MARRIED',
+  splAddress: 'RRRD2929',
+  iban: 'SA0380000000608010167519',
+  qualification: 'BACHELOR',
+  major: 'Business Administration',
+  emergencyContactName: 'Mona Hassan',
+  emergencyContactPhone: '0559876543',
+  contract: {
+    startDate: ago(12), durationMonths: 12, terms: 'Full time, probation 90 days.', salary: 9000,
+    sentAt: ago(20), approvedAt: ago(14), status: 'ACTIVE', statusChangedAt: ago(14), rejectReason: null,
+    externalRef: 'C-2026-114', storageKey: 'contracts/c1.pdf',
+  },
+  onboardingDocuments: [
+    { id: 'd1', type: 'NATIONAL_ID', label: null, required: true, uploaded: true },
+    { id: 'd2', type: 'QUALIFICATION', label: null, required: true, uploaded: true },
+    { id: 'd3', type: 'PHOTO', label: null, required: true, uploaded: true },
+    { id: 'd4', type: 'IBAN_LETTER', label: null, required: true, uploaded: true },
+  ],
+  requests: [
+    { id: 'r1', type: 'SALARY_LETTER', notes: 'For a bank loan', createdAt: ago(3), createdBy: { name: 'Basma Kamal' } },
+  ],
+  gosi: { status: 'DONE', certificateStorageKey: 'g.pdf' },
+  medical: { status: 'PENDING', holdReason: null, holdNote: null, certificateStorageKey: null },
+  criminalRecord: { status: 'REQUEST_SENT', certificateStorageKey: null },
+  assetForms: [
+    {
+      id: 'f1', status: 'APPROVED', deliveryDate: ago(10), rejectReason: null, createdAt: ago(11), sentAt: ago(11), decidedAt: ago(10),
+      items: [
+        { id: 'i1', type: 'LAPTOP', name: 'ThinkPad T14', serialNumber: 'PF3K8891', quantity: 1, condition: 'NEW', notes: null },
+        { id: 'i2', type: 'HEADPHONE', name: 'Jabra Evolve 40', serialNumber: '7784893', quantity: 1, condition: 'NEW', notes: null },
+      ],
+    },
+  ],
+  offboardings: [],
+  auditLogs: [
+    { id: 't1', kind: 'AUDIT', at: ago(3), entity: 'EMPLOYEE_REQUEST', action: 'CREATE', fromStatus: null, toStatus: null, actorType: 'USER', actorName: 'Basma Kamal' },
+    { id: 't2', kind: 'EMAIL', at: ago(10), subject: 'Asset custody approved – Ahmed Hassan', templateKey: 'hr.asset_approved', deliveryStatus: 'SENT', recipientName: 'Rawan Alamri', recipientEmail: 'rawan@riyada-ksa.com' },
+    { id: 't3', kind: 'AUDIT', at: ago(10), entity: 'ASSET_FORM', action: 'STATUS_TRANSITION', fromStatus: 'PENDING_EMPLOYEE_APPROVAL', toStatus: 'APPROVED', actorType: 'LINK', actorName: null },
+    { id: 't4', kind: 'AUDIT', at: ago(14), entity: 'EMPLOYEE', action: 'ACTIVATED', fromStatus: 'AWAITING_CONTRACT_APPROVAL', toStatus: 'ACTIVE', actorType: 'USER', actorName: 'Ayman Saleh' },
+    { id: 't5', kind: 'EMAIL', at: ago(20), subject: 'Your employment contract – Riyada HR', templateKey: 'employee.contract_approval_reminder', deliveryStatus: 'SENT', recipientName: null, recipientEmail: 'ahmed.hassan@riyada-ksa.com' },
+  ],
+  auditTotal: 5,
+  availableActions: ['WITHDRAW'],
+  processActions: { gosi: [], medical: ['COMPLETE', 'HOLD', 'CANCEL'], criminal: ['MARK_PENDING', 'COMPLETE'] },
+};
+const expiryDocs = [
+  { id: 'x1', type: 'IQAMA', number: '2382910044', expiryDate: ago(-12).slice(0, 10), notes: null },
+  { id: 'x2', type: 'PASSPORT', number: 'A1234567', expiryDate: ago(-400).slice(0, 10), notes: null },
+];
+const users = [
+  { id: 'u1', name: 'Basma Kamal', email: 'basma.kamal@riyada-ksa.com', role: 'ADMIN', active: true, mustChangePassword: false, invitedAt: null, passwordChangedAt: ago(40), lastLoginAt: ago(0.2) },
+  { id: 'u2', name: 'Ayman Saleh', email: 'ayman@riyada-ksa.com', role: 'HR', active: true, mustChangePassword: false, invitedAt: ago(30), passwordChangedAt: ago(29), lastLoginAt: ago(1) },
+  { id: 'u3', name: 'Rawan Alamri', email: 'rawan@riyada-ksa.com', role: 'IT', active: true, mustChangePassword: true, invitedAt: ago(2), passwordChangedAt: null, lastLoginAt: null },
+  { id: 'u4', name: 'Fatoon Alharbi', email: 'fatoon@riyada-ksa.com', role: 'INSURANCE', active: false, mustChangePassword: false, invitedAt: ago(200), passwordChangedAt: ago(199), lastLoginAt: ago(60) },
+];
+const emailLog = Array.from({ length: 9 }, (_, i) => ({
+  id: `n${i}`,
+  channel: 'EMAIL',
+  status: i === 5 ? 'FAILED' : 'SENT',
+  recipientEmail: i % 3 === 0 ? 'ayman@riyada-ksa.com' : `${employees[i % employees.length]!.email}`,
+  recipient: i % 3 === 0 ? { name: 'Ayman Saleh', email: 'ayman@riyada-ksa.com' } : null,
+  locale: i % 2 ? 'ar' : 'en',
+  subject: ['Complete your data form', 'تم استكمال بيانات المتدرب – Layla', 'Your employment contract', 'Asset custody form', 'Reminder – data form'][i % 5],
+  body: 'Hello, ...',
+  entity: 'EMPLOYEE',
+  entityId: 'e1',
+  templateKey: ['employee.form_invite', 'hr.form_submitted', 'employee.contract_approval_reminder', 'employee.asset_approval', 'employee.form_reminder'][i % 5],
+  templateVersion: i % 4 === 0 ? 2 : null,
+  sentAt: ago(i * 0.4),
+  createdAt: ago(i * 0.4 + 0.01),
+}));
+const reportSummary = {
+  headcountByDepartment: [
+    { department: 'Customer Service', active: 24, inactive: 3 },
+    { department: 'IT', active: 9, inactive: 1 },
+    { department: 'HR', active: 5, inactive: 0 },
+    { department: 'Finance', active: 6, inactive: 1 },
+    { department: 'Operations', active: 12, inactive: 2 },
+  ],
+  onboardingFunnel: { CREATED: 1, AWAITING_FORM: 2, FORM_RECEIVED: 1, CONTRACT_CREATION: 1, AWAITING_CONTRACT_APPROVAL: 1 },
+  processes: { gosi: { PENDING: 3, DONE: 40, ON_HOLD: 1 }, medical: { PENDING: 5, DONE: 38 }, criminal: { TRAINING: 2, REQUEST_SENT: 3, PENDING: 1, DONE: 36 } },
+  assetForms: { APPROVED: 31, SENT: 2, PENDING_EMPLOYEE_APPROVAL: 1, REJECTED: 1 },
+  unreturnedAssetItems: 4,
+  offboardingByReason: { RESIGNATION: 4, CONTRACT_EXPIRY: 2, TERMINATION: 1 },
+  expiringDocuments: { expired: 1, in30: 2, in60: 4, in90: 7 },
+};
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
@@ -117,6 +217,13 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     });
     return Promise.resolve(json({ items, total: items.length, counts }));
   }
+  if (/^\/api\/employees\/[^/?]+\/documents/.test(path)) return Promise.resolve(json(expiryDocs));
+  if (/^\/api\/employees\/[^/?]+\/photo/.test(path)) return Promise.resolve(json({ error: 'none' }, 404));
+  if (/^\/api\/employees\/[^/?]+\/audit/.test(path)) return Promise.resolve(json({ items: profile.auditLogs, total: profile.auditTotal }));
+  if (/^\/api\/employees\/[^/?]+$/.test(path)) return Promise.resolve(json(profile));
+  if (path.startsWith('/api/users')) return Promise.resolve(json({ items: users, total: users.length }));
+  if (path.startsWith('/api/notifications/log')) return Promise.resolve(json({ items: emailLog, total: emailLog.length }));
+  if (path.startsWith('/api/reports/summary')) return Promise.resolve(json(reportSummary));
   if (path.startsWith('/api/dashboard')) return Promise.resolve(json(dashboard));
   if (path.startsWith('/api/lists')) return Promise.resolve(json({ lists: [] }));
   if (path.startsWith('/api/notifications')) return Promise.resolve(json({ items: [], unread: 0 }));
@@ -146,6 +253,11 @@ onBeforeUnmount(() => {
 const pages = {
   employees: defineAsyncComponent(() => import('../pages/EmployeesPage.vue')),
   home: defineAsyncComponent(() => import('../pages/HomePage.vue')),
+  profile: defineAsyncComponent(() => import('../pages/EmployeeDetailPage.vue')),
+  emails: defineAsyncComponent(() => import('../pages/EmailLogPage.vue')),
+  reports: defineAsyncComponent(() => import('../pages/ReportsPage.vue')),
+  users: defineAsyncComponent(() => import('../pages/UsersPage.vue')),
+  lists: defineAsyncComponent(() => import('../pages/ListsPage.vue')),
 };
 const page = computed(() => pages[(route.query['page'] as keyof typeof pages) ?? 'employees'] ?? pages.employees);
 </script>
