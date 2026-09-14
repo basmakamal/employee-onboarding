@@ -24,22 +24,13 @@ const SAUDI_ID = /^[12]\d{9}$/;
 const HIJRI_DATE = /^1[34]\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|30)$/;
 
 /**
- * IBAN mod-97 check (ISO 13616). Move the first four characters to the end,
- * map letters to numbers (A=10 … Z=35), and the whole value mod 97 must be 1.
- * Computed in chunks because the number exceeds JS integer precision.
+ * Saudi IBAN shape only: the letters SA followed by 22 digits. Spaces and
+ * lower case are accepted and normalised away first. We deliberately do not
+ * run the ISO 13616 mod-97 checksum — HR asked for the format check alone.
  */
 export function isValidIban(raw: string): boolean {
   const iban = raw.replace(/\s+/g, '').toUpperCase();
-  if (!/^SA\d{22}$/.test(iban)) return false;
-
-  const rearranged = iban.slice(4) + iban.slice(0, 4);
-  const digits = rearranged.replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
-
-  let remainder = 0;
-  for (const ch of digits) {
-    remainder = (remainder * 10 + Number(ch)) % 97;
-  }
-  return remainder === 1;
+  return /^SA\d{22}$/.test(iban);
 }
 
 /** Normalise a mobile number to the 05XXXXXXXX form we store. */
