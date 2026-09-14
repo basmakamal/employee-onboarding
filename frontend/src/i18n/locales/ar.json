@@ -127,7 +127,9 @@
     "upcoming": "القادم",
     "upcomingEmpty": "لا مستندات تنتهي خلال ٣٠ يومًا القادمة.",
     "recentEmpty": "لا نشاط بعد.",
-    "whoNeedsYou": "من يحتاج إليك"
+    "whoNeedsYou": "من يحتاج إليك",
+    "statJoined": "انضموا هذا الشهر",
+    "statTracks": "إجراءات ملفات مفتوحة"
   },
   "settings": {
     "title": "الإعدادات",
