@@ -13,6 +13,8 @@
   --app-duration: 160ms;
   /* Depth is for things that float over the page: menus, dialogs, the palette. */
   --app-shadow-sm: none;
+  /* Content surfaces: the faintest lift, so a card is a card and not a line drawing. */
+  --app-shadow-card: 0 1px 2px rgb(31 41 51 / 0.04), 0 1px 1px rgb(31 41 51 / 0.02);
   --app-shadow-md: 0 4px 12px -2px rgb(31 41 51 / 0.1), 0 1px 3px rgb(31 41 51 / 0.06);
   --app-shadow-lg: 0 16px 32px -8px rgb(31 41 51 / 0.16), 0 4px 10px -4px rgb(31 41 51 / 0.08);
 }
@@ -20,6 +22,7 @@
 .v-theme--dark {
   /* In dark mode a lifted surface reads better than a shadow. */
   --app-shadow-sm: none;
+  --app-shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
   --app-shadow-md: 0 4px 10px -2px rgb(0 0 0 / 0.38);
   --app-shadow-lg: 0 16px 32px -8px rgb(0 0 0 / 0.48);
 }
@@ -116,7 +119,7 @@ body {
 .v-card--variant-elevated,
 .v-card--variant-flat {
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  box-shadow: none !important;
+  box-shadow: var(--app-shadow-card) !important;
 }
 
 .v-theme--dark .v-card--variant-elevated,

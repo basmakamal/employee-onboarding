@@ -99,6 +99,10 @@ export const router = createRouter({
       component: () => import('../pages/public/ContractPage.vue'),
       meta: { public: true },
     },
+    // DEV ONLY: the design harness (fixtures in place of the API). Tree-shaken out of builds.
+    ...(import.meta.env.DEV
+      ? [{ path: '/dev/preview', name: 'dev-preview', component: () => import('../dev/DevPreview.vue'), meta: { public: true } }]
+      : []),
     {
       path: '/approve-assets/:token',
       name: 'public-asset-approval',

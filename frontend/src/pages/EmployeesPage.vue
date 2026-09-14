@@ -161,6 +161,12 @@ function fullName(e: EmployeeRow) {
 function initials(e: EmployeeRow) {
   return `${e.firstName[0] ?? ''}${e.lastName[0] ?? ''}`.toUpperCase();
 }
+/** One of six soft tints, always the same for the same person. */
+function avatarTone(e: EmployeeRow): string {
+  let h = 0;
+  for (const ch of `${e.firstName}${e.lastName}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `avatar-tone avatar-tone-${h % 6}`;
+}
 function openRow(_e: unknown, row: { item: EmployeeRow }) {
   void router.push(`/employees/${row.item.id}`);
 }
@@ -306,12 +312,12 @@ onMounted(loadOptions);
     </PageHeader>
 
     <!-- ───── lifecycle tabs ───── -->
-    <v-tabs v-model="filter" color="primary" density="comfortable" class="dir-tabs mb-4">
-      <v-tab v-for="key in FILTERS" :key="key" :value="key" class="text-none">
+    <v-chip-group v-model="filter" mandatory selected-class="pill-on" class="filter-pills mb-5">
+      <v-chip v-for="key in FILTERS" :key="key" :value="key" :ripple="false">
         {{ $t(`employees.filters.${key}`) }}
-        <span class="dir-tabs__count tnum">{{ counts[key] }}</span>
-      </v-tab>
-    </v-tabs>
+        <span class="pill-count tnum">{{ counts[key] }}</span>
+      </v-chip>
+    </v-chip-group>
 
     <!-- ───── toolbar ───── -->
     <div class="dir-tools mb-3">
@@ -367,6 +373,7 @@ onMounted(loadOptions);
           :title="fullName(e)"
           :subtitle="[e.jobTitle, e.department].filter(Boolean).join(' · ') || e.email"
           :initials="initials(e)"
+          :avatar-class="avatarTone(e)"
           :chip="{ text: $t(`status.${e.status}`), color: undefined }"
           :meta="e.employeeNo ?? e.email"
         />
@@ -407,8 +414,8 @@ onMounted(loadOptions);
       >
         <template #item.name="{ item }">
           <div class="d-flex align-center ga-3 py-1">
-            <v-avatar size="34" class="avatar-neutral">
-              <span class="text-caption font-weight-semibold">{{ initials(item) }}</span>
+            <v-avatar size="32" :class="avatarTone(item)">
+              <span style="font-size: 12px">{{ initials(item) }}</span>
             </v-avatar>
             <div class="min-w-0">
               <div class="text-body-2 font-weight-semibold text-truncate">{{ fullName(item) }}</div>
@@ -573,14 +580,7 @@ onMounted(loadOptions);
 </template>
 
 <style scoped>
-.dir-tabs { border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
-.dir-tabs :deep(.v-tab) { font-weight: 500; letter-spacing: 0; }
-.dir-tabs__count {
-  margin-inline-start: 6px;
-  font-size: 0.75rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-.dir-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dir-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px !important; }
 .dir-tools__search { flex: 1 1 260px; min-width: 200px; max-width: 420px; }
 .dir-tools__dept { flex: 0 1 220px; min-width: 180px; }
 .bulk {
@@ -590,7 +590,8 @@ onMounted(loadOptions);
 }
 .grid { overflow: hidden; }
 .grid__table :deep(tbody tr) { cursor: pointer; }
-.grid__table :deep(td) { height: 56px !important; }
+.grid__table :deep(td) { height: 54px !important; }
+.grid__table :deep(thead th:first-child), .grid__table :deep(tbody td:first-child) { padding-inline-end: 0; width: 44px; }
 
 .stepper { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .stepper__step {

@@ -130,8 +130,7 @@ async function resend(row: LogRow) {
   <v-container class="py-8" style="max-width: 1200px">
     <PageHeader :title="$t('emailLog.title')" :subtitle="$t('emailLog.subtitle')" />
 
-    <v-card class="mb-4">
-      <v-card-text class="d-flex flex-wrap ga-3 align-center">
+    <div class="toolbar mb-4">
         <v-text-field
           v-model="search"
           :placeholder="$t('emailLog.search')"
@@ -139,7 +138,7 @@ async function resend(row: LogRow) {
           density="compact"
           hide-details
           clearable
-          style="min-width: 260px; flex: 1 1 260px"
+          class="toolbar__grow"
         />
         <v-select
           v-model="channel"
@@ -151,7 +150,7 @@ async function resend(row: LogRow) {
           :label="$t('emailLog.channel')"
           density="compact"
           hide-details
-          style="max-width: 180px"
+          style="width: 180px"
         />
         <v-select
           v-model="status"
@@ -164,10 +163,9 @@ async function resend(row: LogRow) {
           :label="$t('emailLog.status')"
           density="compact"
           hide-details
-          style="max-width: 180px"
+          style="width: 180px"
         />
-      </v-card-text>
-    </v-card>
+    </div>
 
     <v-card>
       <v-data-table-server

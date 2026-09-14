@@ -10,6 +10,8 @@ withDefaults(
     subtitle?: string;
     meta?: string;
     initials?: string;
+    /** Tint classes for the avatar (see .avatar-tone-*); neutral when omitted. */
+    avatarClass?: string;
     to?: string;
     chip?: { text: string; color?: string } | null;
     actionText?: string;
@@ -22,7 +24,7 @@ const emit = defineEmits<{ action: [] }>();
 <template>
   <component :is="to ? 'router-link' : 'div'" :to="to" class="entity-card">
     <div class="entity-card__row">
-      <v-avatar v-if="initials" size="36" class="avatar-neutral">
+      <v-avatar v-if="initials" size="36" :class="avatarClass || 'avatar-neutral'">
         <span class="text-caption font-weight-bold">{{ initials }}</span>
       </v-avatar>
       <div class="min-w-0 flex-grow-1">

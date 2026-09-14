@@ -43,21 +43,22 @@ defineProps<{
   align-items: flex-start;
   gap: 12px 16px;
   flex-wrap: wrap;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
+[dir='rtl'] .page-head__title { letter-spacing: 0; }
 .page-head__back { margin-top: 2px; }
 .page-head__text { flex: 1 1 260px; min-width: 0; }
 .page-head__title {
-  font-size: 1.375rem;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.005em;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
   margin: 0;
   text-wrap: balance;
 }
 .page-head__subtitle {
-  margin: 4px 0 0;
-  font-size: 0.875rem;
+  margin: 6px 0 0;
+  font-size: 0.9375rem;
   line-height: 1.55;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   max-width: 64ch;
