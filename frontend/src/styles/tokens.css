@@ -13,6 +13,7 @@
   --r-sm: 6px;
   --r-md: 8px;
   --r-lg: 12px;
+  --r-xl: 16px;
 }
 
 /* ── type scale ──────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@
   font-family: var(--font-ar) !important;
   letter-spacing: 0 !important;
 }
-.v-application .text-h4 { font-size: 1.5rem !important; line-height: 1.25 !important; }
+.v-application .text-h4 { font-size: 1.625rem !important; line-height: 1.2 !important; font-weight: 700 !important; letter-spacing: -0.02em !important; }
 .v-application .text-h5 { font-size: 1.25rem !important; line-height: 1.3 !important; }
 .v-application .text-h6 { font-size: 1.0625rem !important; line-height: 1.35 !important; }
 
@@ -66,7 +67,7 @@
    a hairline; depth is reserved for things that float (menus, dialogs). */
 .v-card.v-card--variant-flat {
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  box-shadow: none;
+  box-shadow: var(--app-shadow-card);
 }
 .v-dialog .v-card,
 .v-menu .v-card,
@@ -80,9 +81,17 @@
 
 /* ── inputs ──────────────────────────────────────────────────────────────
    A calm hairline at rest, a single 1px line in the accent on focus. */
-.v-field--variant-outlined .v-field__outline { --v-field-border-opacity: 0.22; }
-.v-field--variant-outlined:hover .v-field__outline { --v-field-border-opacity: 0.4; }
-.v-field--variant-outlined.v-field--focused .v-field__outline { --v-field-border-opacity: 1; --v-field-border-width: 1px; }
+.v-field--variant-outlined .v-field__outline { --v-field-border-opacity: 0.16; }
+.v-field--variant-outlined:hover .v-field__outline { --v-field-border-opacity: 0.32; }
+.v-field--variant-outlined.v-field--focused .v-field__outline {
+  --v-field-border-opacity: 1;
+  --v-field-border-width: 1px;
+  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.14);
+}
+.v-field--variant-outlined { background: rgb(var(--v-theme-surface)); border-radius: var(--r-md); }
+.v-input--density-compact .v-field--variant-outlined { --v-input-control-height: 36px; --v-field-input-padding-top: 6px; --v-field-input-padding-bottom: 6px; }
+.v-field__input { font-size: 0.875rem; }
+.v-field__prepend-inner .v-icon, .v-field__append-inner .v-icon { opacity: 0.55; }
 /* Floating labels sit above the field; never let a stepper or window clip them. */
 .v-dialog .v-window, .v-dialog .v-window__container, .v-dialog .v-window-item { overflow: visible !important; }
 .v-dialog .v-window-item { padding-top: 6px; }
@@ -94,21 +103,30 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: rgb(var(--v-theme-surface));
-  font-size: 12.5px !important;
-  font-weight: 600 !important;
-  letter-spacing: 0 !important;
+  background: rgb(var(--v-theme-surface-light));
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.01em !important;
   text-transform: none !important;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)) !important;
+  height: 42px !important;
+  color: rgba(var(--v-theme-on-surface), 0.55) !important;
   border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)) !important;
 }
+.v-data-table tbody td { font-size: 0.85rem; }
+.v-data-table .v-data-table-footer {
+  font-size: 0.8rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.v-data-table .v-selection-control { --v-selection-control-size: 32px; }
+.v-data-table .v-selection-control .v-icon { font-size: 18px; }
 .v-table tbody td,
 .v-data-table tbody td {
   border-bottom-color: rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.7)) !important;
 }
 .v-table tbody tr:hover td,
 .v-data-table tbody tr:hover td {
-  background: rgba(var(--v-theme-on-surface), 0.03);
+  background: rgba(var(--v-theme-on-surface), 0.025);
 }
 
 /* Chips that carry status keep a dot so colour is never the only signal. */
@@ -146,6 +164,7 @@
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: var(--r-lg);
+  box-shadow: var(--app-shadow-card);
   overflow: hidden;
 }
 .rows__item {
@@ -181,3 +200,104 @@ a.rows__item:hover, .rows__item--link:hover { background: rgba(var(--v-theme-on-
   background: rgb(var(--v-theme-surface-variant)) !important;
   color: rgba(var(--v-theme-on-surface), 0.8) !important;
 }
+
+/* ── buttons ─────────────────────────────────────────────────────────────
+   Primary: solid brand with a faint lift. Tonal: a bordered secondary,
+   the way modern product UIs draw a second-rank action. */
+.v-btn { letter-spacing: 0 !important; }
+.v-btn.v-btn--variant-flat.bg-primary {
+  box-shadow: 0 1px 2px rgba(var(--v-theme-primary), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.v-btn.v-btn--variant-flat.bg-primary:hover { filter: brightness(1.06); }
+.v-btn.v-btn--variant-tonal:not(.text-error):not(.text-success):not(.text-warning) {
+  background: rgb(var(--v-theme-surface));
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 1.4));
+  box-shadow: var(--app-shadow-card);
+}
+.v-btn.v-btn--variant-tonal:not(.text-error):not(.text-success):not(.text-warning) .v-btn__underlay { opacity: 0; }
+.v-btn.v-btn--variant-tonal:not(.text-error):not(.text-success):not(.text-warning):hover {
+  background: rgb(var(--v-theme-surface-light));
+}
+.v-btn.v-btn--size-default { --v-btn-height: 36px; font-size: 0.875rem; padding-inline: 14px; }
+.v-btn.v-btn--size-small { --v-btn-height: 30px; font-size: 0.8125rem; padding-inline: 10px; }
+
+/* ── tabs ────────────────────────────────────────────────────────────────
+   Text tabs on a hairline: quiet at rest, weighty when active, a 2px mark. */
+.v-tabs.tabs-line { --v-tabs-height: 40px; border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
+.v-tabs.tabs-line .v-tab { min-width: 0; padding: 0 4px; margin-inline-end: 22px; font-size: 0.875rem; font-weight: 500; letter-spacing: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); text-transform: none; }
+.v-tabs.tabs-line .v-tab:hover { color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)); }
+.v-tabs.tabs-line .v-tab .v-btn__overlay { display: none; }
+.v-tabs.tabs-line .v-tab--selected { color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)); font-weight: 600; }
+.v-tabs.tabs-line .v-tab__slider { height: 2px; border-radius: 2px 2px 0 0; background: rgb(var(--v-theme-primary)); }
+.tab-count { display: inline-flex; align-items: center; min-width: 20px; height: 18px; padding: 0 6px; margin-inline-start: 8px;
+  border-radius: 999px; font-size: 0.7rem; font-weight: 600; background: rgba(var(--v-theme-on-surface), 0.07);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+.v-tab--selected .tab-count { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary)); }
+
+/* ── people avatars ─────────────────────────────────────────────────────
+   Initials on a soft tint chosen from the name, so a directory reads as
+   people rather than a column of identical grey squares. */
+.avatar-tone { font-weight: 600 !important; letter-spacing: 0.01em; }
+.avatar-tone-0 { background: #E3EEF3 !important; color: #2A5C75 !important; }
+.avatar-tone-1 { background: #E1F0EC !important; color: #276B5C !important; }
+.avatar-tone-2 { background: #F4EBDD !important; color: #7A5312 !important; }
+.avatar-tone-3 { background: #ECE7F3 !important; color: #5A4A87 !important; }
+.avatar-tone-4 { background: #E5EBF2 !important; color: #3E5776 !important; }
+.avatar-tone-5 { background: #F2E5E5 !important; color: #7D3E3E !important; }
+.v-theme--dark .avatar-tone-0 { background: #1F3742 !important; color: #9CC6DB !important; }
+.v-theme--dark .avatar-tone-1 { background: #1E3A34 !important; color: #8FD1BF !important; }
+.v-theme--dark .avatar-tone-2 { background: #3D3222 !important; color: #E1BC7A !important; }
+.v-theme--dark .avatar-tone-3 { background: #302B42 !important; color: #BBA9E6 !important; }
+.v-theme--dark .avatar-tone-4 { background: #25303E !important; color: #A6BEDC !important; }
+.v-theme--dark .avatar-tone-5 { background: #3E2A2A !important; color: #E1A3A3 !important; }
+
+/* ── motion ──────────────────────────────────────────────────────────────
+   Content rises into place once, rows stagger by a few milliseconds each,
+   interactive surfaces answer hover with a small lift and press with a dip.
+   Everything is short and stops when the user prefers reduced motion. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.v-main .page-head, .v-main .home__head { animation: rise 0.36s var(--app-ease) both; }
+.v-main .v-card, .v-main .rows, .v-main .dir-tools, .v-main .filter-pills { animation: rise 0.42s var(--app-ease) both; animation-delay: 0.06s; }
+.rows__item, .v-data-table tbody tr { animation: rise 0.36s var(--app-ease) both; }
+.rows__item:nth-child(1), .v-data-table tbody tr:nth-child(1) { animation-delay: 0.08s; }
+.rows__item:nth-child(2), .v-data-table tbody tr:nth-child(2) { animation-delay: 0.12s; }
+.rows__item:nth-child(3), .v-data-table tbody tr:nth-child(3) { animation-delay: 0.16s; }
+.rows__item:nth-child(4), .v-data-table tbody tr:nth-child(4) { animation-delay: 0.2s; }
+.rows__item:nth-child(5), .v-data-table tbody tr:nth-child(5) { animation-delay: 0.24s; }
+.rows__item:nth-child(6), .v-data-table tbody tr:nth-child(6) { animation-delay: 0.28s; }
+.rows__item:nth-child(n + 7), .v-data-table tbody tr:nth-child(n + 7) { animation-delay: 0.32s; }
+.v-card.card-interactive, a.rows__item { transition: transform var(--app-duration) var(--app-ease), box-shadow var(--app-duration) var(--app-ease), background var(--app-duration) var(--app-ease); }
+.v-card.card-interactive:hover { transform: translateY(-2px); box-shadow: var(--app-shadow-md) !important; }
+.v-btn { transition: transform 120ms var(--app-ease), box-shadow 120ms var(--app-ease), filter 120ms var(--app-ease), background-color 120ms var(--app-ease) !important; }
+.v-btn:not(.v-btn--disabled):active { transform: translateY(1px) scale(0.99); }
+.v-btn.v-btn--variant-flat.bg-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px -2px rgba(var(--v-theme-primary), 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.14); }
+.v-data-table tbody tr { transition: background var(--app-duration) var(--app-ease); }
+.v-avatar { transition: transform var(--app-duration) var(--app-ease); }
+tr:hover .v-avatar, .rows__item:hover .v-avatar { transform: scale(1.06); }
+@media (prefers-reduced-motion: reduce) {
+  .v-main .page-head, .v-main .home__head, .v-main .v-card, .v-main .rows, .v-main .dir-tools, .v-main .filter-pills, .rows__item, .v-data-table tbody tr { animation: none; }
+  .v-card.card-interactive:hover, .v-btn:not(.v-btn--disabled):active, tr:hover .v-avatar, .rows__item:hover .v-avatar { transform: none; }
+}
+
+/* ── pill filters ────────────────────────────────────────────────────────
+   A row of compact pills: white with a hairline at rest, brand-filled
+   when selected. The count rides inside the pill. */
+.filter-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.filter-pills .v-chip {
+  height: 34px; padding: 0 14px; border-radius: 999px; font-size: 0.875rem; font-weight: 500;
+  background: rgb(var(--v-theme-surface)); color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 1.3)); box-shadow: var(--app-shadow-card);
+  transition: background var(--app-duration) var(--app-ease), color var(--app-duration) var(--app-ease), transform 120ms var(--app-ease);
+}
+.filter-pills .v-chip .v-chip__underlay { display: none; }
+.filter-pills .v-chip:hover { background: rgb(var(--v-theme-surface-light)); transform: translateY(-1px); }
+.filter-pills .v-chip.pill-on {
+  background: rgb(var(--v-theme-primary)); color: rgb(var(--v-theme-on-primary)); border-color: transparent;
+  box-shadow: 0 2px 8px -2px rgba(var(--v-theme-primary), 0.5);
+}
+.filter-pills .pill-count { margin-inline-start: 8px; font-size: 0.75rem; font-weight: 600; opacity: 0.75; }

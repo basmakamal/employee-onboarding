@@ -133,6 +133,13 @@ const upcoming = computed(() =>
 );
 
 // ── helpers ──────────────────────────────────────────────────────────────
+/** One of six soft tints, always the same for the same person. */
+function avatarTone(name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `avatar-tone avatar-tone-${h % 6}`;
+}
+
 function initials(name: string): string {
   return name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 }
@@ -247,8 +254,8 @@ onMounted(async () => {
             </div>
             <div class="rows">
               <router-link v-for="item in data.attention" :key="item.kind + item.employeeId + item.status" :to="item.to" class="rows__item">
-                <v-avatar size="32" class="avatar-neutral">
-                  <span class="text-caption font-weight-semibold">{{ initials(item.name) }}</span>
+                <v-avatar size="32" :class="avatarTone(item.name)">
+                  <span style="font-size: 12px">{{ initials(item.name) }}</span>
                 </v-avatar>
                 <div class="min-w-0 flex-grow-1">
                   <div class="text-body-2 font-weight-medium text-truncate">{{ item.name }}</div>
@@ -269,8 +276,8 @@ onMounted(async () => {
             </div>
             <div class="rows">
               <router-link v-for="j in data.recentJoiners" :key="j.id" :to="`/employees/${j.id}`" class="rows__item">
-                <v-avatar size="32" class="avatar-neutral">
-                  <span class="text-caption font-weight-semibold">{{ initials(j.name) }}</span>
+                <v-avatar size="32" :class="avatarTone(j.name)">
+                  <span style="font-size: 12px">{{ initials(j.name) }}</span>
                 </v-avatar>
                 <div class="min-w-0 flex-grow-1">
                   <div class="text-body-2 font-weight-medium text-truncate">{{ j.name }}</div>
@@ -336,11 +343,13 @@ onMounted(async () => {
   margin-bottom: 28px;
 }
 .home__title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.25;
-  margin: 0 0 4px;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  margin: 0 0 6px;
 }
+[dir='rtl'] .home__title { letter-spacing: 0; }
 .home__sub {
   margin: 0;
   font-size: 0.9375rem;
@@ -361,7 +370,7 @@ onMounted(async () => {
 }
 
 /* People: the number is a sentence, with the facts beneath it. */
-.people__count { font-size: 1.75rem; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
+.people__count { font-size: 2rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; }
 .people__facts { display: flex; flex-wrap: wrap; gap: 4px 0; margin-top: 4px; }
 .people__facts > span + span::before { content: '·'; margin: 0 8px; opacity: 0.5; }
 

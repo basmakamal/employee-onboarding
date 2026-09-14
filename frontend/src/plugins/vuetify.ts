@@ -34,26 +34,26 @@ export const vuetify = createVuetify({
         // Riyada's own teal and green carry the brand; the greys lean warm so
         // long HR sessions on a white surface do not feel clinical.
         colors: {
-          primary: '#35708F',
+          primary: '#2A85B3',
           'on-primary': '#FFFFFF',
           secondary: '#4E9E8F',
           'on-secondary': '#FFFFFF',
-          background: '#F5F4F1',
+          background: '#F5F7FA',
           surface: '#FFFFFF',
           'surface-bright': '#FFFFFF',
-          'surface-light': '#FAF9F7',
-          'surface-variant': '#EEEDE9',
+          'surface-light': '#F9FAFC',
+          'surface-variant': '#EEF2F6',
           'on-surface-variant': '#505A64',
           success: '#2E7D5B',
           warning: '#9A6700',
           error: '#B3423F',
-          info: '#3B6E9E',
+          info: '#3F7FD1',
           'on-background': '#1F2933',
           'on-surface': '#1F2933',
         },
         variables: {
           'border-color': '#1F2933',
-          'border-opacity': 0.1,
+          'border-opacity': 0.09,
           'high-emphasis-opacity': 0.92,
           'medium-emphasis-opacity': 0.62,
           'theme-kbd': '#262A33',
@@ -67,8 +67,8 @@ export const vuetify = createVuetify({
         // Three dark levels (page, surface, raised), none of them black; the
         // teal is lifted so it reads on dark without glowing.
         colors: {
-          primary: '#7FB3CF',
-          'on-primary': '#0E2230',
+          primary: '#6FBDE3',
+          'on-primary': '#0B2433',
           secondary: '#7CC4B5',
           'on-secondary': '#0D2320',
           background: '#15181C',
@@ -105,9 +105,9 @@ export const vuetify = createVuetify({
       variant: 'flat',
     },
     VBtn: {
-      rounded: 'md',
+      rounded: 'lg',
       variant: 'flat',
-      class: 'text-none font-weight-medium',
+      class: 'text-none font-weight-semibold',
     },
     VCardActions: {
       VBtn: { variant: 'flat' },
