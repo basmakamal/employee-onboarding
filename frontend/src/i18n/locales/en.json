@@ -127,7 +127,9 @@
     "upcoming": "Upcoming",
     "upcomingEmpty": "No documents expire in the next 30 days.",
     "recentEmpty": "No activity yet.",
-    "whoNeedsYou": "Who needs you"
+    "whoNeedsYou": "Who needs you",
+    "statJoined": "Joined this month",
+    "statTracks": "Open file tracks"
   },
   "settings": {
     "title": "Settings",

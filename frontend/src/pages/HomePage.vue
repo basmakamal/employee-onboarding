@@ -115,16 +115,6 @@ const openTracks = computed(() => {
   return open(p.gosi, ['DONE', 'CANCELLED']) + open(p.medical, ['DONE', 'CANCELLED']) + open(p.criminal, ['DONE']);
 });
 
-const peopleFacts = computed(() => {
-  const c = data.value?.counts;
-  const facts: string[] = [];
-  if (c?.joinedThisMonth) facts.push(t('dashboard.joinedThisMonth', { n: c.joinedThisMonth }));
-  if (onboardingTotal.value) facts.push(t('dashboard.inOnboardingN', { n: onboardingTotal.value }));
-  if (inactiveCount.value) facts.push(t('dashboard.inactiveN', { n: inactiveCount.value }));
-  if (openTracks.value) facts.push(t('dashboard.tracksOpen', { n: openTracks.value }));
-  return facts;
-});
-
 const stages = computed(() => PIPELINE_STAGES.filter((s) => (data.value?.onboarding[s] ?? 0) > 0));
 
 // ── upcoming ─────────────────────────────────────────────────────────────
@@ -180,7 +170,7 @@ onMounted(async () => {
         <p class="home__sub">
           <span class="text-medium-emphasis">{{ today }}.</span>
           <template v-if="data">
-            {{ attentionTotal ? $t('dashboard.subtitleNeeds') : $t('dashboard.subtitleClear') }}
+            {{ ' ' }}{{ attentionTotal ? $t('dashboard.subtitleNeeds') : $t('dashboard.subtitleClear') }}
           </template>
         </p>
       </div>
@@ -199,135 +189,146 @@ onMounted(async () => {
     </template>
 
     <template v-else>
-      <!-- ───── attention ───── -->
-      <section v-if="attentionSummary.length" class="sec">
-        <div class="sec__head">
-          <h2 class="sec__title">{{ $t('dashboard.attention') }}</h2>
+      <!-- ───── attention: one card, one line per problem, each a link ───── -->
+      <v-card v-if="attentionSummary.length" class="panel panel--attention mb-4">
+        <div class="panel__head">
+          <h2 class="panel__title">{{ $t('dashboard.attention') }}</h2>
         </div>
-        <div class="rows">
-          <router-link v-for="row in attentionSummary" :key="row.key" :to="row.to" class="rows__item attn">
-            <span class="attn__mark" :class="`attn__mark--${row.tone}`" aria-hidden="true" />
-            <span class="flex-grow-1 text-body-2 font-weight-medium">{{ row.text }}</span>
-            <span class="attn__link text-body-2">{{ $t('common.view') }} <v-icon icon="arrow-right" size="14" class="flip-rtl" /></span>
+        <div class="list">
+          <router-link v-for="row in attentionSummary" :key="row.key" :to="row.to" class="list__row">
+            <span class="mark" :class="`mark--${row.tone}`" aria-hidden="true" />
+            <span class="flex-grow-1 list__text">{{ row.text }}</span>
+            <span class="list__action">{{ $t('common.view') }} <v-icon icon="arrow-right" size="14" class="flip-rtl" /></span>
           </router-link>
         </div>
-      </section>
+      </v-card>
+
+      <!-- ───── people: the numbers, in one calm row ───── -->
+      <v-card class="panel mb-4">
+        <div class="panel__head">
+          <h2 class="panel__title">{{ $t('dashboard.peopleTitle') }}</h2>
+          <router-link to="/employees" class="panel__link">{{ $t('common.viewAll') }}</router-link>
+        </div>
+        <div class="stats">
+          <router-link to="/employees?filter=active" class="stat">
+            <span class="stat__label">{{ $t('dashboard.kpiActive') }}</span>
+            <span class="stat__value tnum">{{ activeCount }}</span>
+          </router-link>
+          <router-link to="/employees?filter=active" class="stat">
+            <span class="stat__label">{{ $t('dashboard.statJoined') }}</span>
+            <span class="stat__value tnum">{{ data.counts.joinedThisMonth }}</span>
+          </router-link>
+          <router-link to="/employees?filter=onboarding" class="stat">
+            <span class="stat__label">{{ $t('dashboard.kpiOnboarding') }}</span>
+            <span class="stat__value tnum">{{ onboardingTotal }}</span>
+          </router-link>
+          <router-link to="/reports" class="stat">
+            <span class="stat__label">{{ $t('dashboard.statTracks') }}</span>
+            <span class="stat__value tnum">{{ openTracks }}</span>
+          </router-link>
+        </div>
+      </v-card>
 
       <v-row>
-        <!-- ───── left: people ───── -->
+        <!-- ───── left ───── -->
         <v-col cols="12" md="7">
-          <section class="sec">
-            <div class="sec__head">
-              <h2 class="sec__title">{{ $t('dashboard.peopleTitle') }}</h2>
-              <router-link to="/employees" class="sec__hint link-quiet">{{ $t('common.viewAll') }}</router-link>
+          <v-card class="panel mb-4">
+            <div class="panel__head">
+              <h2 class="panel__title">{{ $t('dashboard.onboardingTitle') }}</h2>
+              <router-link to="/employees?filter=onboarding" class="panel__link">{{ $t('common.viewAll') }}</router-link>
             </div>
-            <div class="people">
-              <div class="people__count tnum">
-                {{ activeCount === 1 ? $t('dashboard.employeesOne') : $t('dashboard.employeesCount', { n: activeCount }) }}
-              </div>
-              <div v-if="peopleFacts.length" class="people__facts text-body-2 text-medium-emphasis">
-                <span v-for="(fact, i) in peopleFacts" :key="i">{{ fact }}</span>
-              </div>
-            </div>
-          </section>
-
-          <section class="sec">
-            <div class="sec__head">
-              <h2 class="sec__title">{{ $t('dashboard.onboardingTitle') }}</h2>
-              <router-link to="/employees?filter=onboarding" class="sec__hint link-quiet">{{ $t('common.viewAll') }}</router-link>
-            </div>
-            <p class="text-body-2 text-medium-emphasis mb-3">
+            <p class="panel__lead">
               {{ onboardingTotal === 0 ? $t('dashboard.onboardingNone') : onboardingTotal === 1 ? $t('dashboard.onboardingWaitingOne') : $t('dashboard.onboardingWaiting', { n: onboardingTotal }) }}
             </p>
-            <div v-if="stages.length" class="rows">
-              <router-link v-for="stage in stages" :key="stage" :to="`/employees?status=${stage}`" class="rows__item">
+            <div v-if="stages.length" class="list">
+              <router-link v-for="stage in stages" :key="stage" :to="`/employees?status=${stage}`" class="list__row">
                 <StatusChip :status="stage" class="flex-grow-1" />
-                <span class="text-body-2 font-weight-medium tnum">{{ data.onboarding[stage] }}</span>
-                <v-icon icon="chevron-right" size="16" class="text-medium-emphasis flip-rtl" />
+                <span class="list__num tnum">{{ data.onboarding[stage] }}</span>
+                <v-icon icon="chevron-right" size="16" class="list__chev flip-rtl" />
               </router-link>
             </div>
-          </section>
+          </v-card>
 
-          <section v-if="data.attention.length" class="sec">
-            <div class="sec__head">
-              <h2 class="sec__title">{{ $t('dashboard.whoNeedsYou') }}</h2>
+          <v-card class="panel mb-4">
+            <div class="panel__head">
+              <h2 class="panel__title">{{ $t('dashboard.whoNeedsYou') }}</h2>
             </div>
-            <div class="rows">
-              <router-link v-for="item in data.attention" :key="item.kind + item.employeeId + item.status" :to="item.to" class="rows__item">
+            <div v-if="data.attention.length" class="list">
+              <router-link v-for="item in data.attention" :key="item.kind + item.employeeId + item.status" :to="item.to" class="list__row">
                 <v-avatar size="32" :class="avatarTone(item.name)">
                   <span style="font-size: 12px">{{ initials(item.name) }}</span>
                 </v-avatar>
                 <div class="min-w-0 flex-grow-1">
-                  <div class="text-body-2 font-weight-medium text-truncate">{{ item.name }}</div>
-                  <div class="text-caption text-medium-emphasis text-truncate">{{ attentionText(item) }}</div>
+                  <div class="list__text text-truncate">{{ item.name }}</div>
+                  <div class="list__meta text-truncate">{{ attentionText(item) }}</div>
                 </div>
                 <StatusChip v-if="item.kind === 'stalled'" :status="item.status" class="d-none d-sm-inline-flex" />
-                <v-icon icon="chevron-right" size="16" class="text-medium-emphasis flip-rtl" />
+                <v-icon icon="chevron-right" size="16" class="list__chev flip-rtl" />
               </router-link>
             </div>
-          </section>
+            <div v-else class="panel__empty">{{ $t('dashboard.attentionEmpty') }}</div>
+          </v-card>
         </v-col>
 
-        <!-- ───── right: joiners, upcoming, activity ───── -->
+        <!-- ───── right ───── -->
         <v-col cols="12" md="5">
-          <section class="sec">
-            <div class="sec__head">
-              <h2 class="sec__title">{{ $t('dashboard.recentJoiners') }}</h2>
+          <v-card class="panel mb-4">
+            <div class="panel__head">
+              <h2 class="panel__title">{{ $t('dashboard.recentJoiners') }}</h2>
             </div>
-            <div class="rows">
-              <router-link v-for="j in data.recentJoiners" :key="j.id" :to="`/employees/${j.id}`" class="rows__item">
+            <div v-if="data.recentJoiners.length" class="list">
+              <router-link v-for="j in data.recentJoiners" :key="j.id" :to="`/employees/${j.id}`" class="list__row">
                 <v-avatar size="32" :class="avatarTone(j.name)">
                   <span style="font-size: 12px">{{ initials(j.name) }}</span>
                 </v-avatar>
                 <div class="min-w-0 flex-grow-1">
-                  <div class="text-body-2 font-weight-medium text-truncate">{{ j.name }}</div>
-                  <div class="text-caption text-medium-emphasis text-truncate">
+                  <div class="list__text text-truncate">{{ j.name }}</div>
+                  <div class="list__meta text-truncate">
                     {{ [j.jobTitle, lists.label('DEPARTMENT', j.department) ?? j.department].filter(Boolean).join(' · ') }}
                   </div>
                 </div>
-                <span class="text-caption text-medium-emphasis text-no-wrap">{{ joined(j.hireDate) }}</span>
+                <span class="list__meta text-no-wrap">{{ joined(j.hireDate) }}</span>
               </router-link>
-              <div v-if="data.recentJoiners.length === 0" class="rows__empty">{{ $t('dashboard.joinersEmpty') }}</div>
             </div>
-          </section>
+            <div v-else class="panel__empty">{{ $t('dashboard.joinersEmpty') }}</div>
+          </v-card>
 
-          <section class="sec">
-            <div class="sec__head">
-              <h2 class="sec__title">{{ $t('dashboard.upcoming') }}</h2>
-              <router-link v-if="upcoming.length" to="/reports" class="sec__hint link-quiet">{{ $t('common.viewAll') }}</router-link>
+          <v-card class="panel mb-4">
+            <div class="panel__head">
+              <h2 class="panel__title">{{ $t('dashboard.upcoming') }}</h2>
+              <router-link v-if="upcoming.length" to="/reports" class="panel__link">{{ $t('common.viewAll') }}</router-link>
             </div>
-            <div class="rows">
-              <router-link v-for="item in upcoming" :key="item.employeeId + item.status" :to="item.to" class="rows__item">
+            <div v-if="upcoming.length" class="list">
+              <router-link v-for="item in upcoming" :key="item.employeeId + item.status" :to="item.to" class="list__row">
                 <div class="min-w-0 flex-grow-1">
-                  <div class="text-body-2 font-weight-medium text-truncate">{{ item.name }}</div>
-                  <div class="text-caption text-truncate" :class="item.days <= 7 ? 'text-error' : 'text-medium-emphasis'">{{ attentionText(item) }}</div>
+                  <div class="list__text text-truncate">{{ item.name }}</div>
+                  <div class="list__meta text-truncate" :class="{ 'text-error': item.days <= 7 }">{{ attentionText(item) }}</div>
                 </div>
-                <v-icon icon="chevron-right" size="16" class="text-medium-emphasis flip-rtl" />
+                <v-icon icon="chevron-right" size="16" class="list__chev flip-rtl" />
               </router-link>
-              <div v-if="upcoming.length === 0" class="rows__empty">{{ $t('dashboard.upcomingEmpty') }}</div>
             </div>
-          </section>
+            <div v-else class="panel__empty">{{ $t('dashboard.upcomingEmpty') }}</div>
+          </v-card>
 
-          <section class="sec">
-            <div class="sec__head">
-              <h2 class="sec__title">{{ $t('dashboard.recent') }}</h2>
+          <v-card class="panel mb-4">
+            <div class="panel__head">
+              <h2 class="panel__title">{{ $t('dashboard.recent') }}</h2>
             </div>
-            <div class="rows">
-              <div v-for="log in data.recent.slice(0, 8)" :key="log.id" class="rows__item">
+            <div v-if="data.recent.length" class="list">
+              <div v-for="log in data.recent.slice(0, 8)" :key="log.id" class="list__row list__row--static">
                 <div class="min-w-0 flex-grow-1">
-                  <div class="text-body-2 text-truncate">
-                    <span class="font-weight-medium">{{ $t(`audit.${log.action}`, log.action) }}</span>
-                    <span v-if="log.subject" class="text-medium-emphasis"> · {{ log.subject }}</span>
+                  <div class="list__text text-truncate">
+                    {{ $t(`audit.${log.action}`, log.action) }}<span v-if="log.subject" class="list__dim"> · {{ log.subject }}</span>
                   </div>
-                  <div class="text-caption text-medium-emphasis text-truncate">
+                  <div class="list__meta text-truncate">
                     {{ $t(`entities.${log.entity}`, log.entity) }}<template v-if="actorLabel(log)"> · {{ actorLabel(log) }}</template>
                   </div>
                 </div>
-                <time class="text-caption text-medium-emphasis text-no-wrap tnum">{{ when(log.at) }}</time>
+                <time class="list__meta text-no-wrap tnum">{{ when(log.at) }}</time>
               </div>
-              <div v-if="data.recent.length === 0" class="rows__empty">{{ $t('dashboard.recentEmpty') }}</div>
             </div>
-          </section>
+            <div v-else class="panel__empty">{{ $t('dashboard.recentEmpty') }}</div>
+          </v-card>
         </v-col>
       </v-row>
     </template>
@@ -335,46 +336,61 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.home__head {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 28px;
-}
-.home__title {
-  font-size: 1.75rem;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.025em;
-  margin: 0 0 6px;
-}
+/* ── header ── */
+.home__head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.home__title { font-size: 1.75rem; font-weight: 700; line-height: 1.2; letter-spacing: -0.025em; margin: 0 0 6px; }
 [dir='rtl'] .home__title { letter-spacing: 0; }
-.home__sub {
-  margin: 0;
-  font-size: 0.9375rem;
-  line-height: 1.5;
+.home__sub { margin: 0; font-size: 0.9375rem; line-height: 1.5; }
+
+/* ── one panel shape for every section ──
+   Title row, optional lead sentence, then a list. Same paddings everywhere, so the
+   eye learns the rhythm once. */
+.panel { padding: 0; }
+.panel__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px 0; }
+.panel__title { font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.005em; margin: 0; }
+.panel__link { font-size: 0.8125rem; font-weight: 500; color: rgb(var(--v-theme-primary)); text-decoration: none; }
+.panel__link:hover { text-decoration: underline; }
+.panel__lead { margin: 6px 18px 4px; font-size: 0.875rem; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+.panel__empty { padding: 14px 18px 18px; font-size: 0.875rem; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+.panel--attention { border-color: rgba(var(--v-theme-warning), 0.35) !important; }
+
+/* Lists inside a panel: rows with hairlines, no extra frame. */
+.list { margin-top: 8px; }
+.list__row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 18px; color: inherit; text-decoration: none;
+  border-top: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.8));
+  transition: background var(--app-duration) var(--app-ease);
 }
+a.list__row:hover { background: rgba(var(--v-theme-on-surface), 0.025); }
+.list__row > div { min-width: 0; }
+.list__row > time, .list__row > span.text-no-wrap, .list__row > .v-avatar, .list__row > .v-icon { flex: none; }
+.panel { overflow: hidden; }
+.list__text { font-size: 0.875rem; font-weight: 500; }
+.list__dim { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); font-weight: 400; }
+.list__meta { font-size: 0.8125rem; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+.list__num { font-size: 0.875rem; font-weight: 600; }
+.list__chev { color: rgba(var(--v-theme-on-surface), 0.4); }
+.list__action { color: rgb(var(--v-theme-primary)); font-size: 0.8125rem; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.mark { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.mark--warning { background: rgb(var(--v-theme-warning)); }
+.mark--info { background: rgb(var(--v-theme-info)); }
 
-/* Attention rows: a small coloured mark, the sentence, and where to go. */
-.attn__mark { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.attn__mark--warning { background: rgb(var(--v-theme-warning)); }
-.attn__mark--info { background: rgb(var(--v-theme-info)); }
-.attn__link {
-  color: rgb(var(--v-theme-primary));
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
+/* The people numbers: four figures in one row, label above value. */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 10px; border-top: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.8)); }
+.stat {
+  display: flex; flex-direction: column; gap: 4px; padding: 14px 18px; color: inherit; text-decoration: none;
+  border-inline-start: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.8));
+  transition: background var(--app-duration) var(--app-ease);
 }
-
-/* People: the number is a sentence, with the facts beneath it. */
-.people__count { font-size: 2rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; }
-.people__facts { display: flex; flex-wrap: wrap; gap: 4px 0; margin-top: 4px; }
-.people__facts > span + span::before { content: '·'; margin: 0 8px; opacity: 0.5; }
-
-.link-quiet { color: rgb(var(--v-theme-primary)); text-decoration: none; font-weight: 500; }
-.link-quiet:hover { text-decoration: underline; }
+.stat:first-child { border-inline-start: 0; }
+.stat:hover { background: rgba(var(--v-theme-on-surface), 0.025); }
+.stat__label { font-size: 0.8125rem; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+.stat__value { font-size: 1.5rem; font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; }
+@media (max-width: 700px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .stat:nth-child(3) { border-inline-start: 0; }
+  .stat:nth-child(n + 3) { border-top: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.8)); }
+}
 [dir='rtl'] .flip-rtl { transform: scaleX(-1); }
 </style>
