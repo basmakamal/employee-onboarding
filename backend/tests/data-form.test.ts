@@ -23,8 +23,8 @@ const VALID = {
   emergencyContactPhone: '0559876543',
 };
 
-describe('IBAN mod-97', () => {
-  it('accepts a valid Saudi IBAN', () => {
+describe('IBAN format (SA + 22 digits)', () => {
+  it('accepts a Saudi IBAN', () => {
     expect(isValidIban('SA0380000000608010167519')).toBe(true);
   });
 
@@ -32,12 +32,9 @@ describe('IBAN mod-97', () => {
     expect(isValidIban('sa03 8000 0000 6080 1016 7519')).toBe(true);
   });
 
-  it('rejects a single mistyped digit — the whole point of the checksum', () => {
-    expect(isValidIban('SA0380000000608010167518')).toBe(false);
-  });
-
-  it('rejects a transposition that a length check would miss', () => {
-    expect(isValidIban('SA0380000000608010167591')).toBe(false);
+  it('accepts any 22 digits — there is no checksum any more', () => {
+    expect(isValidIban('SA0380000000608010167518')).toBe(true);
+    expect(isValidIban('SA0000000000000000000000')).toBe(true);
   });
 
   it('rejects a non-Saudi IBAN', () => {
@@ -46,6 +43,11 @@ describe('IBAN mod-97', () => {
 
   it('rejects wrong length', () => {
     expect(isValidIban('SA038000000060801016751')).toBe(false);
+    expect(isValidIban('SA03800000006080101675199')).toBe(false);
+  });
+
+  it('rejects letters after the SA prefix', () => {
+    expect(isValidIban('SA03800000006080101675A9')).toBe(false);
   });
 });
 
@@ -96,7 +98,7 @@ describe('dataFormSchema', () => {
     ['birthDateHijri', '2024-05-12', 'Gregorian year in the Hijri field'],
     ['birthDateHijri', '1400-13-12', 'month 13'],
     ['email', 'not-an-email', 'malformed address'],
-    ['iban', 'SA0380000000608010167518', 'bad checksum'],
+    ['iban', 'SA03800000006080101675', 'too short'],
   ])('rejects %s = %s (%s)', (field, value) => {
     const result = dataFormSchema.safeParse({ ...VALID, [field]: value });
     expect(result.success).toBe(false);

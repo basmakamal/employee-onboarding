@@ -117,15 +117,9 @@ const SPL_ADDRESS = /^[A-Za-z]{4}\d{4}$/;
 const SAUDI_ID = /^[12]\d{9}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** ISO 13616 mod-97, computed in chunks so it survives 24-digit IBANs. */
+/** Shape only: SA followed by 22 digits. No mod-97 checksum. */
 function ibanValid(raw: string): boolean {
-  const iban = raw.replace(/\s+/g, '').toUpperCase();
-  if (!/^SA\d{22}$/.test(iban)) return false;
-  const rearranged = iban.slice(4) + iban.slice(0, 4);
-  const digits = rearranged.replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
-  let remainder = 0;
-  for (const ch of digits) remainder = (remainder * 10 + Number(ch)) % 97;
-  return remainder === 1;
+  return /^SA\d{22}$/.test(raw.replace(/\s+/g, '').toUpperCase());
 }
 
 const REQUIRED_TEXT: FieldKey[] = [
