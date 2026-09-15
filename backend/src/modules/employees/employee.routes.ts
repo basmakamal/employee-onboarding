@@ -74,8 +74,13 @@ const withdrawSchema = z.object({ reason: z.string().min(1).max(1000) });
 
 const notesSchema = z.object({ notes: z.string().optional() });
 
-const ONBOARDING_ACTIONS: Record<string, 'sendForm' | 'requestMissing' | 'acceptDocuments' | 'reopen'> = {
+const ONBOARDING_ACTIONS: Record<
+  string,
+  'sendForm' | 'resendForm' | 'requestMissing' | 'acceptDocuments' | 'reopen'
+> = {
   'send-form': 'sendForm',
+  // Same stage, fresh link: for a form that never arrived or has expired.
+  'resend-form': 'resendForm',
   'request-missing': 'requestMissing',
   'accept-documents': 'acceptDocuments',
   reopen: 'reopen',

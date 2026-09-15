@@ -132,6 +132,33 @@ export class OnboardingService {
   }
 
   /**
+   * The link was lost, expired, or never arrived: issue a fresh data-form
+   * link and e-mail it again. No status move — the record stays in
+   * AWAITING_FORM, so the SLA clock keeps running from the first send
+   * instead of being reset by a resend.
+   */
+  async resendForm(id: string, actor: Actor) {
+    const employee = await this.mustFind(id);
+    if (employee.status !== 'AWAITING_FORM') {
+      throw new GuardFailedError(
+        'WRONG_STATUS',
+        'the data form can only be resent while it is awaiting the employee',
+      );
+    }
+    const link = await this.links.issue('DATA_FORM', { employeeId: employee.id });
+    await this.notifications.notifyExternal(
+      employee.email,
+      // A resend is a chase, not a welcome: same wording the SLA watcher uses.
+      'employee.form_reminder',
+      { name: fullName(employee), linkUrl: link.url },
+      { entity: 'EMPLOYEE', entityId: employee.id },
+      localeOf(employee),
+    );
+    await this.auditLinkSent(employee.id, 'DATA_FORM', actor);
+    return { url: link.url, expiresAt: link.expiresAt };
+  }
+
+  /**
    * Something is missing from the submission: the form reopens, the trainee
    * is told exactly what to complete (HR's note), and the team gets a copy.
    */
