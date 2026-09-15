@@ -350,6 +350,11 @@ model EmployeeRequest {
   employeeId  String
   type        EmployeeRequestType
   notes       String?             @db.Text
+  /// The document behind the request (signed letter, warning notice, promotion
+  /// decision…) — one file per request, attached on creation or later.
+  storageKey  String?
+  fileName    String?
+  mimeType    String?
   createdBy   User                @relation(fields: [createdById], references: [id])
   createdById String
   createdAt   DateTime            @default(now())
