@@ -22,6 +22,15 @@ function makeService(overrides: Partial<Record<string, unknown>> = {}) {
     },
     requests: {
       create: vi.fn().mockImplementation((data) => Promise.resolve({ id: 'r1', ...data })),
+      findById: vi.fn().mockResolvedValue({
+        id: 'r1',
+        employeeId: 'e1',
+        type: 'WARNING',
+        storageKey: null,
+        fileName: null,
+        mimeType: null,
+      }),
+      setDocument: vi.fn().mockImplementation((id, doc) => Promise.resolve({ id, ...doc })),
     },
     gosi: {
       findByEmployee: vi.fn().mockResolvedValue(gosiRow),
@@ -165,6 +174,69 @@ describe('EmployeeService.createRequest (services log)', () => {
         employeeId: 'e1',
       }),
     );
+  });
+});
+
+const PDF = { storageKey: 'employees/e1/a.pdf', fileName: 'warning.pdf', mimeType: 'application/pdf' };
+
+describe('EmployeeService request documents', () => {
+  it('files the document with the request when HR uploads it on creation', async () => {
+    const { service, repos } = makeService();
+
+    await service.createRequest('e1', 'WARNING', HR, undefined, PDF);
+
+    expect(repos.requests.create).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'WARNING', document: PDF }),
+    );
+    expect(repos.audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'WARNING', metadata: { fileName: 'warning.pdf' } }),
+    );
+  });
+
+  it('attaches later: row updated, audited, nothing to delete when there was no file', async () => {
+    const { service, repos } = makeService();
+
+    const result = await service.attachRequestDocument('e1', 'r1', PDF, HR);
+
+    expect(repos.requests.setDocument).toHaveBeenCalledWith('r1', PDF);
+    expect(result.replacedKey).toBeNull();
+    expect(repos.audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: 'EMPLOYEE_REQUEST',
+        entityId: 'r1',
+        action: 'REQUEST_DOCUMENT_ATTACHED',
+        employeeId: 'e1',
+        metadata: { type: 'WARNING', fileName: 'warning.pdf', replaced: false },
+      }),
+    );
+  });
+
+  it('replacing hands the old key back so the route can delete it after the commit', async () => {
+    const { service, repos } = makeService();
+    repos.requests.findById.mockResolvedValue({
+      id: 'r1', employeeId: 'e1', type: 'WARNING', storageKey: 'employees/e1/old.pdf',
+      fileName: 'old.pdf', mimeType: 'application/pdf',
+    });
+
+    const result = await service.attachRequestDocument('e1', 'r1', PDF, HR);
+
+    expect(result.replacedKey).toBe('employees/e1/old.pdf');
+    expect(repos.audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ replaced: true }) }),
+    );
+  });
+
+  it('a request cannot be reached through a different employee file', async () => {
+    const { service, repos } = makeService();
+
+    await expect(service.attachRequestDocument('e2', 'r1', PDF, HR)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.getRequestDocument('e2', 'r1')).rejects.toBeInstanceOf(NotFoundError);
+    expect(repos.requests.setDocument).not.toHaveBeenCalled();
+  });
+
+  it('viewing a request that has no document is a NotFound', async () => {
+    const { service } = makeService();
+    await expect(service.getRequestDocument('e1', 'r1')).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 

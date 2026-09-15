@@ -405,18 +405,97 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     }),
   );
 
-  /** POST /:id/requests — the services grid (salary letter, promotion…). */
+  /** The uploaded file as the service wants it (name/type as the client sent them). */
+  const requestDocumentOf = (file: Express.Multer.File, subdir: string) => ({
+    storageKey: storageKeyFor(subdir, file.filename),
+    fileName: file.originalname.slice(0, 191),
+    mimeType: file.mimetype,
+  });
+
+  /**
+   * POST /:id/requests — the services grid (salary letter, promotion…).
+   * JSON or multipart: an optional `document` file rides along with the
+   * request so the letter/notice is filed the moment the request is logged.
+   * The body is validated by hand AFTER multer so a rejected body never
+   * leaves an orphaned upload behind.
+   */
   router.post(
     '/:id/requests',
     requireRole('HR', 'ADMIN'),
-    validate(createRequestSchema),
+    (req, _res, next) => {
+      req.uploadSubdir = employeeSubdir(req.params['id'] as string);
+      next();
+    },
+    documentUpload.single('document'),
     asyncHandler(async (req, res) => {
-      const body = req.body as z.infer<typeof createRequestSchema>;
-      res
-        .status(201)
-        .json(
-          await service.createRequest(req.params['id'] as string, body.type, actor(req), body.notes),
+      const files = req.file ? [req.file] : [];
+      try {
+        const body = createRequestSchema.parse(req.body);
+        if (req.file) await verifyUploadedFiles(files);
+        const document = req.file
+          ? requestDocumentOf(req.file, req.uploadSubdir as string)
+          : undefined;
+        res
+          .status(201)
+          .json(
+            await service.createRequest(
+              req.params['id'] as string,
+              body.type,
+              actor(req),
+              body.notes,
+              document,
+            ),
+          );
+      } catch (err) {
+        await discardUploads(files);
+        throw err;
+      }
+    }),
+  );
+
+  /**
+   * PUT /:id/requests/:requestId/document — attach (or replace) the file on a
+   * request raised earlier. The old file is removed only after the row points
+   * at the new one.
+   */
+  router.put(
+    '/:id/requests/:requestId/document',
+    requireRole('HR', 'ADMIN'),
+    (req, _res, next) => {
+      req.uploadSubdir = employeeSubdir(req.params['id'] as string);
+      next();
+    },
+    documentUpload.single('document'),
+    asyncHandler(async (req, res) => {
+      if (!req.file) throw new GuardFailedError('FILE_MISSING', 'no document uploaded');
+      try {
+        await verifyUploadedFiles([req.file]);
+        const { request, replacedKey } = await service.attachRequestDocument(
+          req.params['id'] as string,
+          req.params['requestId'] as string,
+          requestDocumentOf(req.file, req.uploadSubdir as string),
+          actor(req),
         );
+        if (replacedKey) await removeStoredFile(replacedKey);
+        res.json(request);
+      } catch (err) {
+        await discardUploads([req.file]);
+        throw err;
+      }
+    }),
+  );
+
+  /** The request's document, for the in-page viewer. */
+  router.get(
+    '/:id/requests/:requestId/document',
+    requireRole('HR', 'ADMIN'),
+    asyncHandler(async (req, res) => {
+      const doc = await service.getRequestDocument(
+        req.params['id'] as string,
+        req.params['requestId'] as string,
+      );
+      if (doc.mimeType) res.type(doc.mimeType);
+      res.sendFile(storagePath(doc.storageKey));
     }),
   );
 
