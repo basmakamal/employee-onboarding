@@ -465,9 +465,13 @@ export class EmployeeRepository {
    * delete so the caller can remove them from disk after the rows are gone.
    */
   async collectStorageKeys(id: string): Promise<string[]> {
-    const [employee, docs, contract, criminal, offboardings] = await Promise.all([
+    const [employee, docs, requests, contract, criminal, offboardings] = await Promise.all([
       this.db.employee.findUnique({ where: { id }, select: { photoKey: true } }),
       this.db.onboardingDocument.findMany({
+        where: { employeeId: id, storageKey: { not: null } },
+        select: { storageKey: true },
+      }),
+      this.db.employeeRequest.findMany({
         where: { employeeId: id, storageKey: { not: null } },
         select: { storageKey: true },
       }),
@@ -484,6 +488,7 @@ export class EmployeeRepository {
     return [
       employee?.photoKey,
       ...docs.map((d) => d.storageKey),
+      ...requests.map((r) => r.storageKey),
       contract?.storageKey,
       criminal?.certificateStorageKey,
       ...offboardings.map((o) => o.noticeStorageKey),

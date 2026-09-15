@@ -12,7 +12,7 @@ import type {
   EmployeeRepository,
   UpdateEmployeeData,
 } from './employee.repository.js';
-import type { EmployeeRequestRepository } from './employee-request.repository.js';
+import type { EmployeeRequestRepository, RequestDocument } from './employee-request.repository.js';
 import type { GosiRepository } from '../processes/gosi.repository.js';
 import type { MedicalInsuranceRepository } from '../processes/medical-insurance.repository.js';
 import type { CriminalRecordRepository } from '../processes/criminal-record.repository.js';
@@ -237,12 +237,16 @@ export class EmployeeService {
     return employee.photoKey;
   }
 
-  /** Log an HR service request (salary letter, promotion, warning…). */
+  /**
+   * Log an HR service request (salary letter, promotion, warning…), with the
+   * document behind it when HR already has the file in hand.
+   */
   async createRequest(
     employeeId: string,
     type: EmployeeRequestType,
     actor: Actor,
     notes?: string,
+    document?: RequestDocument,
   ) {
     const existing = await this.repos.employees.findById(employeeId);
     if (!existing) throw new NotFoundError('employee', employeeId);
@@ -252,6 +256,7 @@ export class EmployeeService {
         employeeId,
         type,
         ...(notes ? { notes } : {}),
+        ...(document ? { document } : {}),
         createdById: actor.id as string,
       });
       await s.audit.append({
@@ -261,9 +266,54 @@ export class EmployeeService {
         actorType: actor.type,
         ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId,
+        ...(document ? { metadata: { fileName: document.fileName } } : {}),
       });
       return request;
     });
+  }
+
+  /**
+   * Attach (or replace) the document on a request raised earlier — the signed
+   * copy usually comes back after the request itself was logged. Returns the
+   * key of the file being replaced so the route can delete it AFTER the
+   * commit: a failed write must never leave the row pointing at a deleted file.
+   */
+  async attachRequestDocument(
+    employeeId: string,
+    requestId: string,
+    document: RequestDocument,
+    actor: Actor,
+  ) {
+    const request = await this.mustFindRequest(employeeId, requestId);
+    const replacedKey = request.storageKey;
+    const updated = await this.transact(async (s) => {
+      const row = await s.requests.setDocument(requestId, document);
+      await s.audit.append({
+        entity: 'EMPLOYEE_REQUEST',
+        entityId: requestId,
+        action: 'REQUEST_DOCUMENT_ATTACHED',
+        actorType: actor.type,
+        ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
+        employeeId,
+        metadata: { type: request.type, fileName: document.fileName, replaced: replacedKey !== null },
+      });
+      return row;
+    });
+    return { request: updated, replacedKey };
+  }
+
+  /** Storage key + name of a request's document, for viewing. */
+  async getRequestDocument(employeeId: string, requestId: string) {
+    const request = await this.mustFindRequest(employeeId, requestId);
+    if (!request.storageKey) throw new NotFoundError('request document', requestId);
+    return { storageKey: request.storageKey, fileName: request.fileName, mimeType: request.mimeType };
+  }
+
+  /** A request is only reachable through its own employee's file. */
+  private async mustFindRequest(employeeId: string, requestId: string) {
+    const request = await this.repos.requests.findById(requestId);
+    if (!request || request.employeeId !== employeeId) throw new NotFoundError('request', requestId);
+    return request;
   }
 
   async getDetails(id: string, actor: Actor) {

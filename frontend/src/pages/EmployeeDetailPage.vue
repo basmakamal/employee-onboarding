@@ -103,6 +103,10 @@ interface RequestRow {
   notes: string | null;
   createdAt: string;
   createdBy: { name: string };
+  /** One document per request — null until HR attaches it. */
+  storageKey: string | null;
+  fileName: string | null;
+  mimeType: string | null;
 }
 
 interface EmployeeDetail {
@@ -870,11 +874,6 @@ const REQUEST_TYPES = [
   { type: 'INVESTIGATION', icon: 'search' },
 ];
 
-/** type → icon lookup for the recent-requests log and dialogs. */
-const REQUEST_ICON: Record<string, string> = Object.fromEntries(
-  REQUEST_TYPES.map((r) => [r.type, r.icon]),
-);
-
 /** Expiry-tracked document types get a recognizable icon each. */
 const DOC_ICON: Record<string, string> = {
   IQAMA: 'id-card',
@@ -885,19 +884,34 @@ const DOC_ICON: Record<string, string> = {
   DRIVING_LICENSE: 'car',
 };
 
-const requestDialog = ref({ show: false, type: 'SALARY_LETTER', notes: '' });
+const requestDialog = ref<{ show: boolean; type: string; notes: string; file: File | null }>({
+  show: false,
+  type: 'SALARY_LETTER',
+  notes: '',
+  file: null,
+});
+const requestFileInput = ref<HTMLInputElement | null>(null);
 
 function openRequest(type: string) {
-  requestDialog.value = { show: true, type, notes: '' };
+  requestDialog.value = { show: true, type, notes: '', file: null };
 }
 
+function onRequestFilePicked(e: Event) {
+  const input = e.target as HTMLInputElement;
+  requestDialog.value.file = input.files?.[0] ?? null;
+  input.value = '';
+}
+
+/** Multipart so the document (when chosen) rides along with the request. */
 async function submitRequest() {
   busy.value = 'request';
   try {
-    await api.post(`/api/employees/${id}/requests`, {
-      type: requestDialog.value.type,
-      notes: requestDialog.value.notes.trim() || undefined,
-    });
+    const body = new FormData();
+    body.append('type', requestDialog.value.type);
+    const notes = requestDialog.value.notes.trim();
+    if (notes) body.append('notes', notes);
+    if (requestDialog.value.file) body.append('document', requestDialog.value.file);
+    await api.post(`/api/employees/${id}/requests`, body);
     requestDialog.value.show = false;
     notify(t('common.saved'));
     await load();
@@ -906,6 +920,72 @@ async function submitRequest() {
   } finally {
     busy.value = '';
   }
+}
+
+// The history is grouped by type — salary letters together, warnings
+// together… — in the same order as the buttons grid, so a type is always
+// found in the same place. Newest first inside each group.
+const GROUP_PREVIEW = 3;
+const expandedGroups = ref<Set<string>>(new Set());
+
+const requestGroups = computed(() => {
+  const rows = employee.value?.requests ?? [];
+  return REQUEST_TYPES.map((rt) => ({
+    type: rt.type,
+    icon: rt.icon,
+    items: rows.filter((r) => r.type === rt.type),
+  })).filter((g) => g.items.length > 0);
+});
+
+function visibleRequests(group: { type: string; items: RequestRow[] }) {
+  return expandedGroups.value.has(group.type) ? group.items : group.items.slice(0, GROUP_PREVIEW);
+}
+
+function toggleGroup(type: string) {
+  const next = new Set(expandedGroups.value);
+  if (next.has(type)) next.delete(type);
+  else next.add(type);
+  expandedGroups.value = next;
+}
+
+// Attaching later: the signed copy often comes back after the request was
+// logged. One hidden input serves every row; the target is remembered.
+const requestAttachInput = ref<HTMLInputElement | null>(null);
+const attachTarget = ref<RequestRow | null>(null);
+
+function pickRequestDocument(request: RequestRow) {
+  attachTarget.value = request;
+  requestAttachInput.value?.click();
+}
+
+async function onRequestAttachPicked(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  const target = attachTarget.value;
+  attachTarget.value = null;
+  if (!file || !target) return;
+  busy.value = `request-doc:${target.id}`;
+  try {
+    const body = new FormData();
+    body.append('document', file);
+    await api.put(`/api/employees/${id}/requests/${target.id}/document`, body);
+    notify(t('requests.attached'));
+    await load();
+  } catch (err) {
+    notify(err instanceof ApiError ? err.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
+function viewRequestDocument(request: RequestRow) {
+  const title = t(`requests.types.${request.type}`);
+  void openViewer(
+    `/api/employees/${id}/requests/${request.id}/document`,
+    title,
+    request.fileName ?? title,
+  );
 }
 
 // ------------------------------------------------------------- AI letter
@@ -2012,40 +2092,76 @@ onMounted(load);
               </v-col>
             </v-row>
             <v-divider v-if="auth.hasRole('HR')" class="my-3" />
-            <template v-if="employee.requests.length">
+            <template v-if="requestGroups.length">
               <div class="text-caption text-medium-emphasis mb-1">{{ $t('requests.recent') }}</div>
-              <v-list density="compact" class="pa-0">
-                <v-list-item v-for="r in employee.requests.slice(0, 5)" :key="r.id" class="px-0">
-                  <template #prepend>
-                    <v-icon
-                      :icon="REQUEST_ICON[r.type] ?? 'clipboard-clock'"
-                      size="20"
-                      class="me-2"
-                      color="primary"
-                    />
-                  </template>
-                  <v-list-item-title>{{ $t(`requests.types.${r.type}`) }}</v-list-item-title>
-                  <v-list-item-subtitle>
-                    {{ new Date(r.createdAt).toLocaleDateString() }} ·
-                    {{ $t('requests.by', { name: r.createdBy.name }) }}
-                    <template v-if="r.notes"> · {{ r.notes }}</template>
-                  </v-list-item-subtitle>
-                  <template #append>
-                    <v-tooltip location="top" :text="$t('ai.letter')">
-                      <template #activator="{ props }">
-                        <v-btn
-                          v-bind="props"
-                          icon="sparkles"
-                          variant="text"
-                          size="small"
-                          color="primary"
-                          @click="generateLetter(r)"
-                        />
-                      </template>
-                    </v-tooltip>
-                  </template>
-                </v-list-item>
-              </v-list>
+              <div v-for="g in requestGroups" :key="g.type" class="request-group">
+                <div class="request-group__head">
+                  <v-icon :icon="g.icon" size="18" color="primary" />
+                  <span class="text-body-2 font-weight-semibold">{{ $t(`requests.types.${g.type}`) }}</span>
+                  <span class="request-group__count tnum">{{ g.items.length }}</span>
+                </div>
+                <v-list density="compact" class="pa-0">
+                  <v-list-item v-for="r in visibleRequests(g)" :key="r.id" class="px-0 request-row">
+                    <template #prepend>
+                      <v-icon
+                        :icon="r.storageKey ? 'file-check' : 'file'"
+                        size="18"
+                        class="me-2"
+                        :color="r.storageKey ? 'success' : undefined"
+                      />
+                    </template>
+                    <v-list-item-title class="text-body-2">
+                      {{ new Date(r.createdAt).toLocaleDateString() }}
+                      <span class="text-medium-emphasis"> · {{ $t('requests.by', { name: r.createdBy.name }) }}</span>
+                    </v-list-item-title>
+                    <v-list-item-subtitle>
+                      <template v-if="r.notes">{{ r.notes }}</template>
+                      <template v-else-if="r.fileName">{{ r.fileName }}</template>
+                      <span v-else class="text-disabled">{{ $t('requests.noDocument') }}</span>
+                    </v-list-item-subtitle>
+                    <template #append>
+                      <v-tooltip v-if="r.storageKey" location="top" :text="$t('requests.view')">
+                        <template #activator="{ props }">
+                          <v-btn v-bind="props" icon="eye" variant="text" size="small" color="primary" @click="viewRequestDocument(r)" />
+                        </template>
+                      </v-tooltip>
+                      <v-tooltip v-if="auth.hasRole('HR')" location="top" :text="r.storageKey ? $t('requests.replace') : $t('requests.attach')">
+                        <template #activator="{ props }">
+                          <v-btn
+                            v-bind="props"
+                            :icon="r.storageKey ? 'refresh-cw' : 'paperclip'"
+                            variant="text"
+                            size="small"
+                            :loading="busy === `request-doc:${r.id}`"
+                            @click="pickRequestDocument(r)"
+                          />
+                        </template>
+                      </v-tooltip>
+                      <v-tooltip location="top" :text="$t('ai.letter')">
+                        <template #activator="{ props }">
+                          <v-btn v-bind="props" icon="sparkles" variant="text" size="small" color="primary" @click="generateLetter(r)" />
+                        </template>
+                      </v-tooltip>
+                    </template>
+                  </v-list-item>
+                </v-list>
+                <v-btn
+                  v-if="g.items.length > GROUP_PREVIEW"
+                  variant="text"
+                  size="x-small"
+                  class="text-none px-1"
+                  @click="toggleGroup(g.type)"
+                >
+                  {{ expandedGroups.has(g.type) ? $t('requests.showLess') : $t('requests.showAll', { n: g.items.length }) }}
+                </v-btn>
+              </div>
+              <input
+                ref="requestAttachInput"
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,.doc,.docx"
+                class="d-none"
+                @change="onRequestAttachPicked"
+              />
             </template>
             <p v-else class="text-medium-emphasis mb-0">{{ $t('requests.empty') }}</p>
           </v-card-text>
@@ -2514,6 +2630,30 @@ onMounted(load);
             :label="$t('requests.title')"
           />
           <v-textarea v-model="requestDialog.notes" :label="$t('requests.notes')" rows="3" />
+          <div class="text-caption text-medium-emphasis mb-1">{{ $t('requests.attachDocument') }}</div>
+          <div class="d-flex align-center flex-wrap ga-2">
+            <v-btn size="small" variant="tonal" prepend-icon="paperclip" @click="requestFileInput?.click()">
+              {{ requestDialog.file ? $t('requests.replace') : $t('requests.chooseFile') }}
+            </v-btn>
+            <v-chip
+              v-if="requestDialog.file"
+              size="small"
+              variant="tonal"
+              closable
+              prepend-icon="file"
+              @click:close="requestDialog.file = null"
+            >
+              {{ requestDialog.file.name }}
+            </v-chip>
+            <span v-else class="text-caption text-disabled">{{ $t('requests.attachDocumentHint') }}</span>
+            <input
+              ref="requestFileInput"
+              type="file"
+              accept="application/pdf,image/jpeg,image/png,.doc,.docx"
+              class="d-none"
+              @change="onRequestFilePicked"
+            />
+          </div>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -2736,6 +2876,34 @@ onMounted(load);
 .service-btn {
   border-color: rgba(var(--v-border-color), var(--v-border-opacity));
   font-weight: 500;
+}
+
+/* ── request history, grouped by type ───────────────────────────────────── */
+.request-group + .request-group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.request-group__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.request-group__count {
+  margin-inline-start: auto;
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  color: rgb(var(--v-theme-primary));
+  background: rgba(var(--v-theme-primary), 0.1);
+}
+.request-row :deep(.v-list-item__append) {
+  gap: 0;
 }
 
 .letter-text :deep(textarea) {
