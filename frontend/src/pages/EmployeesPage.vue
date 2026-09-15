@@ -195,6 +195,47 @@ async function bulkSendForm() {
   }
 }
 
+/** Send the data form again to every selected record still waiting for it. */
+async function bulkResendForm() {
+  const eligible = employees.value.filter(
+    (e) => selected.value.includes(e.id) && e.status === 'AWAITING_FORM',
+  );
+  if (eligible.length === 0) {
+    notify(t('employees.bulkNoneAwaiting'), 'warning');
+    return;
+  }
+  if (!(await confirm({ title: t('employees.bulkResendForm'), message: t('employees.selected', { n: eligible.length }) }))) return;
+  bulkBusy.value = true;
+  try {
+    for (const e of eligible) await api.post(`/api/employees/${e.id}/actions/resend-form`, {});
+    notify(t('employees.bulkResent', { n: eligible.length }));
+    selected.value = [];
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    bulkBusy.value = false;
+  }
+}
+
+/** Row-level resend — the same thing for one person, from the row menu. */
+async function resendForm(target: EmployeeRow) {
+  const ok = await confirm({
+    title: t('actions.RESEND_FORM'),
+    message: t('employees.resendFormConfirm', { name: fullName(target), email: target.email }),
+    confirmText: t('actions.RESEND_FORM'),
+    icon: 'mail-plus',
+  });
+  if (!ok) return;
+  try {
+    await api.post(`/api/employees/${target.id}/actions/resend-form`, {});
+    notify(t('employees.resendFormDone'));
+    await load();
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  }
+}
+
 /** A CSV of the selected rows — the columns on screen, nothing hidden. */
 function bulkExport() {
   const rows = employees.value.filter((e) => selected.value.includes(e.id));
@@ -356,6 +397,9 @@ onMounted(loadOptions);
         <v-btn v-if="auth.hasRole('HR')" size="small" variant="tonal" prepend-icon="send" :loading="bulkBusy" @click="bulkSendForm">
           {{ $t('employees.bulkSendForm') }}
         </v-btn>
+        <v-btn v-if="auth.hasRole('HR')" size="small" variant="tonal" prepend-icon="mail-plus" :loading="bulkBusy" @click="bulkResendForm">
+          {{ $t('employees.bulkResendForm') }}
+        </v-btn>
         <v-btn size="small" variant="tonal" prepend-icon="download" @click="bulkExport">{{ $t('employees.bulkExport') }}</v-btn>
         <v-spacer />
         <v-btn size="small" variant="text" @click="selected = []">{{ $t('common.cancel') }}</v-btn>
@@ -439,6 +483,12 @@ onMounted(loadOptions);
             </template>
             <v-list density="compact" min-width="200">
               <v-list-item prepend-icon="external-link" :title="$t('employees.openProfile')" :to="`/employees/${item.id}`" />
+              <v-list-item
+                v-if="auth.hasRole('HR') && item.status === 'AWAITING_FORM'"
+                prepend-icon="mail-plus"
+                :title="$t('actions.RESEND_FORM')"
+                @click="resendForm(item)"
+              />
               <v-list-item
                 v-if="auth.user?.role === 'ADMIN'"
                 prepend-icon="trash-2"

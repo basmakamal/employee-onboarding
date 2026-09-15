@@ -552,6 +552,9 @@ const PIPELINE_STAGES = [
 // as a status change (the contract is approved on an external platform).
 const ONBOARDING_ACTIONS: Record<string, { endpoint: string; icon: string; color: string }> = {
   SEND_FORM: { endpoint: 'send-form', icon: 'send', color: 'primary' },
+  // Not a status move, so it never comes back in availableActions — it is
+  // offered below whenever the record is still waiting for the form.
+  RESEND_FORM: { endpoint: 'resend-form', icon: 'mail-plus', color: 'primary' },
   REQUEST_MISSING: { endpoint: 'request-missing', icon: 'file-warning', color: 'warning' },
   ACCEPT_DOCUMENTS: { endpoint: 'accept-documents', icon: 'file-check', color: 'success' },
   REOPEN: { endpoint: 'reopen', icon: 'rotate-ccw', color: 'secondary' },
@@ -642,17 +645,27 @@ async function withdrawEmployee() {
   }
 }
 
-const onboardingButtons = computed(
-  () =>
+const onboardingButtons = computed(() => {
+  const buttons =
     employee.value?.availableActions
       .filter((a) => ONBOARDING_ACTIONS[a])
-      .map((a) => ({ action: a, ...ONBOARDING_ACTIONS[a]! })) ?? [],
-);
+      .map((a) => ({ action: a, ...ONBOARDING_ACTIONS[a]! })) ?? [];
+  // Waiting on the new hire: HR can send the same form again (a fresh link,
+  // the old one dies) without touching the record's status.
+  if (employee.value?.status === 'AWAITING_FORM' && auth.hasRole('HR')) {
+    buttons.push({ action: 'RESEND_FORM', ...ONBOARDING_ACTIONS['RESEND_FORM']! });
+  }
+  return buttons;
+});
 
 const notesDialog = ref(false);
 const missingNotes = ref('');
 
-async function runOnboardingAction(endpoint: string, body?: { notes?: string }) {
+async function runOnboardingAction(
+  endpoint: string,
+  body?: { notes?: string },
+  successMessage?: string,
+) {
   busy.value = endpoint;
   try {
     const result = await api.post<{ url?: string }>(
@@ -660,7 +673,7 @@ async function runOnboardingAction(endpoint: string, body?: { notes?: string }) 
       body ?? {},
     );
     if (result.url) linkDialog.value = { show: true, url: result.url };
-    notify(t('common.done'));
+    notify(successMessage ?? t('common.done'));
     await load();
   } catch (e) {
     notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
@@ -669,10 +682,26 @@ async function runOnboardingAction(endpoint: string, body?: { notes?: string }) 
   }
 }
 
-function onOnboardingAction(action: string) {
+async function onOnboardingAction(action: string) {
   if (action === 'REQUEST_MISSING') {
     missingNotes.value = '';
     notesDialog.value = true;
+    return;
+  }
+  if (action === 'RESEND_FORM') {
+    const name = `${employee.value?.firstName ?? ''} ${employee.value?.lastName ?? ''}`.trim();
+    const ok = await confirm({
+      title: t('actions.RESEND_FORM'),
+      message: t('employees.resendFormConfirm', { name, email: employee.value?.email ?? '' }),
+      confirmText: t('actions.RESEND_FORM'),
+      icon: 'mail-plus',
+    });
+    if (!ok) return;
+    void runOnboardingAction(
+      ONBOARDING_ACTIONS[action]!.endpoint,
+      undefined,
+      t('employees.resendFormDone'),
+    );
     return;
   }
   void runOnboardingAction(ONBOARDING_ACTIONS[action]!.endpoint);
@@ -1287,7 +1316,7 @@ const allActions = computed<HeaderAction[]>(() => {
       icon: b.icon,
       color: b.color,
       busyKey: b.endpoint,
-      run: () => onOnboardingAction(b.action),
+      run: () => void onOnboardingAction(b.action),
     });
   }
   if (isPipeline.value && e.status === 'CONTRACT_CREATION' && auth.hasRole('HR')) {
@@ -1337,6 +1366,7 @@ const MAIN_ACTION_ORDER = [
   'contract:ACTIVE',
   'onb:ACCEPT_DOCUMENTS',
   'onb:SEND_FORM',
+  'onb:RESEND_FORM',
   'onb:REOPEN',
   'contract:PENDING_APPROVAL',
   'contract-edit',

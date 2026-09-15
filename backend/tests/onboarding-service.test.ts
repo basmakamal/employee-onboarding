@@ -216,6 +216,41 @@ describe('OnboardingService.reopen', () => {
   });
 });
 
+describe('OnboardingService.resendForm', () => {
+  it('issues a fresh link and mails the reminder without moving the status', async () => {
+    const { service, workflow, links, notifications, repos } = makeService({
+      employee: { status: 'AWAITING_FORM' } as Partial<Employee>,
+    });
+
+    const result = await service.resendForm('e1', HR);
+
+    expect(result).toMatchObject({ url: 'http://x/l' });
+    expect(links.issue).toHaveBeenCalledWith('DATA_FORM', { employeeId: 'e1' });
+    expect(notifications.notifyExternal).toHaveBeenCalledWith(
+      'nora@example.com',
+      'employee.form_reminder',
+      expect.objectContaining({ linkUrl: 'http://x/l' }),
+      expect.anything(),
+      expect.anything(),
+    );
+    // The SLA clock must keep running from the first send.
+    expect(workflow.transition).not.toHaveBeenCalled();
+    expect(repos.audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'LINK_SENT', metadata: { purpose: 'DATA_FORM' } }),
+    );
+  });
+
+  it('refuses at any other stage — nothing is issued or mailed', async () => {
+    const { service, links, notifications } = makeService({
+      employee: { status: 'FORM_RECEIVED' } as Partial<Employee>,
+    });
+
+    await expect(service.resendForm('e1', HR)).rejects.toBeInstanceOf(GuardFailedError);
+    expect(links.issue).not.toHaveBeenCalled();
+    expect(notifications.notifyExternal).not.toHaveBeenCalled();
+  });
+});
+
 describe('OnboardingService signed-link surface', () => {
   it('linkContext exposes only public fields plus the checklist', async () => {
     const { service } = makeService();
