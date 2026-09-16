@@ -212,6 +212,7 @@ model User {
   auditEntries        AuditLog[]
   notifications       Notification[]
   employeeRequests    EmployeeRequest[]
+  groupMemberships    NotificationGroupMember[]
 
   @@map("users")
 }
@@ -601,6 +602,7 @@ model EmailTemplate {
 enum TriggerRecipient {
   SUBJECT // the employee / new hire the record belongs to
   ROLE // a staff group
+  GROUP // a named responsible team (NotificationGroup)
 }
 
 /// "When <machine> enters <status>, send <template> to <recipient>." Fired
@@ -612,6 +614,8 @@ model EmailTrigger {
   templateKey String
   recipient   TriggerRecipient
   role        String?
+  /// The team when recipient = GROUP.
+  groupId     String?
   active      Boolean          @default(true)
   createdAt   DateTime         @default(now())
   createdById String?
@@ -655,6 +659,56 @@ model StatusOwnership {
 
   @@unique([processKey, status])
   @@map("status_ownership")
+}
+
+/// A named responsible team — the PEOPLE who follow up a set of statuses
+/// (e.g. "Employment Contract" → Ayman + Aljohara). Members are e-mail
+/// addresses so a team can exist before its people have accounts; a member
+/// may later be linked to a User, which adds the in-app bell for them.
+/// Today this only steers notifications: where a status has a team, the team
+/// replaces the role-wide broadcast. Permissions stay with StatusOwnership.
+model NotificationGroup {
+  id          String   @id @default(cuid())
+  /// Stable handle for seeding / integrations (e.g. EMPLOYMENT_CONTRACT).
+  key         String   @unique
+  nameAr      String
+  nameEn      String
+  description String?  @db.Text
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     NotificationGroupMember[]
+  assignments NotificationGroupAssignment[]
+
+  @@map("notification_groups")
+}
+
+model NotificationGroupMember {
+  id      String            @id @default(cuid())
+  group   NotificationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId String
+  name    String
+  email   String
+  /// Optional link to a staff account (in-app notifications as well as e-mail).
+  user    User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId  String?
+
+  @@unique([groupId, email])
+  @@map("notification_group_members")
+}
+
+/// "This team is responsible for <process> in <status>."
+model NotificationGroupAssignment {
+  id         String            @id @default(cuid())
+  group      NotificationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId    String
+  processKey String
+  status     String
+
+  @@unique([groupId, processKey, status])
+  @@index([processKey, status])
+  @@map("notification_group_assignments")
 }
 
 // ---------------------------------------------------------------------------

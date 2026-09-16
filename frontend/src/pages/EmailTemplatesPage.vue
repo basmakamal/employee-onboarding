@@ -63,8 +63,10 @@ interface Trigger {
   processKey: string;
   status: string;
   templateKey: string;
-  recipient: 'SUBJECT' | 'ROLE';
+  recipient: 'SUBJECT' | 'ROLE' | 'GROUP';
   role: string | null;
+  /** The responsible team when recipient = GROUP. */
+  groupId: string | null;
   /** Comma-separated extra recipients (server storage format). */
   ccEmails: string | null;
   active: boolean;
@@ -78,6 +80,8 @@ interface TriggerOptions {
   processes: Record<string, string[]>;
   roles: string[];
   templates: Array<{ key: string; nameAr: string; nameEn: string; audience: Audience }>;
+  /** Responsible teams (GROUP recipients). */
+  groups?: Array<{ id: string; nameAr: string; nameEn: string }>;
 }
 
 const { t, locale } = useI18n();
@@ -325,10 +329,17 @@ const newTrigger = ref({
   processKey: 'EMPLOYEE',
   status: 'CREATED',
   templateKey: 'custom.status_change',
-  recipient: 'SUBJECT' as 'SUBJECT' | 'ROLE',
+  recipient: 'SUBJECT' as 'SUBJECT' | 'ROLE' | 'GROUP',
   role: 'HR',
+  groupId: null as string | null,
   ccEmails: [] as string[],
 });
+
+const groupName = (id: string | null) => {
+  const g = options.value.groups?.find((x) => x.id === id);
+  if (!g) return id ?? '';
+  return locale.value.startsWith('ar') ? g.nameAr : g.nameEn;
+};
 
 const triggerStatuses = computed(() => options.value.processes[newTrigger.value.processKey] ?? []);
 
@@ -351,6 +362,7 @@ async function createTrigger() {
       templateKey: n.templateKey,
       recipient: n.recipient,
       role: n.recipient === 'ROLE' ? n.role : null,
+      groupId: n.recipient === 'GROUP' ? n.groupId : null,
       ccEmails: n.ccEmails,
     });
     triggerDialog.value = false;
@@ -494,6 +506,9 @@ async function removeTrigger(trigger: Trigger) {
               <td>{{ nameOfKey(tr.templateKey) }}</td>
               <td>
                 <template v-if="tr.recipient === 'SUBJECT'">{{ $t('emailTemplates.triggers.subjectRecipient') }}</template>
+                <template v-else-if="tr.recipient === 'GROUP'">
+                  <v-icon icon="users" size="14" class="me-1" />{{ groupName(tr.groupId) }}
+                </template>
                 <template v-else>{{ $t(`roles.${tr.role}`, tr.role ?? '') }}</template>
               </td>
               <td>
@@ -799,6 +814,7 @@ async function removeTrigger(trigger: Trigger) {
                 :items="[
                   { title: $t('emailTemplates.triggers.subjectRecipient'), value: 'SUBJECT' },
                   { title: $t('emailTemplates.triggers.roleRecipient'), value: 'ROLE' },
+                  { title: $t('emailTemplates.triggers.groupRecipient'), value: 'GROUP' },
                 ]"
                 :label="$t('emailTemplates.triggers.recipient')"
               />
@@ -808,6 +824,13 @@ async function removeTrigger(trigger: Trigger) {
                 v-model="newTrigger.role"
                 :items="options.roles.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
                 :label="$t('emailTemplates.triggers.role')"
+              />
+            </v-col>
+            <v-col v-if="newTrigger.recipient === 'GROUP'" cols="12" sm="6">
+              <v-select
+                v-model="newTrigger.groupId"
+                :items="(options.groups ?? []).map((g) => ({ title: groupName(g.id), value: g.id, props: { subtitle: g.nameEn } }))"
+                :label="$t('emailTemplates.triggers.group')"
               />
             </v-col>
             <v-col cols="12">

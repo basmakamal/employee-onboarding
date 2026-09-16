@@ -2,6 +2,7 @@ import type { NotificationRepository } from './notification.repository.js';
 import type { Notifier, OutboundMessage } from './notifier.js';
 import { renderTemplate, type Locale, type RenderedMessage, type TemplateParams } from './templates.js';
 import type { UserRepository } from '../auth/user.repository.js';
+import type { GroupMember } from './notification-group.repository.js';
 import { logger } from '../common/logger.js';
 import { NotFoundError } from '../workflow/errors.js';
 
@@ -31,6 +32,24 @@ const renderFromCode: RenderFn = (key, locale, params) =>
   Promise.resolve({ ...renderTemplate(key, locale, params), templateKey: key, templateVersion: null });
 
 /**
+ * Where a team notice should go: the machine + status it is about, the role
+ * group that owns that status, and (optionally) the named primary owners.
+ * If a responsible team is assigned to the status, the team replaces the
+ * role broadcast; otherwise the role (+ owners) gets it as before.
+ */
+export interface TeamTarget {
+  processKey: string;
+  status: string;
+  role: string;
+  ownerIds?: string[];
+}
+
+/** Who is on the team for a status — injected so the service stays testable. */
+export interface GroupLookup {
+  membersFor(processKey: string, status: string): Promise<GroupMember[]>;
+}
+
+/**
  * One door for all outbound notifications:
  *   - every email is persisted first (PENDING), then delivered, then marked
  *     SENT or FAILED — the notifications table is a complete send log
@@ -54,6 +73,8 @@ export class NotificationService {
     private readonly render: RenderFn = renderFromCode,
     /** Public URL of the app — staff messages link to the employee's file. */
     private readonly appUrl?: string,
+    /** Responsible teams per status — absent means role broadcast only. */
+    private readonly groups?: GroupLookup,
   ) {}
 
   /** The employee's file in the system, for staff-facing messages. */
@@ -142,6 +163,55 @@ export class NotificationService {
     const seen = new Set<string>();
     const staff = [...group, ...owners].filter((u) => !seen.has(u.id) && seen.add(u.id));
     await this.fanOut(staff, templateKey, params, ref, locale);
+  }
+
+  /**
+   * A notice for the people following up a status. The responsible team
+   * assigned to (process, status) — if any — REPLACES the role-wide
+   * broadcast: only its members hear about it. Without a team the owning
+   * role gets it, plus any named owners, exactly as before.
+   */
+  async notifyTeam(
+    target: TeamTarget,
+    templateKey: string,
+    params: TemplateParams,
+    ref?: EntityRef,
+    locale: Locale = 'ar',
+  ): Promise<void> {
+    const members = (await this.groups?.membersFor(target.processKey, target.status)) ?? [];
+    if (members.length > 0) {
+      await this.notifyMembers(members, templateKey, params, ref, locale);
+      return;
+    }
+    if (target.ownerIds && target.ownerIds.length > 0) {
+      await this.notifyRoleAndUsers(target.role, target.ownerIds, templateKey, params, ref, locale);
+      return;
+    }
+    await this.notifyRole(target.role, templateKey, params, ref, locale);
+  }
+
+  /**
+   * Team members: those linked to an account get the bell + e-mail like any
+   * staff user; the rest get the e-mail. One message per address.
+   */
+  async notifyMembers(
+    members: GroupMember[],
+    templateKey: string,
+    params: TemplateParams,
+    ref?: EntityRef,
+    locale: Locale = 'ar',
+  ): Promise<void> {
+    const linkedIds = members.map((m) => m.userId).filter((id): id is string => !!id);
+    const linked = await this.users.listActiveByIds(linkedIds);
+    const reached = new Set(linked.map((u) => u.id));
+    await this.fanOut(linked, templateKey, params, ref, locale);
+    // Team messages are staff-facing: they carry the employee-file link.
+    const staffParams = this.withLinks(params, ref);
+    for (const member of members) {
+      // Linked and active → already reached through the account above.
+      if (member.userId && reached.has(member.userId)) continue;
+      await this.notifyExternal(member.email, templateKey, staffParams, ref, locale);
+    }
   }
 
   /** Notify specific people (the named primary owners of a process). */
