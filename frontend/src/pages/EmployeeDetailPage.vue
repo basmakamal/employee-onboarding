@@ -1499,7 +1499,7 @@ onMounted(load);
         <v-card class="mb-4">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="id-card" class="me-2" color="primary" />
+              <v-icon icon="fluent:scan-person" class="me-2" />
               {{ $t('profile.details') }}
             </v-card-title>
           </v-card-item>
@@ -1566,7 +1566,7 @@ onMounted(load);
     <v-card v-if="isPipeline || isWithdrawn" class="mb-6">
       <v-card-item>
         <v-card-title class="text-subtitle-1 font-weight-bold">
-          <v-icon icon="graduation-cap" class="me-2" color="primary" />
+          <v-icon icon="fluent:certificate" class="me-2" />
           {{ $t('onboarding.section') }}
         </v-card-title>
       </v-card-item>
@@ -1693,7 +1693,7 @@ onMounted(load);
         <v-card class="mb-4">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="file-signature" class="me-2" color="primary" />
+              <v-icon icon="fluent:document-text" class="me-2" />
               {{ $t('contractCard.title') }}
             </v-card-title>
             <template #append>
@@ -1806,7 +1806,7 @@ onMounted(load);
         <v-card v-if="!isPipeline" class="mb-4">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="id-card" class="me-2" color="primary" />
+              <v-icon icon="fluent:scan-person" class="me-2" />
               {{ $t('expiryDocs.title') }}
             </v-card-title>
             <template #append>
@@ -1869,7 +1869,7 @@ onMounted(load);
         <v-card>
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="laptop" class="me-2" color="secondary" />
+              <v-icon icon="fluent:toolbox" class="me-2" />
               {{ $t('assets.title') }}
             </v-card-title>
             <template #append>
@@ -1963,7 +1963,7 @@ onMounted(load);
         <v-card v-if="!isPipeline" class="mb-4">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="hand" class="me-2" color="primary" />
+              <v-icon icon="fluent:clipboard-task" class="me-2" />
               {{ $t('requests.title') }}
             </v-card-title>
           </v-card-item>
@@ -2025,7 +2025,7 @@ onMounted(load);
         <v-card v-if="employee.onboardingDocuments.length">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
-              <v-icon icon="folder" class="me-2" color="secondary" />
+              <v-icon icon="fluent:document-folder" class="me-2" />
               {{ $t('onboarding.documents') }}
             </v-card-title>
           </v-card-item>
@@ -2337,7 +2337,7 @@ onMounted(load);
       <v-card class="pa-2">
         <v-card-item>
           <v-card-title class="text-subtitle-1 font-weight-bold">
-            <v-icon icon="sparkles" class="me-2" color="primary" />
+            <v-icon icon="fluent:bot-sparkle" class="me-2" />
             {{ $t('ai.letterTitle') }} — {{ $t(`requests.types.${letterDialog.type}`, letterDialog.type) }}
           </v-card-title>
         </v-card-item>

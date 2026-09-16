@@ -247,7 +247,7 @@ onMounted(async () => {
       <v-card class="mb-6">
         <v-card-item>
           <v-card-title class="text-subtitle-1 font-weight-bold">
-            <v-icon icon="user-search" class="me-2" color="primary" />
+            <v-icon icon="fluent:people-list" class="me-2" />
             {{ $t('reports.people') }}
             <v-chip size="small" variant="tonal" class="ms-2">{{ empTotal }}</v-chip>
           </v-card-title>
