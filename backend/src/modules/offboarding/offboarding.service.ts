@@ -362,7 +362,8 @@ export class OffboardingService {
 
     const employee = await this.repos.employees.findById(offboarding.employeeId);
     if (employee) {
-      await this.notifications.notifyHr(
+      await this.notifications.notifyTeam(
+        { processKey: 'OFFBOARDING', status: offboarding.status, role: 'HR' },
         'hr.exit_interview_done',
         { name: `${employee.firstName} ${employee.lastName}` },
         { entity: 'OFFBOARDING', entityId: offboarding.id },

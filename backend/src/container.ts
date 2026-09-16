@@ -50,6 +50,7 @@ import { onTransition } from './workflow/engine.js';
 import { withAfterCommit } from './common/after-commit.js';
 import { OpenWorkHalter, type HaltScope } from './workflow/halt-open-work.js';
 import { ResponsibilityService } from './workflow/responsibility.service.js';
+import { NotificationGroupRepository } from './notifications/notification-group.repository.js';
 
 /**
  * Composition root — the ONLY place where concrete implementations are
@@ -80,6 +81,9 @@ export function buildContainer() {
   // notification service renders everything through this so the override
   // is honoured no matter who is sending.
   const templateService = new TemplateService(prisma, config.APP_URL);
+  // Responsible teams: named people per status. Where a status has a team,
+  // the team replaces the role-wide broadcast for that notice.
+  const notificationGroups = new NotificationGroupRepository(prisma);
   const notifications = new NotificationService(
     notificationRepo,
     users,
@@ -88,10 +92,17 @@ export function buildContainer() {
     publishNotify,
     (key, locale, params) => templateService.render(key, locale, params),
     config.APP_URL,
+    notificationGroups,
   );
   // "When X enters status Y, email Z" — fires after each transition commits.
   const linkTokenService = new LinkTokenService(linkTokens, config.APP_URL, config.LINK_TTL_HOURS);
-  const triggerService = new TriggerService(prisma, notifications, templateService, linkTokenService);
+  const triggerService = new TriggerService(
+    prisma,
+    notifications,
+    templateService,
+    linkTokenService,
+    notificationGroups,
+  );
   onTransition((event) => triggerService.handle(event));
   const dashboardService = new DashboardService(prisma);
   const reportsService = new ReportsService(prisma);
@@ -267,6 +278,7 @@ export function buildContainer() {
       holidays,
       employeeDocuments,
       notificationRepo,
+      notificationGroups,
     },
     notifications,
     notifier,

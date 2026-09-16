@@ -56,7 +56,7 @@ function makeService(overrides: Partial<Record<string, unknown>> = {}, unreturne
   };
   const notifications = {
     notifyExternal: vi.fn().mockResolvedValue(undefined),
-    notifyHr: vi.fn().mockResolvedValue(undefined),
+    notifyTeam: vi.fn().mockResolvedValue(undefined),
   };
   // Unit of work under test = the same fakes; the consumed link's stamp
   // delegates to the fake links service so assertions stay in one place.
@@ -163,7 +163,8 @@ describe('OffboardingService', () => {
       expect.any(Date),
     );
     expect(links.markUsed).toHaveBeenCalled();
-    expect(notifications.notifyHr).toHaveBeenCalledWith(
+    expect(notifications.notifyTeam).toHaveBeenCalledWith(
+      expect.objectContaining({ processKey: 'OFFBOARDING', role: 'HR' }),
       'hr.exit_interview_done',
       expect.objectContaining({ name: 'Nora Khalid' }),
       { entity: 'OFFBOARDING', entityId: 'o1' },

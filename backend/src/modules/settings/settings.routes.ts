@@ -10,6 +10,9 @@ import {
   type ResponsibilityService,
 } from '../../workflow/responsibility.service.js';
 import { generateSaudiHolidays } from '../../workflow/saudi-holidays.js';
+import type { NotificationGroupRepository } from '../../notifications/notification-group.repository.js';
+import { MACHINE_STATUSES } from '../../notifications/template-catalog.js';
+import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
 
 const holidaySchema = z.object({
   date: z.coerce.date(),
@@ -38,6 +41,34 @@ const ownershipSchema = z.object({
 
 const responsibilitySchema = z.object({
   userIds: z.array(z.string().min(1)).max(20),
+});
+
+// ---- Responsible teams ----
+const groupSchema = z.object({
+  /** Stable handle, e.g. EMPLOYMENT_CONTRACT — upper-case letters, digits, underscores. */
+  key: z.string().regex(/^[A-Z][A-Z0-9_]{1,60}$/),
+  nameAr: z.string().min(1).max(120),
+  nameEn: z.string().min(1).max(120),
+  description: z.string().max(1000).nullable().optional(),
+  sortOrder: z.number().int().min(0).max(1000).optional(),
+});
+
+const membersSchema = z.object({
+  members: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(120),
+        email: z.string().email(),
+        userId: z.string().min(1).nullable().optional(),
+      }),
+    )
+    .max(50),
+});
+
+const assignmentsSchema = z.object({
+  assignments: z
+    .array(z.object({ processKey: z.string().min(1), status: z.string().min(1) }))
+    .max(200),
 });
 
 /** Only machines with a registered scheduler watcher may be watched. */
@@ -71,9 +102,87 @@ export function settingsRouter(
   ownership: OwnershipService,
   holidays: HolidayRepository,
   responsibility: ResponsibilityService,
+  groups?: NotificationGroupRepository,
 ): Router {
   const router = Router();
   router.use(requireRole('ADMIN'));
+
+  // ---- Responsible teams: named people per status (notifications) ----
+  if (groups) {
+    const mustFind = async (id: string) => {
+      const row = await groups.findById(id);
+      if (!row) throw new NotFoundError('team', id);
+      return row;
+    };
+
+    router.get(
+      '/groups',
+      asyncHandler(async (_req, res) => {
+        res.json(await groups.list());
+      }),
+    );
+
+    router.post(
+      '/groups',
+      validate(groupSchema),
+      asyncHandler(async (req, res) => {
+        const body = req.body as z.infer<typeof groupSchema>;
+        if (await groups.findByKey(body.key)) {
+          throw new GuardFailedError('DUPLICATE_KEY', `a team with key ${body.key} already exists`);
+        }
+        res.status(201).json(await groups.create(body));
+      }),
+    );
+
+    router.put(
+      '/groups/:id',
+      validate(groupSchema.omit({ key: true }).partial()),
+      asyncHandler(async (req, res) => {
+        const id = req.params['id'] as string;
+        await mustFind(id);
+        res.json(await groups.update(id, req.body as Partial<z.infer<typeof groupSchema>>));
+      }),
+    );
+
+    router.delete(
+      '/groups/:id',
+      asyncHandler(async (req, res) => {
+        const id = req.params['id'] as string;
+        await mustFind(id);
+        await groups.remove(id);
+        res.status(204).end();
+      }),
+    );
+
+    /** Replace the member list — the UI edits the list as a whole. */
+    router.put(
+      '/groups/:id/members',
+      validate(membersSchema),
+      asyncHandler(async (req, res) => {
+        const id = req.params['id'] as string;
+        await mustFind(id);
+        const { members } = req.body as z.infer<typeof membersSchema>;
+        res.json(await groups.replaceMembers(id, members));
+      }),
+    );
+
+    /** Replace the statuses this team follows up. */
+    router.put(
+      '/groups/:id/assignments',
+      validate(assignmentsSchema),
+      asyncHandler(async (req, res) => {
+        const id = req.params['id'] as string;
+        await mustFind(id);
+        const { assignments } = req.body as z.infer<typeof assignmentsSchema>;
+        for (const a of assignments) {
+          if (!MACHINE_STATUSES[a.processKey]?.includes(a.status)) {
+            throw new GuardFailedError('BAD_STATUS', `${a.status} is not a status of ${a.processKey}`);
+          }
+        }
+        res.json(await groups.replaceAssignments(id, assignments));
+      }),
+    );
+  }
 
   // ---- Work calendar: weekend days + public holidays ----
   router.get(
