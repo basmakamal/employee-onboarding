@@ -69,6 +69,19 @@ export const LIST_DEFS: ListDef[] = [
     ],
   },
 
+  // ── organisation (multi-company) ───────────────────────────────────────
+  // The levels of the org tree. A company uses whichever it needs; a new
+  // level is a value here, not a migration.
+  {
+    key: 'ORG_UNIT_TYPE', kind: 'free', nameAr: 'مستويات الهيكل التنظيمي', nameEn: 'Organisational unit types',
+    defaults: [
+      v('BRANCH', 'فرع', 'Branch'),
+      v('SUB_BRANCH', 'فرع فرعي', 'Sub-branch'),
+      v('DEPARTMENT', 'إدارة', 'Department'),
+      v('TEAM', 'فريق', 'Team'),
+    ],
+  },
+
   // ── the employee record ───────────────────────────────────────────────
   { key: 'DEPARTMENT', kind: 'free', nameAr: 'الإدارات', nameEn: 'Departments', defaults: [] },
   { key: 'PROJECT', kind: 'free', nameAr: 'المشاريع', nameEn: 'Projects', defaults: [] },

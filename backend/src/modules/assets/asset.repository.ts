@@ -1,6 +1,6 @@
 import type { Db } from '../../common/prisma.js';
 
-/** Company asset registry (unique serial numbers). */
+/** Asset registry — one per company; serial numbers unique inside a company. */
 export class AssetRepository {
   constructor(private readonly db: Db) {}
 
@@ -8,8 +8,11 @@ export class AssetRepository {
     return this.db.asset.create({ data });
   }
 
-  findBySerial(serialNumber: string) {
-    return this.db.asset.findUnique({ where: { serialNumber } });
+  /** Serial numbers are unique per company (the registry scope arrives in Phase 6). */
+  findBySerial(serialNumber: string, companyId?: string) {
+    return this.db.asset.findFirst({
+      where: { serialNumber, ...(companyId ? { companyId } : {}) },
+    });
   }
 
   list() {
