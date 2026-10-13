@@ -21,12 +21,17 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const companySchema = z.object({ companyId: z.string().min(1).nullable() });
+
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8).max(200),
 });
 
 const REFRESH_COOKIE = 'refresh_token';
+
+const bearer = (req: { header(name: string): string | undefined }) =>
+  (req.header('authorization') ?? '').replace(/^Bearer /, '');
 
 function setRefreshCookie(res: Response, token: string) {
   res.cookie(REFRESH_COOKIE, token, {
@@ -82,7 +87,22 @@ export function authRouter(auth: AuthService): Router {
     '/me',
     requireAuth(auth),
     asyncHandler(async (req, res) => {
-      res.json({ actor: req.actor });
+      res.json({ actor: req.actor, user: await auth.authenticate(bearer(req)) });
+    }),
+  );
+
+  /**
+   * Enter (or leave, with null) a company workspace. Validated against the
+   * user's assignments server-side; the choice is a context, re-checked on
+   * every request — never a proof of authorisation.
+   */
+  router.post(
+    '/company',
+    requireAuth(auth),
+    validate(companySchema),
+    asyncHandler(async (req, res) => {
+      const { companyId } = req.body as z.infer<typeof companySchema>;
+      res.json({ user: await auth.selectCompany(req.actor?.id ?? '', companyId) });
     }),
   );
 

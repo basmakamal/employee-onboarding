@@ -656,7 +656,7 @@ const onboardingButtons = computed(() => {
       .map((a) => ({ action: a, ...ONBOARDING_ACTIONS[a]! })) ?? [];
   // Waiting on the new hire: HR can send the same form again (a fresh link,
   // the old one dies) without touching the record's status.
-  if (employee.value?.status === 'AWAITING_FORM' && auth.hasRole('HR')) {
+  if (employee.value?.status === 'AWAITING_FORM' && auth.can('onboarding.manage')) {
     buttons.push({ action: 'RESEND_FORM', ...ONBOARDING_ACTIONS['RESEND_FORM']! });
   }
   return buttons;
@@ -1399,7 +1399,7 @@ const allActions = computed<HeaderAction[]>(() => {
       run: () => void onOnboardingAction(b.action),
     });
   }
-  if (isPipeline.value && e.status === 'CONTRACT_CREATION' && auth.hasRole('HR')) {
+  if (isPipeline.value && e.status === 'CONTRACT_CREATION' && auth.can('contracts.write')) {
     out.push({
       key: 'contract-edit',
       label: e.contract ? t('contract.edit') : t('contract.createBtn'),
@@ -1408,24 +1408,24 @@ const allActions = computed<HeaderAction[]>(() => {
       run: openContractDialog,
     });
   }
-  if (auth.hasRole('IT') && !isClosed.value) {
+  if (auth.can('assets.manage') && !isClosed.value) {
     out.push({ key: 'asset', label: t('assets.newForm'), icon: 'laptop', run: () => { formDialog.value = true; } });
   }
-  if (!isPipeline.value && !isClosed.value && auth.hasRole('HR')) {
+  if (!isPipeline.value && !isClosed.value && auth.can('employees.write')) {
     out.push({ key: 'doc', label: t('expiryDocs.add'), icon: 'file-clock', run: () => openDocDialog() });
     out.push({ key: 'req', label: t('requests.new'), icon: 'hand', run: () => openRequest('SALARY_LETTER') });
   }
-  if (auth.hasRole('HR')) out.push({ key: 'edit', label: t('profile.edit'), icon: 'pencil', run: openEdit });
+  if (auth.can('employees.write')) out.push({ key: 'edit', label: t('profile.edit'), icon: 'pencil', run: openEdit });
   out.push({ key: 'print', label: t('common.print'), icon: 'printer', run: printProfile });
 
   const danger: HeaderAction[] = [];
-  if (!openOffboarding.value && e.status === 'ACTIVE' && auth.hasRole('HR')) {
+  if (!openOffboarding.value && e.status === 'ACTIVE' && auth.can('offboarding.manage')) {
     danger.push({ key: 'offboard', label: t('profile.endContract'), icon: 'log-out', destructive: true, run: () => { offboardingDialog.value = true; } });
   }
   if (e.availableActions.includes('WITHDRAW')) {
     danger.push({ key: 'withdraw', label: t('withdraw.button'), icon: 'user-x', destructive: true, run: () => { withdrawReason.value = ''; withdrawDialog.value = true; } });
   }
-  if (auth.user?.role === 'ADMIN') {
+  if (auth.can('employees.delete')) {
     danger.push({ key: 'delete', label: t('profile.delete'), icon: 'trash-2', destructive: true, run: () => { deleteDialog.value = true; } });
   }
   if (danger.length) out.push({ key: 'sep', label: '', icon: '', divider: true, run: () => {} }, ...danger);
@@ -1485,7 +1485,7 @@ onMounted(load);
             <span v-else style="font-size: 20px">{{ initials }}</span>
           </v-avatar>
           <v-btn
-            v-if="auth.hasRole('HR')"
+            v-if="auth.can('employees.write')"
             icon="camera"
             size="x-small"
             color="primary"
@@ -1921,7 +1921,7 @@ onMounted(load);
             </v-card-title>
             <template #append>
               <v-btn
-                v-if="auth.hasRole('HR')"
+                v-if="auth.can('documents.write')"
                 color="primary"
                 size="small"
                 prepend-icon="plus"
@@ -1955,14 +1955,14 @@ onMounted(load);
               </v-list-item-subtitle>
               <template #append>
                 <v-btn
-                  v-if="auth.hasRole('HR')"
+                  v-if="auth.can('documents.write')"
                   icon="pencil"
                   variant="text"
                   size="small"
                   @click="openDocDialog(doc)"
                 />
                 <v-btn
-                  v-if="auth.hasRole('HR')"
+                  v-if="auth.can('documents.write')"
                   icon="trash-2"
                   variant="text"
                   size="small"
@@ -1984,7 +1984,7 @@ onMounted(load);
             </v-card-title>
             <template #append>
               <v-btn
-                v-if="auth.hasRole('IT') && !isClosed"
+                v-if="auth.can('assets.manage') && !isClosed"
                 color="primary"
                 size="small"
                 prepend-icon="plus"
@@ -2078,7 +2078,7 @@ onMounted(load);
             </v-card-title>
           </v-card-item>
           <v-card-text>
-            <v-row v-if="auth.hasRole('HR')" dense class="mb-1">
+            <v-row v-if="auth.can('requests.write')" dense class="mb-1">
               <v-col v-for="r in REQUEST_TYPES" :key="r.type" cols="6">
                 <v-btn
                   block
@@ -2091,7 +2091,7 @@ onMounted(load);
                 </v-btn>
               </v-col>
             </v-row>
-            <v-divider v-if="auth.hasRole('HR')" class="my-3" />
+            <v-divider v-if="auth.can('requests.write')" class="my-3" />
             <template v-if="requestGroups.length">
               <div class="text-caption text-medium-emphasis mb-1">{{ $t('requests.recent') }}</div>
               <div v-for="g in requestGroups" :key="g.type" class="request-group">
@@ -2125,7 +2125,7 @@ onMounted(load);
                           <v-btn v-bind="props" icon="eye" variant="text" size="small" color="primary" @click="viewRequestDocument(r)" />
                         </template>
                       </v-tooltip>
-                      <v-tooltip v-if="auth.hasRole('HR')" location="top" :text="r.storageKey ? $t('requests.replace') : $t('requests.attach')">
+                      <v-tooltip v-if="auth.can('requests.write')" location="top" :text="r.storageKey ? $t('requests.replace') : $t('requests.attach')">
                         <template #activator="{ props }">
                           <v-btn
                             v-bind="props"
@@ -2189,8 +2189,8 @@ onMounted(load);
                   :prepend-icon="doc.uploaded ? 'file-check' : 'file-x'"
                   :color="doc.uploaded ? 'success' : doc.required ? 'error' : 'grey'"
                   variant="tonal"
-                  :append-icon="doc.uploaded && auth.hasRole('HR') ? 'eye' : undefined"
-                  @click="doc.uploaded && auth.hasRole('HR') && viewOnboardingDoc(doc)"
+                  :append-icon="doc.uploaded && auth.can('documents.read') ? 'eye' : undefined"
+                  @click="doc.uploaded && auth.can('documents.read') && viewOnboardingDoc(doc)"
                 >
                   {{ doc.label ?? $t(`docTypes.${doc.type}`, doc.type) }}
                   <span v-if="!doc.required" class="text-caption ms-1">

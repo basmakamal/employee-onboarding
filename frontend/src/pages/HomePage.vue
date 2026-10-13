@@ -174,7 +174,7 @@ onMounted(async () => {
           </template>
         </p>
       </div>
-      <v-btn v-if="auth.hasRole('HR')" color="primary" prepend-icon="plus" to="/employees?new=1">
+      <v-btn v-if="auth.can('employees.write')" color="primary" prepend-icon="plus" to="/employees?new=1">
         {{ $t('employees.new') }}
       </v-btn>
     </header>

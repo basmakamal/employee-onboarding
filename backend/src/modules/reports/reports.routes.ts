@@ -1,6 +1,6 @@
 import { Router, type Response } from 'express';
 import { asyncHandler } from '../../common/http.js';
-import { requireRole } from '../../auth/require-auth.middleware.js';
+import { requirePermission } from '../../auth/authz/authorize.js';
 import type { ReportsService } from './reports.service.js';
 
 function excelHeaders(res: Response, filename: string) {
@@ -17,7 +17,7 @@ function excelHeaders(res: Response, filename: string) {
  */
 export function reportsRouter(service: ReportsService): Router {
   const router = Router();
-  router.use(requireRole('HR', 'ADMIN'));
+  router.use(requirePermission('reports.view'));
 
   router.get(
     '/summary',

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
-import { requireRole } from '../../auth/require-auth.middleware.js';
+import { requirePermission } from '../../auth/authz/authorize.js';
 import { NotFoundError } from '../../workflow/errors.js';
 import type { EmployeeDocumentRepository } from './employee-document.repository.js';
 import type { SlaFiringRepository } from '../../workflow/sla-firing.repository.js';
@@ -50,7 +50,7 @@ export function employeeDocumentRouter(deps: {
 
   nested.post(
     '/',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('documents.write'),
     validate(documentSchema),
     asyncHandler(async (req, res) => {
       const input = compact(req.body as z.infer<typeof documentSchema>);
@@ -65,7 +65,7 @@ export function employeeDocumentRouter(deps: {
 
   flat.put(
     '/:docId',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('documents.write'),
     validate(documentSchema.partial()),
     asyncHandler(async (req, res) => {
       const id = req.params['docId'] as string;
@@ -88,7 +88,7 @@ export function employeeDocumentRouter(deps: {
 
   flat.delete(
     '/:docId',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('documents.write'),
     asyncHandler(async (req, res) => {
       const id = req.params['docId'] as string;
       const existing = await deps.documents.findById(id);

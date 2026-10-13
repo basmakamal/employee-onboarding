@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, pagedQuery, validate, validateQuery } from '../common/http.js';
-import { requireRole } from './require-auth.middleware.js';
+import { requirePermission } from '../auth/authz/authorize.js';
 import { AuthService } from './auth.service.js';
 import type { UserRepository } from './user.repository.js';
 import type { NotificationService } from '../notifications/notification.service.js';
@@ -65,7 +65,7 @@ export function usersRouter(
   appUrl: string,
 ): Router {
   const router = Router();
-  router.use(requireRole('ADMIN'));
+  router.use(requirePermission('users.manage'));
 
   const listQuerySchema = z.object({
     q: z.string().max(200).optional(),
