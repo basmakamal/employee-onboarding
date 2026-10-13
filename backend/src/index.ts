@@ -5,7 +5,7 @@ import { createApp } from './app.js';
 import { buildContainer } from './container.js';
 import { startSlaScheduler } from './workflow/sla-scheduler.js';
 import { requireAuth } from './auth/require-auth.middleware.js';
-import { COMPANY_SCOPED_PREFIXES, requireCompany, requirePermission } from './auth/authz/authorize.js';
+import { actorScope, COMPANY_SCOPED_PREFIXES, requireCompany, requirePermission } from './auth/authz/authorize.js';
 import { companyRouter } from './modules/companies/company.routes.js';
 import { orgRouter } from './modules/organisation/org.routes.js';
 import { assignmentsRouter, rolesRouter } from './auth/authz.routes.js';
@@ -90,8 +90,8 @@ staffApi.use(
 staffApi.use('/email-triggers', emailTriggersRouter(container.triggerService));
 staffApi.get(
   '/dashboard',
-  asyncHandler(async (_req, res) => {
-    res.json(await container.dashboardService.summary());
+  asyncHandler(async (req, res) => {
+    res.json(await container.dashboardService.summary(actorScope(req.actor)));
   }),
 );
 /** Queue visibility for admins (feeds the phase-6 health dashboard). */
