@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { Role, SlaUnit, SlaAction } from '../src/generated/prisma/enums.js';
+import { SYSTEM_ROLES } from '../src/auth/authz/permissions.js';
 
 const prisma = new PrismaClient({
   adapter: new PrismaMariaDb(process.env['DATABASE_URL'] ?? ''),
@@ -389,6 +390,28 @@ async function seedGroups() {
   }
 }
 
+/**
+ * Roles + their permission bundles (multi-company authorisation). Creates
+ * missing roles and ADDS missing permissions to system roles; it never
+ * removes a permission an admin granted, and never touches custom roles.
+ */
+async function seedRoles() {
+  for (const role of SYSTEM_ROLES) {
+    const row = await prisma.roleDefinition.upsert({
+      where: { code: role.code },
+      update: { system: true },
+      create: { code: role.code, nameAr: role.nameAr, nameEn: role.nameEn, level: role.level, system: true },
+      include: { permissions: { select: { permission: true } } },
+    });
+    const have = new Set(row.permissions.map((p) => p.permission));
+    const missing = role.permissions.filter((p) => !have.has(p));
+    if (missing.length) {
+      await prisma.rolePermission.createMany({ data: missing.map((permission) => ({ roleId: row.id, permission })) });
+    }
+    console.log(`seeded role  ${role.code.padEnd(16)} +${missing.length} permission(s)`);
+  }
+}
+
 async function seedOwnership() {
   for (const row of OWNERSHIP) {
     // Never overwrite an admin's customization — only create missing rows.
@@ -413,6 +436,7 @@ async function seedSequences() {
 }
 
 main()
+  .then(seedRoles)
   .then(seedOwnership)
   .then(seedGroups)
   .then(seedSequences)

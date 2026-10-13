@@ -189,6 +189,139 @@ enum NotificationStatus {
 // Staff
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Companies and organisation (multi-company platform, Oct 2026)
+// ---------------------------------------------------------------------------
+
+/// A tenant. Every HR record belongs to exactly one company — directly
+/// (employees, org units, positions, assets) or through its employee.
+model Company {
+  id        String   @id @default(cuid())
+  /// Short stable handle, e.g. RIYADA — used in reports and the switcher.
+  code      String   @unique
+  nameAr    String
+  nameEn    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees     Employee[]
+  orgUnits      OrgUnit[]
+  positions     Position[]
+  assets        Asset[]
+  listValues    ListValue[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  assignments   UserAssignment[]
+  activeFor     User[]           @relation("ActiveCompany")
+
+  @@map("companies")
+}
+
+/// One table for the whole hierarchy (branch → sub-branch → department →
+/// team …). `type` is a code from the ORG_UNIT_TYPE list, so a company that
+/// has no sub-branches simply never creates one, and a new level later is a
+/// list value, not a migration. `path` is the materialised ancestry
+/// ("/a/b/c/") — "this unit and everything under it" is one indexed prefix
+/// match, and a cycle is impossible to express.
+model OrgUnit {
+  id        String   @id @default(cuid())
+  company   Company  @relation(fields: [companyId], references: [id])
+  companyId String
+  parent    OrgUnit? @relation("OrgUnitTree", fields: [parentId], references: [id])
+  parentId  String?
+  children  OrgUnit[] @relation("OrgUnitTree")
+  type      String
+  code      String
+  nameAr    String
+  nameEn    String
+  path      String
+  depth     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  positions Position[]
+  employees Employee[]
+
+  @@unique([companyId, code])
+  @@index([companyId, parentId])
+  @@index([companyId, path])
+  @@index([companyId, type, active])
+  @@map("org_units")
+}
+
+/// A job position inside a company, optionally tied to one org unit.
+model Position {
+  id        String   @id @default(cuid())
+  company   Company  @relation(fields: [companyId], references: [id])
+  companyId String
+  orgUnit   OrgUnit? @relation(fields: [orgUnitId], references: [id])
+  orgUnitId String?
+  code      String
+  titleAr   String
+  titleEn   String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees Employee[]
+
+  @@unique([companyId, code])
+  @@index([companyId, orgUnitId, active])
+  @@map("positions")
+}
+
+/// A role bundles permission codes (see src/auth/authz/permissions.ts).
+/// Rows marked `system` are seeded and cannot be deleted, only re-bundled.
+model RoleDefinition {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  nameAr    String
+  nameEn    String
+  /// GLOBAL | COMPANY | UNIT — where the role is meant to be assigned (guides the admin UI).
+  level     String   @default("COMPANY")
+  system    Boolean  @default(false)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permissions RolePermission[]
+  assignments UserAssignment[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  id         String         @id @default(cuid())
+  role       RoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId     String
+  permission String
+
+  @@unique([roleId, permission])
+  @@map("role_permissions")
+}
+
+/// "User U holds role R in scope S." Scope: both NULL = global (super admin);
+/// companyId only = the whole company; companyId + orgUnitId = that unit and
+/// its descendants. Effective access = the union of a user's assignments.
+model UserAssignment {
+  id          String         @id @default(cuid())
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  role        RoleDefinition @relation(fields: [roleId], references: [id])
+  roleId      String
+  company     Company?       @relation(fields: [companyId], references: [id])
+  companyId   String?
+  orgUnitId   String?
+  createdAt   DateTime       @default(now())
+  createdById String?
+
+  @@index([userId])
+  @@index([companyId, roleId])
+  @@map("user_assignments")
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -203,8 +336,14 @@ model User {
   lastLoginAt        DateTime?
   /// Storage key of the staff member's own profile picture.
   photoKey           String?
+  /// The company workspace this user is working in. Set by the company
+  /// selector, re-validated against assignments on every request — it is a
+  /// context, never a proof of authorisation.
+  activeCompany   Company? @relation("ActiveCompany", fields: [activeCompanyId], references: [id])
+  activeCompanyId String?
   createdAt    DateTime @default(now())
 
+  assignments         UserAssignment[]
   employeesCreated    Employee[]    @relation("EmployeeCreatedBy")
   contractsCreated    Contract[]
   assetFormsCreated   AssetForm[]
@@ -232,7 +371,7 @@ model Employee {
   fatherName       String?
   grandfatherName  String?
   lastName         String
-  email            String         @unique
+  email            String
   phone            String?
   nationalId       String?
   /// Gregorian — the value every downstream system (contract, GOSI) needs.
@@ -253,10 +392,23 @@ model Employee {
   major            String?
   emergencyContactName  String?
   emergencyContactPhone String?
+  /// Legacy free-text placement — read-only mirrors until the org tables
+  /// carry every record (dropped in the final multi-company phase).
   department     String?
   project        String?
   jobTitle       String?
   directManager  String?
+  /// Nullable only until the legacy mapping has run everywhere; services
+  /// always set it, and scoped queries never match a NULL.
+  company    Company?  @relation(fields: [companyId], references: [id])
+  companyId  String?
+  orgUnit    OrgUnit?  @relation(fields: [orgUnitId], references: [id])
+  orgUnitId  String?
+  position   Position? @relation(fields: [positionId], references: [id])
+  positionId String?
+  manager    Employee?  @relation("EmployeeManager", fields: [managerId], references: [id])
+  managerId  String?
+  reports    Employee[] @relation("EmployeeManager")
   employmentType EmploymentType @default(FULL_TIME)
   /// Language of every email this person receives (set at creation, confirmed by the data form).
   preferredLanguage Language @default(AR)
@@ -288,8 +440,13 @@ model Employee {
 
   /// (status, statusChangedAt) serves both the status filters and the SLA
   /// scan "in status X for longer than Y"; createdAt serves the list sort.
+  @@unique([companyId, email])
   @@index([status, statusChangedAt])
   @@index([createdAt])
+  /// Every scoped list / count / SLA scan starts from the company.
+  @@index([companyId, status, statusChangedAt])
+  @@index([companyId, orgUnitId])
+  @@index([companyId, createdAt])
   @@map("employees")
 }
 
@@ -418,15 +575,19 @@ model CriminalRecordProcess {
 /// (cables, accessories) may have no serial.
 model Asset {
   id           String   @id @default(cuid())
+  company      Company? @relation(fields: [companyId], references: [id])
+  companyId    String?
   type         String // e.g. LAPTOP, HEADPHONE, PHONE, ACCESS_CARD
   name         String
-  serialNumber String?  @unique
+  serialNumber String?
   notes        String?
   createdAt    DateTime @default(now())
 
   formItems AssetFormItem[]
 
+  @@unique([companyId, serialNumber])
   @@index([type])
+  @@index([companyId, type])
   @@map("assets")
 }
 
@@ -735,8 +896,12 @@ model Notification {
   templateVersion Int?
   sentAt         DateTime?
   readAt         DateTime? // in-app read marker
+  /// The company the message is about (NULL for system / global mail) — the e-mail log is scoped by it.
+  company        Company?            @relation(fields: [companyId], references: [id])
+  companyId      String?
   createdAt      DateTime            @default(now())
 
+  @@index([companyId, createdAt])
   @@index([recipientUserId, readAt])
   /// The bell fetches "my latest N" — recipient + recency.
   @@index([recipientUserId, createdAt])
@@ -802,6 +967,9 @@ model AuditLog {
   /// Optional anchor so a record's full timeline is one indexed query.
   employee   Employee? @relation("EmployeeAudit", fields: [employeeId], references: [id])
   employeeId String?
+  /// Denormalised from the record so scoped timelines and exports never join; NULL for global admin actions.
+  company    Company?  @relation(fields: [companyId], references: [id])
+  companyId  String?
 
   metadata Json?
   at       DateTime @default(now())
@@ -810,6 +978,7 @@ model AuditLog {
   @@index([employeeId, at])
   /// Time-bounded exports and "latest activity" both order by at alone.
   @@index([at])
+  @@index([companyId, at])
   @@map("audit_logs")
 }
 
@@ -819,6 +988,9 @@ model AuditLog {
 /// (only labels and order change); free lists grow as staff type new values.
 model ListValue {
   id        String   @id @default(cuid())
+  /// NULL = global default shared by every company; a company row overrides.
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
   list      String
   code      String
   labelAr   String
@@ -832,5 +1004,6 @@ model ListValue {
 
   @@unique([list, code])
   @@index([list, active, sortOrder])
+  @@index([companyId, list, active, sortOrder])
   @@map("list_values")
 }
