@@ -202,6 +202,10 @@ model Company {
   nameAr    String
   nameEn    String
   active    Boolean  @default(true)
+  /// The company manager (a staff account). Setting it maintains a
+  /// COMPANY_MANAGER assignment, so the person's login sees this company.
+  manager   User?    @relation("CompanyManager", fields: [managerId], references: [id], onDelete: SetNull)
+  managerId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -218,12 +222,14 @@ model Company {
   @@map("companies")
 }
 
-/// One table for the whole hierarchy (branch → sub-branch → department →
-/// team …). `type` is a code from the ORG_UNIT_TYPE list, so a company that
-/// has no sub-branches simply never creates one, and a new level later is a
-/// list value, not a migration. `path` is the materialised ancestry
+/// One table for the whole hierarchy: branches / locations and the
+/// department tree under them (a former "team" is simply a child
+/// department). `type` is a code from the ORG_UNIT_TYPE list, so a company
+/// that has no branches simply never creates one, and a new level later is
+/// a list value, not a migration. `path` is the materialised ancestry
 /// ("/a/b/c/") — "this unit and everything under it" is one indexed prefix
-/// match, and a cycle is impossible to express.
+/// match, and a cycle is impossible to express. The unit's manager (a staff
+/// account) gets a UNIT_MANAGER assignment for exactly that subtree.
 model OrgUnit {
   id        String   @id @default(cuid())
   company   Company  @relation(fields: [companyId], references: [id])
@@ -238,10 +244,11 @@ model OrgUnit {
   path      String
   depth     Int      @default(0)
   active    Boolean  @default(true)
+  manager   User?    @relation("OrgUnitManager", fields: [managerId], references: [id], onDelete: SetNull)
+  managerId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  positions Position[]
   employees Employee[]
 
   @@unique([companyId, code])
@@ -251,13 +258,13 @@ model OrgUnit {
   @@map("org_units")
 }
 
-/// A job position inside a company, optionally tied to one org unit.
+/// Job titles — an independent master per company. A title belongs to no
+/// department: the department link is made on the employee, so one title
+/// (e.g. Team Leader) serves every department.
 model Position {
   id        String   @id @default(cuid())
   company   Company  @relation(fields: [companyId], references: [id])
   companyId String
-  orgUnit   OrgUnit? @relation(fields: [orgUnitId], references: [id])
-  orgUnitId String?
   code      String
   titleAr   String
   titleEn   String
@@ -268,7 +275,7 @@ model Position {
   employees Employee[]
 
   @@unique([companyId, code])
-  @@index([companyId, orgUnitId, active])
+  @@index([companyId, active])
   @@map("positions")
 }
 
@@ -344,6 +351,8 @@ model User {
   createdAt    DateTime @default(now())
 
   assignments         UserAssignment[]
+  managedCompanies    Company[]     @relation("CompanyManager")
+  managedUnits        OrgUnit[]     @relation("OrgUnitManager")
   employeesCreated    Employee[]    @relation("EmployeeCreatedBy")
   contractsCreated    Contract[]
   assetFormsCreated   AssetForm[]

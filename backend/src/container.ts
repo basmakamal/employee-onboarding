@@ -53,6 +53,8 @@ import { ResponsibilityService } from './workflow/responsibility.service.js';
 import { NotificationGroupRepository } from './notifications/notification-group.repository.js';
 import { CompanyRepository } from './auth/company.repository.js';
 import { CompanyService } from './modules/companies/company.service.js';
+import { AssignmentService } from './auth/assignment.service.js';
+import { OrgService } from './modules/organisation/org.service.js';
 
 /**
  * Composition root — the ONLY place where concrete implementations are
@@ -213,7 +215,10 @@ export function buildContainer() {
 
   // Companies + unit paths resolve each request's workspace and scope.
   const companies = new CompanyRepository(prisma);
-  const companyService = new CompanyService(prisma, audit);
+  // Roles, assignments and the manager seats that drive them.
+  const assignmentService = new AssignmentService(prisma, audit);
+  const companyService = new CompanyService(prisma, audit, assignmentService);
+  const orgService = new OrgService(prisma, audit, assignmentService);
   const authService = new AuthService(
     users,
     {
@@ -301,6 +306,8 @@ export function buildContainer() {
     offboardingService,
     authService,
     companyService,
+    assignmentService,
+    orgService,
     settingsService,
     dashboardService,
     reportsService,

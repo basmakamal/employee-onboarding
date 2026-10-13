@@ -10,6 +10,8 @@ export const router = createRouter({
     // Reachable without a selected company — it is how you get one.
     { path: '/select-company', name: 'select-company', component: () => import('../pages/SelectCompanyPage.vue'), meta: { global: true } },
     { path: '/companies', name: 'companies', component: () => import('../pages/CompaniesPage.vue'), meta: { global: true, permission: 'companies.manage' } },
+    { path: '/roles', name: 'roles', component: () => import('../pages/RolesPage.vue'), meta: { global: true, permission: 'users.manage' } },
+    { path: '/organisation', name: 'organisation', component: () => import('../pages/OrganisationPage.vue'), meta: { permission: 'org.read' } },
     {
       path: '/change-password',
       meta: { global: true },
