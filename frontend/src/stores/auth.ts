@@ -56,11 +56,23 @@ export const useAuthStore = defineStore('auth', () => {
     await tryRefresh().catch(() => null);
   }
 
+  /** Enter (or leave, with null) a company workspace — validated server-side. */
+  async function selectCompany(companyId: string | null): Promise<void> {
+    const result = await api.post<{ user: SessionUser }>('/api/auth/company', { companyId });
+    user.value = result.user;
+  }
+
+  /** Re-read the session (new companies, changed permissions) without a re-login. */
+  async function refreshSession(): Promise<void> {
+    const result = await api.get<{ user: SessionUser }>('/api/auth/me');
+    user.value = result.user;
+  }
+
   async function logout(): Promise<void> {
     await api.post('/api/auth/logout').catch(() => null);
     setAccessToken('');
     user.value = null;
   }
 
-  return { user, isAuthenticated, can, hasRole, login, logout, restore };
+  return { user, isAuthenticated, can, hasRole, login, logout, restore, selectCompany, refreshSession };
 });

@@ -32,7 +32,7 @@ const palette = ref(false);
 
 /** Pages that render without the staff chrome (signed links, login, first password). */
 const isBare = computed(() =>
-  ['/form/', '/contract/', '/approve-assets/', '/exit-interview/', '/login', '/change-password'].some((p) =>
+  ['/form/', '/contract/', '/approve-assets/', '/exit-interview/', '/login', '/change-password', '/select-company'].some((p) =>
     route.path.startsWith(p),
   ),
 );
@@ -62,6 +62,7 @@ const GROUPS: NavGroup[] = [
   {
     key: 'nav.groupAdmin',
     items: [
+      { to: '/companies', icon: 'fluent:building-people', key: 'nav.companies', permission: 'companies.manage' },
       { to: '/users', icon: 'fluent:person-key', key: 'nav.users', permission: 'users.manage' },
       { to: '/ownership', icon: 'fluent:people-team', key: 'nav.ownership', permission: 'settings.manage' },
       { to: '/lists', icon: 'fluent:text-bullet-list-square', key: 'nav.lists', permission: 'lists.manage' },
@@ -99,6 +100,34 @@ const bottomItems = computed(() =>
     { to: '/emails', icon: 'fluent:mail', key: 'nav.inbox', permission: 'emails.view' as string | undefined },
   ].filter((i) => !i.permission || auth.can(i.permission)),
 );
+
+// ------------------------------------------------------------ company switcher
+const companyName = (c: { nameAr: string; nameEn: string }) =>
+  (prefs.locale ?? 'ar').startsWith('ar') ? c.nameAr : c.nameEn;
+const companySearch = ref('');
+const companyBusy = ref(false);
+const switchable = computed(() => (auth.user?.companies.length ?? 0) > 1);
+const companyChoices = computed(() => {
+  const q = companySearch.value.trim().toLowerCase();
+  const all = auth.user?.companies ?? [];
+  return q ? all.filter((c) => [c.nameAr, c.nameEn, c.code].some((v) => v.toLowerCase().includes(q))) : all;
+});
+
+/**
+ * Switching companies reloads the app at the dashboard: the simplest way to
+ * guarantee no list, filter, cache or open dialog from company A survives
+ * into company B. The session comes back through the refresh cookie.
+ */
+async function switchCompany(companyId: string) {
+  if (companyId === auth.user?.activeCompany?.id) return;
+  companyBusy.value = true;
+  try {
+    await auth.selectCompany(companyId);
+    window.location.assign('/');
+  } catch {
+    companyBusy.value = false;
+  }
+}
 
 const initials = computed(() =>
   (auth.user?.name ?? '')
@@ -150,7 +179,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
       >
         <div class="shell-brand" :class="{ 'shell-brand--rail': isRail }">
           <span class="shell-brand__tile"><img src="/riyada-logo.png" alt="Riyada" class="shell-brand__logo" /></span>
-          <b v-if="!isRail" class="shell-brand__text">{{ $t('app.title') }}</b>
+          <span v-if="!isRail" class="shell-brand__text">
+            <b>{{ $t('app.title') }}</b>
+            <small v-if="auth.user?.activeCompany" class="shell-brand__company">{{ companyName(auth.user.activeCompany) }}</small>
+          </span>
           <v-btn
             v-if="display.mdAndUp.value && !rail"
             icon="panel-left-close"
@@ -248,6 +280,54 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
           </template>
         </nav>
         <v-spacer />
+
+        <!-- Active company — always visible; a searchable switcher when there is more than one -->
+        <v-menu v-if="auth.user?.activeCompany" :disabled="!switchable" :close-on-content-click="false">
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              variant="tonal"
+              color="primary"
+              size="small"
+              rounded="pill"
+              class="me-2 text-none shell-company"
+              :loading="companyBusy"
+              :aria-label="$t('company.current')"
+            >
+              <v-icon icon="fluent:building-people" size="18" class="me-1" />
+              <span class="text-truncate">{{ companyName(auth.user.activeCompany) }}</span>
+              <v-icon v-if="switchable" icon="chevron-down" size="14" class="ms-1" />
+            </v-btn>
+          </template>
+          <v-card min-width="280" max-width="360">
+            <div class="px-3 pt-3 pb-1 text-caption text-medium-emphasis">{{ $t('company.switch') }}</div>
+            <v-text-field
+              v-if="(auth.user?.companies.length ?? 0) > 6"
+              v-model="companySearch"
+              :placeholder="$t('company.search')"
+              prepend-inner-icon="search"
+              density="compact"
+              hide-details
+              class="mx-3 mb-2"
+              autofocus
+            />
+            <v-list density="compact" max-height="320" class="pt-0">
+              <v-list-item
+                v-for="c in companyChoices"
+                :key="c.id"
+                :active="c.id === auth.user?.activeCompany?.id"
+                :title="companyName(c)"
+                :subtitle="c.code"
+                @click="switchCompany(c.id)"
+              >
+                <template #append>
+                  <v-icon v-if="c.id === auth.user?.activeCompany?.id" icon="check" size="16" color="primary" />
+                </template>
+              </v-list-item>
+            </v-list>
+          </v-card>
+        </v-menu>
+
         <v-btn
           v-if="display.smAndDown.value"
           icon="search"
@@ -362,7 +442,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
   flex: none;
 }
 .shell-brand__logo { height: 18px; width: auto; display: block; }
-.shell-brand__text { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+.shell-brand__text { display: flex; flex-direction: column; min-width: 0; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; line-height: 1.2; }
+.shell-brand__company { font-size: 11px; font-weight: 500; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; }
+.shell-company { max-width: 240px; }
+.shell-company .v-btn__content { max-width: 100%; }
 .shell-brand .v-btn { color: rgba(var(--v-theme-on-primary), 0.85); }
 .shell-search {
   display: flex;

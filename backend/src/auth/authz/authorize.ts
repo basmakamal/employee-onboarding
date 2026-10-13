@@ -68,6 +68,22 @@ export function contextOf(req: { actor?: Actor }): CompanyContext {
   };
 }
 
+/**
+ * API prefixes that only make sense inside a company workspace. Mounted
+ * with requireCompany() in index.ts; everything else under /api (auth,
+ * companies, users, settings, templates, lists, the bell) is global.
+ */
+export const COMPANY_SCOPED_PREFIXES = [
+  '/employees',
+  '/employee-documents',
+  '/offboardings',
+  '/reports',
+  '/dashboard',
+  '/ai',
+  '/assets',
+  '/asset-forms',
+] as const;
+
 /** Route gate for company-owned data: no selected company → refused. */
 export function requireCompany(): RequestHandler {
   return (req, _res, next) => {

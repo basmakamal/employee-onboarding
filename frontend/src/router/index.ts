@@ -7,8 +7,12 @@ export const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: HomePage },
     { path: '/login', name: 'login', component: () => import('../pages/LoginPage.vue'), meta: { public: true } },
+    // Reachable without a selected company — it is how you get one.
+    { path: '/select-company', name: 'select-company', component: () => import('../pages/SelectCompanyPage.vue'), meta: { global: true } },
+    { path: '/companies', name: 'companies', component: () => import('../pages/CompaniesPage.vue'), meta: { global: true, permission: 'companies.manage' } },
     {
       path: '/change-password',
+      meta: { global: true },
       name: 'change-password',
       component: () => import('../pages/ChangePasswordPage.vue'),
     },
@@ -48,43 +52,43 @@ export const router = createRouter({
       path: '/email-templates',
       name: 'email-templates',
       component: () => import('../pages/EmailTemplatesPage.vue'),
-      meta: { permission: 'settings.manage' },
+      meta: { global: true, permission: 'settings.manage' },
     },
     {
       path: '/settings',
       name: 'settings',
       component: () => import('../pages/SettingsPage.vue'),
-      meta: { permission: 'settings.manage' },
+      meta: { global: true, permission: 'settings.manage' },
     },
     {
       path: '/automation',
       name: 'automation',
       component: () => import('../pages/AutomationPage.vue'),
-      meta: { permission: 'settings.manage' },
+      meta: { global: true, permission: 'settings.manage' },
     },
     {
       path: '/calendar',
       name: 'calendar',
       component: () => import('../pages/CalendarPage.vue'),
-      meta: { permission: 'settings.manage' },
+      meta: { global: true, permission: 'settings.manage' },
     },
     {
       path: '/ownership',
       name: 'ownership',
       component: () => import('../pages/OwnershipPage.vue'),
-      meta: { permission: 'settings.manage' },
+      meta: { global: true, permission: 'settings.manage' },
     },
     {
       path: '/lists',
       name: 'lists',
       component: () => import('../pages/ListsPage.vue'),
-      meta: { permission: 'lists.manage' },
+      meta: { global: true, permission: 'lists.manage' },
     },
     {
       path: '/users',
       name: 'users',
       component: () => import('../pages/UsersPage.vue'),
-      meta: { permission: 'users.manage' },
+      meta: { global: true, permission: 'users.manage' },
     },
     // Public signed-link pages (no staff chrome, token IS the auth).
     {
@@ -141,6 +145,12 @@ router.beforeEach(async (to) => {
   }
 
   const permission = to.meta['permission'] as string | undefined;
-  if (permission && !auth.can(permission)) return { name: 'home' };
+  if (permission && !auth.can(permission)) return { name: auth.user?.activeCompany ? 'home' : 'select-company' };
+
+  // Company-owned pages need a selected workspace. Global administration
+  // (companies, users, settings…) is marked meta.global and stays reachable.
+  if (!to.meta['global'] && !auth.user?.activeCompany) {
+    return { name: 'select-company', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} };
+  }
   return true;
 });
