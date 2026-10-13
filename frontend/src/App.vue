@@ -49,6 +49,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/', icon: 'fluent:home', key: 'nav.home' },
       { to: '/employees', icon: 'fluent:people', key: 'nav.employees' },
+      { to: '/organisation', icon: 'fluent:people-community', key: 'nav.organisation', permission: 'org.read' },
     ],
   },
   {
@@ -64,6 +65,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/companies', icon: 'fluent:building-people', key: 'nav.companies', permission: 'companies.manage' },
       { to: '/users', icon: 'fluent:person-key', key: 'nav.users', permission: 'users.manage' },
+      { to: '/roles', icon: 'fluent:shield-checkmark', key: 'nav.roles', permission: 'users.manage' },
       { to: '/ownership', icon: 'fluent:people-team', key: 'nav.ownership', permission: 'settings.manage' },
       { to: '/lists', icon: 'fluent:text-bullet-list-square', key: 'nav.lists', permission: 'lists.manage' },
       { to: '/automation', icon: 'fluent:clock-alarm', key: 'nav.automation', permission: 'settings.manage' },

@@ -11,12 +11,16 @@ import { useAuthStore } from '../stores/auth';
 import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
 
+interface StaffUser { id: string; name: string; email: string; active: boolean }
+
 interface CompanyRow {
   id: string;
   code: string;
   nameAr: string;
   nameEn: string;
   active: boolean;
+  managerId: string | null;
+  manager: { id: string; name: string; email: string } | null;
   createdAt: string;
   _count: { employees: number; orgUnits: number; assignments: number };
 }
@@ -31,9 +35,16 @@ const notify = (text: string, color = 'success') => (snackbar.value = { show: tr
 
 const name = (c: CompanyRow) => (locale.value.startsWith('ar') ? c.nameAr : c.nameEn);
 
+const staff = ref<StaffUser[]>([]);
+const staffItems = computed(() => [
+  { title: t('org.noManager'), value: null },
+  ...staff.value.filter((s) => s.active).map((s) => ({ title: s.name, value: s.id, props: { subtitle: s.email } })),
+]);
+
 const headers = computed(() => [
   { title: t('company.code'), key: 'code', width: 140 },
   { title: t('company.name'), key: 'name' },
+  { title: t('company.manager'), key: 'manager', width: 200 },
   { title: t('company.employees'), key: 'employees', align: 'end' as const, width: 120 },
   { title: t('company.units'), key: 'units', align: 'end' as const, width: 120 },
   { title: t('fields.status'), key: 'active', width: 120 },
@@ -43,7 +54,12 @@ const headers = computed(() => [
 async function load() {
   loading.value = true;
   try {
-    rows.value = await api.get<CompanyRow[]>('/api/companies');
+    const [companies, users] = await Promise.all([
+      api.get<CompanyRow[]>('/api/companies'),
+      auth.can('users.manage') ? api.get<{ items: StaffUser[] }>('/api/users?page=1&limit=100') : Promise.resolve({ items: [] as StaffUser[] }),
+    ]);
+    rows.value = companies;
+    staff.value = users.items;
   } catch (e) {
     notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
@@ -51,17 +67,17 @@ async function load() {
   }
 }
 
-const dialog = ref<{ show: boolean; id: string | null; code: string; nameAr: string; nameEn: string; active: boolean }>({
-  show: false, id: null, code: '', nameAr: '', nameEn: '', active: true,
+const dialog = ref<{ show: boolean; id: string | null; code: string; nameAr: string; nameEn: string; active: boolean; managerId: string | null }>({
+  show: false, id: null, code: '', nameAr: '', nameEn: '', active: true, managerId: null,
 });
 const codeOk = computed(() => /^[A-Za-z][A-Za-z0-9_]{1,30}$/.test(dialog.value.code.trim()));
 const formOk = computed(() => (dialog.value.id || codeOk.value) && dialog.value.nameAr.trim() && dialog.value.nameEn.trim());
 
 function openCreate() {
-  dialog.value = { show: true, id: null, code: '', nameAr: '', nameEn: '', active: true };
+  dialog.value = { show: true, id: null, code: '', nameAr: '', nameEn: '', active: true, managerId: null };
 }
 function openEdit(c: CompanyRow) {
-  dialog.value = { show: true, id: c.id, code: c.code, nameAr: c.nameAr, nameEn: c.nameEn, active: c.active };
+  dialog.value = { show: true, id: c.id, code: c.code, nameAr: c.nameAr, nameEn: c.nameEn, active: c.active, managerId: c.managerId };
 }
 
 async function save() {
@@ -69,9 +85,9 @@ async function save() {
   try {
     const d = dialog.value;
     if (d.id) {
-      await api.put(`/api/companies/${d.id}`, { nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim(), active: d.active });
+      await api.put(`/api/companies/${d.id}`, { nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim(), active: d.active, managerId: d.managerId });
     } else {
-      await api.post('/api/companies', { code: d.code.trim().toUpperCase(), nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim() });
+      await api.post('/api/companies', { code: d.code.trim().toUpperCase(), nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim(), managerId: d.managerId });
     }
     dialog.value.show = false;
     notify(t('common.saved'));
@@ -115,6 +131,13 @@ onMounted(load);
           <div class="text-body-2 font-weight-semibold">{{ name(item) }}</div>
           <div class="text-caption text-medium-emphasis">{{ locale.startsWith('ar') ? item.nameEn : item.nameAr }}</div>
         </template>
+        <template #item.manager="{ item }">
+          <template v-if="item.manager">
+            <div class="text-body-2 text-truncate">{{ item.manager.name }}</div>
+            <div class="text-caption text-medium-emphasis text-truncate" dir="ltr">{{ item.manager.email }}</div>
+          </template>
+          <span v-else class="text-caption text-disabled">{{ $t('org.noManager') }}</span>
+        </template>
         <template #item.employees="{ item }"><span class="tnum">{{ item._count.employees }}</span></template>
         <template #item.units="{ item }"><span class="tnum">{{ item._count.orgUnits }}</span></template>
         <template #item.active="{ item }">
@@ -155,6 +178,7 @@ onMounted(load);
           />
           <v-text-field v-model="dialog.nameAr" :label="$t('company.nameAr')" />
           <v-text-field v-model="dialog.nameEn" :label="$t('company.nameEn')" dir="ltr" />
+          <v-select v-model="dialog.managerId" :items="staffItems" :label="$t('company.manager')" :hint="$t('company.managerHint')" persistent-hint class="mb-2" />
           <v-switch v-if="dialog.id" v-model="dialog.active" :label="$t('company.active')" color="success" hide-details />
         </v-card-text>
         <v-card-actions>

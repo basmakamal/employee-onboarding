@@ -53,6 +53,95 @@ const resetDialog = ref({ show: false, userId: '', name: '', password: '' });
 
 const editDialog = ref({ show: false, userId: '', name: '', email: '', role: 'HR', active: true });
 
+// ------------------------------------------------------- assignments
+// Where a user holds which role: global, a whole company, or one unit and
+// its descendants. Manager seats (set on the Organisation / Companies
+// pages) appear here too and are kept in step by the server.
+interface AssignmentRow {
+  id?: string;
+  roleCode: string;
+  companyId: string | null;
+  orgUnitId: string | null;
+}
+interface RoleOption { code: string; nameAr: string; nameEn: string; level: string; active: boolean }
+interface CompanyOption { id: string; code: string; nameAr: string; nameEn: string }
+interface UnitOption { id: string; code: string; nameAr: string; nameEn: string; depth: number; active: boolean }
+
+const { locale } = useI18n();
+const ar = computed(() => locale.value.startsWith('ar'));
+const assignDialog = ref<{ show: boolean; userId: string; name: string; rows: AssignmentRow[] }>({ show: false, userId: '', name: '', rows: [] });
+const roleOptions = ref<RoleOption[]>([]);
+const companyOptions = ref<CompanyOption[]>([]);
+const unitsByCompany = ref<Record<string, UnitOption[]>>({});
+
+const roleItems = computed(() =>
+  roleOptions.value.filter((r) => r.active).map((r) => ({ title: ar.value ? r.nameAr : r.nameEn, value: r.code, props: { subtitle: `${r.code} · ${t(`roles.levels.${r.level}`)}` } })),
+);
+const companyItems = computed(() => [
+  { title: t('users.globalScope'), value: null },
+  ...companyOptions.value.map((c) => ({ title: ar.value ? c.nameAr : c.nameEn, value: c.id, props: { subtitle: c.code } })),
+]);
+function unitItems(companyId: string | null) {
+  const units = companyId ? (unitsByCompany.value[companyId] ?? []) : [];
+  return [
+    { title: t('users.wholeCompany'), value: null },
+    ...units.filter((u) => u.active).map((u) => ({ title: `${'— '.repeat(u.depth)}${ar.value ? u.nameAr : u.nameEn}`, value: u.id, props: { subtitle: u.code } })),
+  ];
+}
+
+/** Units of a company are fetched lazily — the org API answers for the ACTIVE company only, so we ask per company through the admin route. */
+async function loadUnits(companyId: string | null) {
+  if (!companyId || unitsByCompany.value[companyId]) return;
+  try {
+    unitsByCompany.value = { ...unitsByCompany.value, [companyId]: await api.get<UnitOption[]>(`/api/companies/${companyId}/units`) };
+  } catch {
+    unitsByCompany.value = { ...unitsByCompany.value, [companyId]: [] };
+  }
+}
+
+async function openAssignments(user: UserRow) {
+  busy.value = `assign:${user.id}`;
+  try {
+    const [rows, roles, companies] = await Promise.all([
+      api.get<Array<{ role: { code: string }; companyId: string | null; orgUnitId: string | null }>>(`/api/users/${user.id}/assignments`),
+      roleOptions.value.length ? Promise.resolve(roleOptions.value) : api.get<RoleOption[]>('/api/roles'),
+      companyOptions.value.length ? Promise.resolve(companyOptions.value) : api.get<CompanyOption[]>('/api/companies'),
+    ]);
+    roleOptions.value = roles;
+    companyOptions.value = companies;
+    const mapped = rows.map((r) => ({ roleCode: r.role.code, companyId: r.companyId, orgUnitId: r.orgUnitId }));
+    await Promise.all([...new Set(mapped.map((r) => r.companyId))].map(loadUnits));
+    assignDialog.value = { show: true, userId: user.id, name: user.name, rows: mapped };
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+function addAssignment() {
+  assignDialog.value.rows.push({ roleCode: roleOptions.value[0]?.code ?? 'HR', companyId: companyOptions.value[0]?.id ?? null, orgUnitId: null });
+  void loadUnits(assignDialog.value.rows.at(-1)?.companyId ?? null);
+}
+function onCompanyPicked(row: AssignmentRow, companyId: string | null) {
+  row.companyId = companyId;
+  row.orgUnitId = null;
+  void loadUnits(companyId);
+}
+async function saveAssignments() {
+  busy.value = 'assignments';
+  try {
+    await api.put(`/api/users/${assignDialog.value.userId}/assignments`, {
+      assignments: assignDialog.value.rows.map((r) => ({ roleCode: r.roleCode, companyId: r.companyId, orgUnitId: r.orgUnitId })),
+    });
+    assignDialog.value.show = false;
+    notify(t('common.saved'));
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
+}
+
 /** Admins cannot demote or lock themselves out — enforced server-side too. */
 const isSelf = computed(() => editDialog.value.userId === auth.user?.id);
 
@@ -280,6 +369,20 @@ onMounted(load);
                 />
               </template>
             </v-tooltip>
+            <v-tooltip :text="$t('users.assignments')" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="fluent:people-team"
+                  size="small"
+                  variant="text"
+                  density="comfortable"
+                  :loading="busy === `assign:${item.id}`"
+                  :aria-label="$t('users.assignments')"
+                  @click="openAssignments(item)"
+                />
+              </template>
+            </v-tooltip>
             <v-tooltip :text="$t('users.resetPassword')" location="top">
               <template #activator="{ props }">
                 <v-btn
@@ -329,6 +432,28 @@ onMounted(load);
     </v-card>
 
     <!-- Create user -->
+    <!-- Assignments: role × scope rows -->
+    <v-dialog v-model="assignDialog.show" max-width="760">
+      <v-card :title="$t('users.assignmentsFor', { name: assignDialog.name })" class="pa-2">
+        <v-card-text>
+          <p class="text-body-2 text-medium-emphasis mb-3">{{ $t('users.assignmentsHint') }}</p>
+          <div v-if="assignDialog.rows.length === 0" class="text-body-2 text-medium-emphasis mb-3">{{ $t('users.noAssignments') }}</div>
+          <v-row v-for="(row, i) in assignDialog.rows" :key="i" dense class="align-center">
+            <v-col cols="12" sm="4"><v-select v-model="row.roleCode" :items="roleItems" :label="$t('users.role')" density="compact" hide-details /></v-col>
+            <v-col cols="12" sm="4"><v-select :model-value="row.companyId" :items="companyItems" :label="$t('users.scopeCompany')" density="compact" hide-details @update:model-value="(v: string | null) => onCompanyPicked(row, v)" /></v-col>
+            <v-col cols="10" sm="3"><v-select v-model="row.orgUnitId" :items="unitItems(row.companyId)" :label="$t('users.scopeUnit')" density="compact" hide-details :disabled="!row.companyId" /></v-col>
+            <v-col cols="2" sm="1" class="text-end"><v-btn icon="x" variant="text" size="small" :aria-label="$t('common.delete')" @click="assignDialog.rows.splice(i, 1)" /></v-col>
+          </v-row>
+          <v-btn size="small" variant="text" prepend-icon="plus" class="mt-2" @click="addAssignment">{{ $t('users.addAssignment') }}</v-btn>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="assignDialog.show = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="primary" :loading="busy === 'assignments'" @click="saveAssignments">{{ $t('common.save') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="createDialog" max-width="520">
       <v-card :title="$t('users.new')" class="pa-2">
         <v-card-text>
