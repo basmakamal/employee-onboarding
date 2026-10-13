@@ -97,6 +97,11 @@ async function request<T>(method: string, url: string, body?: unknown, retried =
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message?: string; details?: never } })?.error;
+    // Company-owned data without a selected company: go and pick one.
+    if (err?.code === 'COMPANY_REQUIRED' && !window.location.pathname.startsWith('/select-company')) {
+      const back = window.location.pathname + window.location.search;
+      window.location.assign(`/select-company?redirect=${encodeURIComponent(back)}`);
+    }
     throw new ApiError(err?.code ?? 'UNKNOWN', err?.message ?? res.statusText, res.status, err?.details);
   }
   return data as T;

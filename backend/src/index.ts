@@ -5,7 +5,8 @@ import { createApp } from './app.js';
 import { buildContainer } from './container.js';
 import { startSlaScheduler } from './workflow/sla-scheduler.js';
 import { requireAuth } from './auth/require-auth.middleware.js';
-import { requirePermission } from './auth/authz/authorize.js';
+import { COMPANY_SCOPED_PREFIXES, requireCompany, requirePermission } from './auth/authz/authorize.js';
+import { companyRouter } from './modules/companies/company.routes.js';
 import { authRouter } from './auth/auth.routes.js';
 import { employeeRouter } from './modules/employees/employee.routes.js';
 import { assetRouter } from './modules/assets/asset.routes.js';
@@ -38,6 +39,12 @@ void container.listService
 // the state machines (roles on transitions) and per-route gates below.
 const staffApi = Router();
 staffApi.use(requireAuth(container.authService));
+// Global administration — the one HR-adjacent surface that works before a
+// company is selected (it is how a super admin gets one).
+staffApi.use('/companies', companyRouter(container.companyService));
+// Company-owned data refuses to answer without a selected workspace; it
+// never widens to "all companies".
+staffApi.use([...COMPANY_SCOPED_PREFIXES], requireCompany());
 const docRouters = employeeDocumentRouter({
   documents: container.repos.employeeDocuments,
   firings: container.repos.slaFirings,
