@@ -255,7 +255,8 @@ export class EmployeeService {
     notes?: string,
     document?: RequestDocument,
   ) {
-    const existing = await this.mustFind(employeeId, actor);
+    // Scope guard: an employee outside the actor's company / subtree is a 404.
+    await this.mustFind(employeeId, actor);
 
     return this.transact(async (s) => {
       const request = await s.requests.create({
