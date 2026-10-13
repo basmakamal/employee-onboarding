@@ -6,9 +6,10 @@
  * company-specific appears here, by design.
  */
 import { computed, onMounted, ref } from 'vue';
+import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
-import { api, ApiError, type SessionCompany } from '../api/client';
+import { api, type SessionCompany } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 
 interface CompanyRow extends SessionCompany {
@@ -55,7 +56,7 @@ async function choose(company: SessionCompany) {
     const redirect = typeof route.query['redirect'] === 'string' ? route.query['redirect'] : '/';
     await router.replace(redirect.startsWith('/select-company') ? '/' : redirect);
   } catch (e) {
-    error.value = e instanceof ApiError ? e.message : t('common.error');
+    error.value = errorText(e);
   } finally {
     busy.value = '';
   }

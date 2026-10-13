@@ -9,6 +9,8 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError, type SessionUser } from '../api/client';
 import { useAuthStore } from '../stores/auth';
+import { rules } from '../validation/rules';
+import { errorText } from '../validation/errors';
 import LanguageToggle from '../components/LanguageToggle.vue';
 
 const auth = useAuthStore();
@@ -26,19 +28,18 @@ const forced = computed(() => auth.user?.mustChangePassword === true);
 const mismatch = computed(() => confirm.value.length > 0 && confirm.value !== next.value);
 const tooShort = computed(() => next.value.length > 0 && next.value.length < 8);
 const sameAsCurrent = computed(() => next.value.length > 0 && next.value === current.value);
-const canSubmit = computed(
-  () =>
-    !!current.value &&
-    next.value.length >= 8 &&
-    confirm.value === next.value &&
-    !sameAsCurrent.value &&
-    !loading.value,
-);
+/** Live checks above show while typing; the rules below also catch empty fields on Save. */
+const formRef = ref<{ validate(): Promise<{ valid: boolean }> } | null>(null);
 
 async function submit() {
-  if (!canSubmit.value) return;
-  loading.value = true;
+  if (loading.value) return;
   error.value = '';
+  const { valid } = (await formRef.value?.validate()) ?? { valid: true };
+  if (!valid || tooShort.value || mismatch.value || sameAsCurrent.value) {
+    error.value = t('errors.fixFields');
+    return;
+  }
+  loading.value = true;
   try {
     const result = await api.post<{ user: SessionUser }>('/api/auth/change-password', {
       currentPassword: current.value,
@@ -47,8 +48,7 @@ async function submit() {
     auth.user = result.user;
     await router.replace('/');
   } catch (e) {
-    error.value =
-      e instanceof ApiError && e.status === 401 ? t('changePassword.wrongCurrent') : t('common.error');
+    error.value = e instanceof ApiError && e.status === 401 ? t('changePassword.wrongCurrent') : errorText(e);
   } finally {
     loading.value = false;
   }
@@ -89,9 +89,10 @@ async function signOut() {
           </v-alert>
         </v-expand-transition>
 
-        <v-form @submit.prevent="submit">
+        <v-form ref="formRef" @submit.prevent="submit">
           <v-text-field
             v-model="current"
+            :rules="[rules.required]"
             :label="$t('changePassword.current')"
             :type="show ? 'text' : 'password'"
             prepend-inner-icon="lock"
@@ -102,6 +103,7 @@ async function signOut() {
           />
           <v-text-field
             v-model="next"
+            :rules="[rules.required]"
             :label="$t('changePassword.new')"
             :type="show ? 'text' : 'password'"
             prepend-inner-icon="lock"
@@ -116,6 +118,7 @@ async function signOut() {
           />
           <v-text-field
             v-model="confirm"
+            :rules="[rules.required]"
             :label="$t('changePassword.confirm')"
             :type="show ? 'text' : 'password'"
             prepend-inner-icon="lock-keyhole"
@@ -134,7 +137,6 @@ async function signOut() {
             rounded="lg"
             class="mt-5"
             :loading="loading"
-            :disabled="!canSubmit"
           >
             {{ $t('changePassword.save') }}
           </v-btn>

@@ -5,11 +5,15 @@
  * workspace, behind the selector.
  */
 import { computed, onMounted, ref } from 'vue';
+import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../api/client';
+import { api } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
+import FormErrorAlert from '../components/FormErrorAlert.vue';
+import { useForm } from '../composables/useForm';
+import { rules } from '../validation/rules';
 
 interface StaffUser { id: string; name: string; email: string; active: boolean }
 
@@ -61,7 +65,7 @@ async function load() {
     rows.value = companies;
     staff.value = users.items;
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     loading.value = false;
   }
@@ -70,19 +74,19 @@ async function load() {
 const dialog = ref<{ show: boolean; id: string | null; code: string; nameAr: string; nameEn: string; active: boolean; managerId: string | null }>({
   show: false, id: null, code: '', nameAr: '', nameEn: '', active: true, managerId: null,
 });
-const codeOk = computed(() => /^[A-Za-z][A-Za-z0-9_]{1,30}$/.test(dialog.value.code.trim()));
-const formOk = computed(() => (dialog.value.id || codeOk.value) && dialog.value.nameAr.trim() && dialog.value.nameEn.trim());
+const form = useForm();
 
 function openCreate() {
+  form.reset();
   dialog.value = { show: true, id: null, code: '', nameAr: '', nameEn: '', active: true, managerId: null };
 }
 function openEdit(c: CompanyRow) {
+  form.reset();
   dialog.value = { show: true, id: c.id, code: c.code, nameAr: c.nameAr, nameEn: c.nameEn, active: c.active, managerId: c.managerId };
 }
 
-async function save() {
-  busy.value = 'save';
-  try {
+function save() {
+  return form.submit(async () => {
     const d = dialog.value;
     if (d.id) {
       await api.put(`/api/companies/${d.id}`, { nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim(), active: d.active, managerId: d.managerId });
@@ -94,11 +98,7 @@ async function save() {
     await load();
     // A new company should appear in the switcher without a re-login.
     await auth.refreshSession();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 async function toggleActive(c: CompanyRow) {
@@ -109,7 +109,7 @@ async function toggleActive(c: CompanyRow) {
     await load();
     await auth.refreshSession();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
   }
@@ -166,25 +166,29 @@ onMounted(load);
     <v-dialog v-model="dialog.show" max-width="520">
       <v-card :title="dialog.id ? $t('company.edit') : $t('company.new')" class="pa-2">
         <v-card-text>
+          <FormErrorAlert :form="form" />
+          <v-form :ref="form.bind" @submit.prevent="save">
           <v-text-field
             v-model="dialog.code"
-            :label="$t('company.code')"
+            :label="$t('company.code') + ' *'"
             :hint="$t('company.codeHint')"
             persistent-hint
             :disabled="!!dialog.id"
-            :error="!dialog.id && dialog.code.length > 0 && !codeOk"
+            :rules="dialog.id ? [] : [rules.required, rules.handle, rules.maxLength(31)]"
+            :error-messages="form.errorsFor('code')"
             dir="ltr"
             class="mb-2"
           />
-          <v-text-field v-model="dialog.nameAr" :label="$t('company.nameAr')" />
-          <v-text-field v-model="dialog.nameEn" :label="$t('company.nameEn')" dir="ltr" />
-          <v-select v-model="dialog.managerId" :items="staffItems" :label="$t('company.manager')" :hint="$t('company.managerHint')" persistent-hint class="mb-2" />
+          <v-text-field v-model="dialog.nameAr" :label="$t('company.nameAr') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="form.errorsFor('nameAr')" dir="rtl" />
+          <v-text-field v-model="dialog.nameEn" :label="$t('company.nameEn') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="form.errorsFor('nameEn')" dir="ltr" />
+          <v-select v-model="dialog.managerId" :items="staffItems" :label="$t('company.manager')" :hint="$t('company.managerHint')" persistent-hint :error-messages="form.errorsFor('managerId')" class="mb-2" />
           <v-switch v-if="dialog.id" v-model="dialog.active" :label="$t('company.active')" color="success" hide-details />
+          </v-form>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="dialog.show = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn color="primary" :loading="busy === 'save'" :disabled="!formOk" @click="save">{{ $t('common.save') }}</v-btn>
+          <v-btn color="primary" :loading="form.busy.value" @click="save">{{ $t('common.save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

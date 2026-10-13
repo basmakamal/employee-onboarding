@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../api/client';
+import { api } from '../api/client';
 import YearCalendar from '../components/YearCalendar.vue';
 import PageHeader from '../components/PageHeader.vue';
+import FormErrorAlert from '../components/FormErrorAlert.vue';
+import { useForm } from '../composables/useForm';
+import { rules } from '../validation/rules';
 
 interface HolidayRow {
   id: string;
@@ -21,6 +25,7 @@ const snackbar = ref({ show: false, text: '', color: 'success' });
 const weekendDays = ref<number[]>([5, 6]);
 const holidays = ref<HolidayRow[]>([]);
 const newHoliday = ref({ date: '', name: '' });
+const holidayForm = useForm();
 const calendarBusy = ref(false);
 const viewYear = ref(new Date().getFullYear());
 const showYearView = ref(false);
@@ -50,27 +55,23 @@ async function saveWeekend(days: number[]) {
     weekendDays.value = days;
     notify(t('common.saved'));
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     calendarBusy.value = false;
   }
 }
 
-async function addHoliday() {
-  calendarBusy.value = true;
-  try {
+function addHoliday() {
+  return holidayForm.submit(async () => {
     await api.post('/api/settings/holidays', {
       date: newHoliday.value.date,
       name: newHoliday.value.name.trim(),
     });
     newHoliday.value = { date: '', name: '' };
+    holidayForm.reset();
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    calendarBusy.value = false;
-  }
+  });
 }
 
 async function removeHoliday(id: string) {
@@ -80,7 +81,7 @@ async function removeHoliday(id: string) {
     notify(t('common.done'));
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     calendarBusy.value = false;
   }
@@ -96,7 +97,7 @@ async function generateYear() {
     showYearView.value = true;
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     calendarBusy.value = false;
   }
@@ -152,33 +153,37 @@ onMounted(load);
         </v-list>
         <p v-else class="text-medium-emphasis mb-3">{{ $t('calendar.noHolidays') }}</p>
 
-        <div class="d-flex align-center flex-wrap mt-2" style="gap: 8px">
+        <FormErrorAlert :form="holidayForm" class="mt-2" />
+        <v-form :ref="holidayForm.bind" class="d-flex align-start flex-wrap mt-2" style="gap: 8px" @submit.prevent="addHoliday">
           <v-text-field
             v-model="newHoliday.date"
-            :label="$t('calendar.date')"
+            :label="$t('calendar.date') + ' *'"
             type="date"
             density="compact"
-            hide-details
+            hide-details="auto"
+            :rules="[rules.required, rules.date]"
+            :error-messages="holidayForm.errorsFor('date')"
             style="max-width: 200px"
           />
           <v-text-field
             v-model="newHoliday.name"
-            :label="$t('calendar.name')"
+            :label="$t('calendar.name') + ' *'"
             density="compact"
-            hide-details
+            hide-details="auto"
+            :rules="[rules.required, rules.maxLength(120)]"
+            :error-messages="holidayForm.errorsFor('name')"
             style="max-width: 280px"
           />
           <v-btn
             color="primary"
             variant="tonal"
             prepend-icon="plus"
-            :loading="calendarBusy"
-            :disabled="!newHoliday.date || !newHoliday.name.trim()"
-            @click="addHoliday"
+            :loading="holidayForm.busy.value"
+            type="submit"
           >
             {{ $t('calendar.add') }}
           </v-btn>
-        </div>
+        </v-form>
 
         <v-divider class="my-4" />
 

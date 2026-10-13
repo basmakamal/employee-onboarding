@@ -128,7 +128,7 @@ export function settingsRouter(
       asyncHandler(async (req, res) => {
         const body = req.body as z.infer<typeof groupSchema>;
         if (await groups.findByKey(body.key)) {
-          throw new GuardFailedError('DUPLICATE_KEY', `a team with key ${body.key} already exists`);
+          throw new GuardFailedError('DUPLICATE_KEY', `a team with key ${body.key} already exists`, 'key');
         }
         res.status(201).json(await groups.create(body));
       }),

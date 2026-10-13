@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
-import { api, ApiError, getAccessToken } from '../api/client';
+import { api, getAccessToken, apiErrorFrom } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
 import { useOrgOptions } from '../composables/useOrgOptions';
+import { useForm } from '../composables/useForm';
+import FormErrorAlert from '../components/FormErrorAlert.vue';
+import { rules } from '../validation/rules';
 import ProcessCard from '../components/ProcessCard.vue';
 import StatusChip from '../components/StatusChip.vue';
 import { useAuthStore } from '../stores/auth';
@@ -309,7 +313,7 @@ async function onPhotoPicked(event: Event) {
     notify(t('common.saved'));
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
     if (photoInput.value) photoInput.value.value = '';
@@ -367,9 +371,19 @@ const editForm = ref({
   hireDate: '',
 });
 
+/** One form state per dialog: rules on Save, server errors on the field that caused them. */
+const editProfileForm = useForm();
+const docFormState = useForm();
+const assetFormState = useForm();
+const withdrawForm = useForm();
+const contractFormState = useForm();
+const requestForm = useForm();
+const offboardingFormState = useForm();
+
 function openEdit() {
   const e = employee.value;
   if (!e) return;
+  editProfileForm.reset();
   void api.get<{ departments: string[]; jobTitles: string[]; projects: string[] }>('/api/employees/options')
     .then((opts) => (fieldOptions.value = opts));
   editForm.value = {
@@ -392,9 +406,8 @@ function openEdit() {
   editDialog.value = true;
 }
 
-async function saveEdit() {
-  busy.value = 'edit';
-  try {
+function saveEdit() {
+  return editProfileForm.submit(async () => {
     const f = editForm.value;
     // Empty optional fields clear the column (null); required ones are trimmed.
     await api.put(`/api/employees/${id}`, {
@@ -415,11 +428,7 @@ async function saveEdit() {
     editDialog.value = false;
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 function docDaysLeft(doc: ExpiryDoc): number {
@@ -444,12 +453,12 @@ function openDocDialog(doc?: ExpiryDoc) {
         notes: doc.notes ?? '',
       }
     : { id: '', type: 'IQAMA', customType: '', number: '', expiryDate: '', notes: '' };
+  docFormState.reset();
   docDialog.value = true;
 }
 
-async function saveDoc() {
-  busy.value = 'doc';
-  try {
+function saveDoc() {
+  return docFormState.submit(async () => {
     const body = {
       type: docForm.value.type === 'CUSTOM' ? docForm.value.customType.trim() : docForm.value.type,
       number: docForm.value.number.trim() || undefined,
@@ -461,11 +470,7 @@ async function saveDoc() {
     docDialog.value = false;
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 async function removeDoc(docId: string) {
@@ -475,7 +480,7 @@ async function removeDoc(docId: string) {
     notify(t('common.done'));
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
   }
@@ -492,15 +497,19 @@ async function actOnProcess(
     notify(t('common.done'));
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
   }
 }
 
-async function createAssetForm() {
-  busy.value = 'form';
-  try {
+function openAssetForm() {
+  assetFormState.reset();
+  formDialog.value = true;
+}
+
+function createAssetForm() {
+  return assetFormState.submit(async () => {
     const items = newForm.value.items
       .filter((i) => i.type.trim() && i.name.trim())
       .map((i) => ({
@@ -520,11 +529,7 @@ async function createAssetForm() {
     newForm.value = { deliveryDate: '', items: [emptyItem()] };
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 async function actOnForm(formId: string, action: 'send' | 'cancel' | 'revise') {
@@ -535,7 +540,7 @@ async function actOnForm(formId: string, action: 'send' | 'cancel' | 'revise') {
     notify(t('common.done'));
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
   }
@@ -625,7 +630,7 @@ async function setContractStatus(status: ContractStatus, reason?: string) {
     notify(status === 'ACTIVE' ? t('contract.activated', { name }) : t('contract.statusChanged'));
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
   }
@@ -635,9 +640,8 @@ async function setContractStatus(status: ContractStatus, reason?: string) {
 const withdrawDialog = ref(false);
 const withdrawReason = ref('');
 
-async function withdrawEmployee() {
-  busy.value = 'withdraw';
-  try {
+function withdrawEmployee() {
+  return withdrawForm.submit(async () => {
     const result = await api.post<{ halted: { links: number; assetForms: number; processes: string[] } | null }>(
       `/api/employees/${id}/withdraw`,
       { reason: withdrawReason.value.trim() },
@@ -650,11 +654,7 @@ async function withdrawEmployee() {
         : t('withdraw.done'),
     );
     await load();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 const onboardingButtons = computed(() => {
@@ -688,7 +688,7 @@ async function runOnboardingAction(
     notify(successMessage ?? t('common.done'));
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
   }
@@ -793,15 +793,12 @@ async function attachProcessDoc(kind: 'gosi' | 'medical' | 'criminal', file: Fil
       body,
     });
     if (!res.ok) {
-      const data = (await res.json().catch(() => null)) as {
-        error?: { message?: string };
-      } | null;
-      throw new Error(data?.error?.message ?? t('common.error'));
+      throw await apiErrorFrom(res);
     }
     notify(t('common.done'));
     await load();
   } catch (e) {
-    notify(e instanceof Error ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
   }
@@ -832,8 +829,7 @@ async function uploadContractFile(file: File) {
     body,
   });
   if (!res.ok) {
-    const data = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-    throw new Error(data?.error?.message ?? t('common.error'));
+    throw await apiErrorFrom(res);
   }
 }
 
@@ -847,12 +843,12 @@ function openContractDialog() {
   };
   contractExternalRef.value = c?.externalRef ?? '';
   contractFile.value = null;
+  contractFormState.reset();
   contractDialog.value = true;
 }
 
-async function saveContract() {
-  busy.value = 'contract';
-  try {
+function saveContract() {
+  return contractFormState.submit(async () => {
     if (contractFile.value) await uploadContractFile(contractFile.value);
     const details: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(contractForm.value)) if (v.trim()) details[k] = v.trim();
@@ -863,11 +859,7 @@ async function saveContract() {
     contractDialog.value = false;
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    notify(e instanceof Error ? e.message : t('common.error'), 'error');
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 // ------------------------------------------------------------- requests & services
@@ -901,6 +893,7 @@ const requestDialog = ref<{ show: boolean; type: string; notes: string; file: Fi
 const requestFileInput = ref<HTMLInputElement | null>(null);
 
 function openRequest(type: string) {
+  requestForm.reset();
   requestDialog.value = { show: true, type, notes: '', file: null };
 }
 
@@ -911,9 +904,8 @@ function onRequestFilePicked(e: Event) {
 }
 
 /** Multipart so the document (when chosen) rides along with the request. */
-async function submitRequest() {
-  busy.value = 'request';
-  try {
+function submitRequest() {
+  return requestForm.submit(async () => {
     const body = new FormData();
     body.append('type', requestDialog.value.type);
     const notes = requestDialog.value.notes.trim();
@@ -923,11 +915,7 @@ async function submitRequest() {
     requestDialog.value.show = false;
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 // The history is grouped by type — salary letters together, warnings
@@ -981,7 +969,7 @@ async function onRequestAttachPicked(e: Event) {
     notify(t('requests.attached'));
     await load();
   } catch (err) {
-    notify(err instanceof ApiError ? err.message : t('common.error'), 'error');
+    notify(errorText(err), 'error');
   } finally {
     busy.value = '';
   }
@@ -1010,7 +998,7 @@ async function generateLetter(request: RequestRow) {
     });
     letterDialog.value.text = letter;
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
     letterDialog.value.show = false;
   } finally {
     letterDialog.value.loading = false;
@@ -1251,7 +1239,7 @@ async function onScanPicked(event: Event) {
     if (extracted.notes) docForm.value.notes = extracted.notes;
     notify(t('ai.scanned'));
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
     if (scanInput.value) scanInput.value.value = '';
@@ -1333,7 +1321,7 @@ async function removeEmployee() {
     deleteDialog.value = false;
     await router.push('/employees');
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
     busy.value = '';
   }
 }
@@ -1346,9 +1334,13 @@ const openOffboarding = computed(() =>
   employee.value?.offboardings.find((o) => !['CLOSED', 'CANCELLED'].includes(o.status)),
 );
 
-async function startOffboarding() {
-  busy.value = 'offboarding';
-  try {
+function openOffboardingDialog() {
+  offboardingFormState.reset();
+  offboardingDialog.value = true;
+}
+
+function startOffboarding() {
+  return offboardingFormState.submit(async () => {
     const created = await api.post<{ id: string }>('/api/offboardings', {
       employeeId: id,
       reason: offboardingForm.value.reason,
@@ -1356,11 +1348,7 @@ async function startOffboarding() {
     });
     offboardingDialog.value = false;
     await router.push(`/offboardings/${created.id}`);
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 
@@ -1417,7 +1405,7 @@ const allActions = computed<HeaderAction[]>(() => {
     });
   }
   if (auth.can('assets.manage') && !isClosed.value) {
-    out.push({ key: 'asset', label: t('assets.newForm'), icon: 'laptop', run: () => { formDialog.value = true; } });
+    out.push({ key: 'asset', label: t('assets.newForm'), icon: 'laptop', run: openAssetForm });
   }
   if (!isPipeline.value && !isClosed.value && auth.can('employees.write')) {
     out.push({ key: 'doc', label: t('expiryDocs.add'), icon: 'file-clock', run: () => openDocDialog() });
@@ -1428,10 +1416,10 @@ const allActions = computed<HeaderAction[]>(() => {
 
   const danger: HeaderAction[] = [];
   if (!openOffboarding.value && e.status === 'ACTIVE' && auth.can('offboarding.manage')) {
-    danger.push({ key: 'offboard', label: t('profile.endContract'), icon: 'log-out', destructive: true, run: () => { offboardingDialog.value = true; } });
+    danger.push({ key: 'offboard', label: t('profile.endContract'), icon: 'log-out', destructive: true, run: openOffboardingDialog });
   }
   if (e.availableActions.includes('WITHDRAW')) {
-    danger.push({ key: 'withdraw', label: t('withdraw.button'), icon: 'user-x', destructive: true, run: () => { withdrawReason.value = ''; withdrawDialog.value = true; } });
+    danger.push({ key: 'withdraw', label: t('withdraw.button'), icon: 'user-x', destructive: true, run: () => { withdrawReason.value = ''; withdrawForm.reset(); withdrawDialog.value = true; } });
   }
   if (auth.can('employees.delete')) {
     danger.push({ key: 'delete', label: t('profile.delete'), icon: 'trash-2', destructive: true, run: () => { deleteDialog.value = true; } });
@@ -1996,7 +1984,7 @@ onMounted(load);
                 color="primary"
                 size="small"
                 prepend-icon="plus"
-                @click="formDialog = true"
+                @click="openAssetForm"
               >
                 {{ $t('assets.newForm') }}
               </v-btn>
@@ -2268,8 +2256,11 @@ onMounted(load);
     <v-dialog v-model="formDialog" max-width="760">
       <v-card :title="$t('assets.newForm')" class="pa-2">
         <v-card-text>
+          <FormErrorAlert :form="assetFormState" />
+          <v-form :ref="assetFormState.bind" @submit.prevent="createAssetForm">
           <v-text-field
             v-model="newForm.deliveryDate"
+            :error-messages="assetFormState.errorsFor('deliveryDate')"
             :label="$t('assets.deliveryDate')"
             type="date"
             style="max-width: 240px"
@@ -2277,11 +2268,11 @@ onMounted(load);
           <div v-for="(item, i) in newForm.items" :key="i" class="item-row mb-2">
             <v-row dense>
               <v-col cols="6" sm="2">
-                <v-combobox v-model="item.type" :items="lists.items('ASSET_TYPE')" item-title="title" item-value="value" :return-object="false" :label="$t('assets.type')" density="compact" />
+                <v-combobox v-model="item.type" :items="lists.items('ASSET_TYPE')" item-title="title" item-value="value" :return-object="false" :label="$t('assets.type') + ' *'" density="compact" :rules="[rules.required]" :error-messages="assetFormState.errorsFor(`items.${i}.type`)" />
               </v-col>
-              <v-col cols="6" sm="3"><v-text-field v-model="item.name" :label="$t('assets.name')" density="compact" /></v-col>
+              <v-col cols="6" sm="3"><v-text-field v-model="item.name" :label="$t('assets.name') + ' *'" density="compact" :rules="[rules.required, rules.maxLength(200)]" :error-messages="assetFormState.errorsFor(`items.${i}.name`)" /></v-col>
               <v-col cols="6" sm="3"><v-text-field v-model="item.serialNumber" :label="$t('assets.serial')" density="compact" /></v-col>
-              <v-col cols="3" sm="1"><v-text-field v-model.number="item.quantity" :label="$t('assets.qty')" type="number" min="1" density="compact" /></v-col>
+              <v-col cols="3" sm="1"><v-text-field v-model.number="item.quantity" :label="$t('assets.qty')" type="number" min="1" density="compact" :rules="[rules.integer(1)]" :error-messages="assetFormState.errorsFor(`items.${i}.quantity`)" /></v-col>
               <v-col cols="3" sm="2">
                 <v-select
                   v-model="item.condition"
@@ -2305,14 +2296,14 @@ onMounted(load);
           <v-btn variant="tonal" size="small" prepend-icon="plus" @click="newForm.items.push(emptyItem())">
             {{ $t('assets.addItem') }}
           </v-btn>
+          </v-form>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="formDialog = false">{{ $t('common.cancel') }}</v-btn>
           <v-btn
             color="primary"
-            :loading="busy === 'form'"
-            :disabled="!newForm.items.some((i) => i.type.trim() && i.name.trim())"
+            :loading="assetFormState.busy.value"
             @click="createAssetForm"
           >
             {{ $t('common.create') }}
@@ -2365,7 +2356,17 @@ onMounted(load);
           <v-alert type="warning" variant="tonal" density="compact" class="mb-4">
             {{ $t('withdraw.hint') }}
           </v-alert>
-          <v-textarea v-model="withdrawReason" :label="$t('withdraw.reason')" rows="2" auto-grow />
+          <FormErrorAlert :form="withdrawForm" />
+          <v-form :ref="withdrawForm.bind" @submit.prevent="withdrawEmployee">
+            <v-textarea
+              v-model="withdrawReason"
+              :label="$t('withdraw.reason') + ' *'"
+              :rules="[rules.required, rules.maxLength(1000)]"
+              :error-messages="withdrawForm.errorsFor('reason')"
+              rows="2"
+              auto-grow
+            />
+          </v-form>
         </v-card-text>
         <v-card-actions class="px-6 pb-5 pt-2">
           <v-spacer />
@@ -2374,8 +2375,7 @@ onMounted(load);
             variant="flat"
             color="error"
             class="px-5"
-            :loading="busy === 'withdraw'"
-            :disabled="!withdrawReason.trim()"
+            :loading="withdrawForm.busy.value"
             @click="withdrawEmployee"
           >
             {{ $t('withdraw.confirm') }}
@@ -2402,6 +2402,7 @@ onMounted(load);
     <v-dialog v-model="docDialog" max-width="480">
       <v-card :title="docForm.id ? $t('expiryDocs.edit') : $t('expiryDocs.add')" class="pa-2">
         <v-card-text>
+          <FormErrorAlert :form="docFormState" />
           <v-btn
             variant="tonal"
             color="secondary"
@@ -2421,8 +2422,11 @@ onMounted(load);
             class="d-none"
             @change="onScanPicked"
           />
+          <v-form :ref="docFormState.bind" @submit.prevent="saveDoc">
           <v-select
             v-model="docForm.type"
+            :rules="[rules.required]"
+            :error-messages="docFormState.errorsFor('type')"
             :items="[
               ...lists.items('DOC_TYPE').map((o) => ({
                 title: o.title,
@@ -2440,11 +2444,13 @@ onMounted(load);
           <v-text-field
             v-if="docForm.type === 'CUSTOM'"
             v-model="docForm.customType"
-            :label="$t('expiryDocs.customType')"
+            :label="$t('expiryDocs.customType') + ' *'"
+            :rules="[rules.required, rules.maxLength(60)]"
           />
-          <v-text-field v-model="docForm.number" :label="$t('expiryDocs.number')" />
-          <v-text-field v-model="docForm.expiryDate" :label="$t('expiryDocs.expiry')" type="date" />
-          <v-textarea v-model="docForm.notes" :label="$t('assets.notes')" rows="2" />
+          <v-text-field v-model="docForm.number" :label="$t('expiryDocs.number')" :error-messages="docFormState.errorsFor('number')" />
+          <v-text-field v-model="docForm.expiryDate" :label="$t('expiryDocs.expiry') + ' *'" type="date" :rules="[rules.required, rules.date]" :error-messages="docFormState.errorsFor('expiryDate')" />
+          <v-textarea v-model="docForm.notes" :label="$t('assets.notes')" rows="2" :error-messages="docFormState.errorsFor('notes')" />
+          </v-form>
           <v-alert v-if="docForm.id" type="info" variant="tonal" density="compact">
             {{ $t('expiryDocs.renewHint') }}
           </v-alert>
@@ -2454,8 +2460,7 @@ onMounted(load);
           <v-btn variant="text" @click="docDialog = false">{{ $t('common.cancel') }}</v-btn>
           <v-btn
             color="primary"
-            :loading="busy === 'doc'"
-            :disabled="!docForm.expiryDate || (docForm.type === 'CUSTOM' && !docForm.customType.trim())"
+            :loading="docFormState.busy.value"
             @click="saveDoc"
           >
             {{ $t('common.save') }}
@@ -2561,6 +2566,7 @@ onMounted(load);
     <v-dialog v-model="contractDialog" max-width="560">
       <v-card :title="$t('contractCard.title')" class="pa-2">
         <v-card-text>
+          <FormErrorAlert :form="contractFormState" />
           <p class="text-caption text-medium-emphasis mt-0 mb-4">{{ $t('contract.optionalHint') }}</p>
           <div class="contract-file mb-4">
             <div class="d-flex align-center ga-3 flex-wrap">
@@ -2592,18 +2598,21 @@ onMounted(load);
               />
             </div>
           </div>
+          <v-form :ref="contractFormState.bind" @submit.prevent="saveContract">
           <v-row dense>
-            <v-col cols="6"><v-text-field v-model="contractForm.salary" :label="$t('contract.salary')" /></v-col>
+            <v-col cols="6"><v-text-field v-model="contractForm.salary" :label="$t('contract.salary')" :error-messages="contractFormState.errorsFor('details.salary')" /></v-col>
             <v-col cols="6">
-              <v-text-field v-model="contractForm.durationMonths" :label="$t('contract.durationMonths')" type="number" min="1" />
+              <v-text-field v-model="contractForm.durationMonths" :label="$t('contract.durationMonths')" type="number" min="1" :rules="[rules.integer(1)]" :error-messages="contractFormState.errorsFor('details.durationMonths')" />
             </v-col>
             <v-col cols="12">
-              <v-text-field v-model="contractForm.startDate" :label="$t('contract.startDate')" type="date" />
+              <v-text-field v-model="contractForm.startDate" :label="$t('contract.startDate')" type="date" :rules="[rules.date]" :error-messages="contractFormState.errorsFor('details.startDate')" />
             </v-col>
             <v-col cols="12">
               <v-textarea v-model="contractForm.terms" :label="$t('contract.terms')" rows="3" />
               <v-text-field
                 v-model="contractExternalRef"
+                :rules="[rules.maxLength(120)]"
+                :error-messages="contractFormState.errorsFor('externalRef')"
                 :label="$t('contract.externalRef')"
                 :hint="$t('contract.externalRefHint')"
                 persistent-hint
@@ -2611,11 +2620,12 @@ onMounted(load);
               />
             </v-col>
           </v-row>
+          </v-form>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="contractDialog = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn color="primary" :loading="busy === 'contract'" @click="saveContract">
+          <v-btn color="primary" :loading="contractFormState.busy.value" @click="saveContract">
             {{ $t('common.save') }}
           </v-btn>
         </v-card-actions>
@@ -2626,8 +2636,10 @@ onMounted(load);
     <v-dialog v-model="requestDialog.show" max-width="440">
       <v-card :title="$t('requests.new')" class="pa-2">
         <v-card-text>
+          <FormErrorAlert :form="requestForm" />
           <v-select
             v-model="requestDialog.type"
+            :error-messages="requestForm.errorsFor('type')"
             :items="
               REQUEST_TYPES.map((r) => ({
                 title: $t(`requests.types.${r.type}`),
@@ -2637,7 +2649,7 @@ onMounted(load);
             "
             :label="$t('requests.title')"
           />
-          <v-textarea v-model="requestDialog.notes" :label="$t('requests.notes')" rows="3" />
+          <v-textarea v-model="requestDialog.notes" :label="$t('requests.notes')" rows="3" :error-messages="requestForm.errorsFor('notes')" />
           <div class="text-caption text-medium-emphasis mb-1">{{ $t('requests.attachDocument') }}</div>
           <div class="d-flex align-center flex-wrap ga-2">
             <v-btn size="small" variant="tonal" prepend-icon="paperclip" @click="requestFileInput?.click()">
@@ -2666,7 +2678,7 @@ onMounted(load);
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="requestDialog.show = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn color="primary" :loading="busy === 'request'" @click="submitRequest">
+          <v-btn color="primary" :loading="requestForm.busy.value" @click="submitRequest">
             {{ $t('common.save') }}
           </v-btn>
         </v-card-actions>
@@ -2677,27 +2689,29 @@ onMounted(load);
     <v-dialog v-model="editDialog" max-width="720">
       <v-card :title="$t('profile.edit')" class="pa-2">
         <v-card-text>
+          <FormErrorAlert :form="editProfileForm" />
+          <v-form :ref="editProfileForm.bind" @submit.prevent="saveEdit">
           <v-row dense>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.firstName" :label="$t('fields.firstName')" />
+              <v-text-field v-model="editForm.firstName" :label="$t('fields.firstName') + ' *'" :rules="[rules.required, rules.maxLength(100)]" :error-messages="editProfileForm.errorsFor('firstName')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.lastName" :label="$t('fields.lastName')" />
+              <v-text-field v-model="editForm.lastName" :label="$t('fields.lastName') + ' *'" :rules="[rules.required, rules.maxLength(100)]" :error-messages="editProfileForm.errorsFor('lastName')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.email" :label="$t('fields.email')" type="email" />
+              <v-text-field v-model="editForm.email" :label="$t('fields.email') + ' *'" type="email" dir="ltr" :rules="[rules.required, rules.email]" :error-messages="editProfileForm.errorsFor('email')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.phone" :label="$t('fields.phone')" />
+              <v-text-field v-model="editForm.phone" :label="$t('fields.phone')" dir="ltr" :error-messages="editProfileForm.errorsFor('phone')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.nationalId" :label="$t('fields.nationalId')" />
+              <v-text-field v-model="editForm.nationalId" :label="$t('fields.nationalId')" dir="ltr" :error-messages="editProfileForm.errorsFor('nationalId')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.birthDate" :label="$t('fields.birthDate')" type="date" />
+              <v-text-field v-model="editForm.birthDate" :label="$t('fields.birthDate')" type="date" :rules="[rules.date]" :error-messages="editProfileForm.errorsFor('birthDate')" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-select v-model="editForm.orgUnitId" :items="org.unitItems.value" :label="$t('fields.orgUnit')" :hint="org.hasUnits.value ? '' : $t('fields.orgNone')" persistent-hint clearable />
+              <v-select v-model="editForm.orgUnitId" :items="org.unitItems.value" :label="$t('fields.orgUnit')" :hint="org.hasUnits.value ? '' : $t('fields.orgNone')" persistent-hint clearable :error-messages="editProfileForm.errorsFor('orgUnitId')" />
             </v-col>
             <v-col cols="12" sm="6">
               <v-combobox
@@ -2713,7 +2727,7 @@ onMounted(load);
               />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-select v-model="editForm.positionId" :items="org.titleItems.value" :label="$t('fields.position')" :hint="org.hasTitles.value ? '' : $t('fields.titlesNone')" persistent-hint clearable />
+              <v-select v-model="editForm.positionId" :items="org.titleItems.value" :label="$t('fields.position')" :hint="org.hasTitles.value ? '' : $t('fields.titlesNone')" persistent-hint clearable :error-messages="editProfileForm.errorsFor('positionId')" />
             </v-col>
             <v-col cols="12" sm="6">
               <v-autocomplete
@@ -2724,6 +2738,7 @@ onMounted(load);
                 persistent-hint
                 clearable
                 no-filter
+                :error-messages="editProfileForm.errorsFor('managerId')"
                 @update:search="(q: string) => org.searchManagers(q, id)"
               />
             </v-col>
@@ -2735,7 +2750,7 @@ onMounted(load);
               />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.hireDate" :label="$t('employees.hireDate')" type="date" />
+              <v-text-field v-model="editForm.hireDate" :label="$t('employees.hireDate') + ' *'" type="date" :rules="[rules.required, rules.date]" :error-messages="editProfileForm.errorsFor('hireDate')" />
             </v-col>
             <v-col cols="12" sm="6">
               <v-select
@@ -2748,14 +2763,14 @@ onMounted(load);
               />
             </v-col>
           </v-row>
+          </v-form>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="editDialog = false">{{ $t('common.cancel') }}</v-btn>
           <v-btn
             color="primary"
-            :loading="busy === 'edit'"
-            :disabled="!editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim() || !editForm.hireDate"
+            :loading="editProfileForm.busy.value"
             @click="saveEdit"
           >
             {{ $t('common.save') }}
@@ -2768,20 +2783,25 @@ onMounted(load);
     <v-dialog v-model="offboardingDialog" max-width="480">
       <v-card :title="$t('offboarding.start')" class="pa-2">
         <v-card-text>
+          <FormErrorAlert :form="offboardingFormState" />
+          <v-form :ref="offboardingFormState.bind" @submit.prevent="startOffboarding">
           <v-select
             v-model="offboardingForm.reason"
             :items="OFFBOARDING_REASONS.map((r) => ({ title: $t(`offboardingReasons.${r}`), value: r }))"
-            :label="$t('offboarding.reason')"
+            :label="$t('offboarding.reason') + ' *'"
+            :rules="[rules.required]"
+            :error-messages="offboardingFormState.errorsFor('reason')"
           />
           <v-alert type="info" variant="tonal" density="compact" class="mb-3">
             {{ $t('offboarding.stopsOpenWork') }}
           </v-alert>
-          <v-textarea v-model="offboardingForm.notes" :label="$t('assets.notes')" rows="2" />
+          <v-textarea v-model="offboardingForm.notes" :label="$t('assets.notes')" rows="2" :error-messages="offboardingFormState.errorsFor('notes')" />
+          </v-form>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="offboardingDialog = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn color="warning" :loading="busy === 'offboarding'" @click="startOffboarding">
+          <v-btn color="warning" :loading="offboardingFormState.busy.value" @click="startOffboarding">
             {{ $t('common.create') }}
           </v-btn>
         </v-card-actions>

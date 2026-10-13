@@ -15,10 +15,11 @@
  * The rules mirror the server's data-form.schema.ts — the server remains the
  * authority, this is just fast feedback.
  */
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { describeError } from '../../validation/errors';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../../api/client';
+import { api } from '../../api/client';
 import { usePreferencesStore } from '../../stores/preferences';
 import { useListsStore } from '../../stores/lists';
 
@@ -69,6 +70,8 @@ const state = ref<'loading' | 'ready' | 'submitting' | 'done' | 'invalid'>('load
 const ctx = ref<FormContext | null>(null);
 const error = ref('');
 const showErrors = ref(false);
+/** Problems the server found that the page could not (e.g. a file type), keyed by field. */
+const serverFields = ref<Record<string, string[]>>({});
 
 const fields = ref({
   firstName: '',
@@ -152,7 +155,11 @@ const problems = computed<Partial<Record<FieldKey, string>>>(() => {
 });
 
 /** What the field shows under itself right now. */
+// Once the person edits anything, the server's earlier verdict no longer applies.
+watch(fields, () => (serverFields.value = {}), { deep: true });
+
 function errorsFor(key: FieldKey): string[] {
+  if (serverFields.value[key]?.length) return serverFields.value[key];
   const message = problems.value[key];
   if (!message) return [];
   const filled = String(fields.value[key] ?? '').trim() !== '';
@@ -241,6 +248,7 @@ async function submit() {
 
   state.value = 'submitting';
   error.value = '';
+  serverFields.value = {};
   const body = new FormData();
   const values = {
     ...fields.value,
@@ -255,8 +263,12 @@ async function submit() {
     await api.post(`/api/link/${token}/form`, body);
     state.value = 'done';
   } catch (e) {
-    error.value = e instanceof ApiError ? e.message : t('common.error');
+    const d = describeError(e);
+    error.value = d.lines.length ? `${d.message} ${d.lines.join(' ')}` : d.message;
+    serverFields.value = d.fields;
     state.value = 'ready';
+    await nextTick();
+    document.querySelector('.v-input--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
 </script>

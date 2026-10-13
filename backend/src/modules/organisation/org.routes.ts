@@ -4,7 +4,8 @@ import { asyncHandler, validate } from '../../common/http.js';
 import { contextOf, requirePermission } from '../../auth/authz/authorize.js';
 import type { OrgService } from './org.service.js';
 
-const CODE = z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_-]{0,40}$/);
+/** Unit / title codes: letters or digits first (e.g. CS-CALL, 52), then letters, digits, dash, underscore. */
+const CODE = z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,40}$/);
 
 const unitSchema = z.object({
   parentId: z.string().min(1).nullable().optional(),

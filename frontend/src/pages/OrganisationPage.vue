@@ -5,13 +5,17 @@
  * the selected company — the server refuses anything else.
  */
 import { computed, onMounted, ref } from 'vue';
+import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../api/client';
+import { api } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 import { useConfirm } from '../composables/useConfirm';
 import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
+import FormErrorAlert from '../components/FormErrorAlert.vue';
+import { useForm } from '../composables/useForm';
+import { rules } from '../validation/rules';
 
 interface Unit {
   id: string;
@@ -53,7 +57,7 @@ const loading = ref(true);
 const busy = ref('');
 const snackbar = ref({ show: false, text: '', color: 'success' });
 const notify = (text: string, color = 'success') => (snackbar.value = { show: true, text, color });
-const fail = (e: unknown) => notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+const fail = (e: unknown) => notify(errorText(e), 'error');
 
 async function load() {
   loading.value = true;
@@ -105,17 +109,18 @@ const parentItems = (self?: Unit) =>
 const unitDialog = ref<{ show: boolean; id: string | null; parentId: string | null; type: string; code: string; nameAr: string; nameEn: string; managerId: string | null; active: boolean }>({
   show: false, id: null, parentId: null, type: 'DEPARTMENT', code: '', nameAr: '', nameEn: '', managerId: null, active: true,
 });
-const unitOk = computed(() => /^[A-Za-z][A-Za-z0-9_-]{0,40}$/.test(unitDialog.value.code.trim()) && unitDialog.value.nameAr.trim() && unitDialog.value.nameEn.trim());
+const unitForm = useForm();
+const titleForm = useForm();
 
 function openUnit(parent?: Unit, existing?: Unit) {
+  unitForm.reset();
   unitDialog.value = existing
     ? { show: true, id: existing.id, parentId: existing.parentId, type: existing.type, code: existing.code, nameAr: existing.nameAr, nameEn: existing.nameEn, managerId: existing.managerId, active: existing.active }
     : { show: true, id: null, parentId: parent?.id ?? null, type: parent ? 'DEPARTMENT' : 'BRANCH', code: '', nameAr: '', nameEn: '', managerId: null, active: true };
 }
 
-async function saveUnit() {
-  busy.value = 'unit';
-  try {
+function saveUnit() {
+  return unitForm.submit(async () => {
     const d = unitDialog.value;
     const body = { parentId: d.parentId, type: d.type, code: d.code.trim(), nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim(), managerId: d.managerId, active: d.active };
     if (d.id) await api.put(`/api/org/units/${d.id}`, body);
@@ -123,11 +128,7 @@ async function saveUnit() {
     unitDialog.value.show = false;
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    fail(e);
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 async function removeUnit(u: Unit) {
@@ -148,15 +149,14 @@ async function removeUnit(u: Unit) {
 const titleDialog = ref<{ show: boolean; id: string | null; code: string; titleAr: string; titleEn: string; active: boolean }>({
   show: false, id: null, code: '', titleAr: '', titleEn: '', active: true,
 });
-const titleOk = computed(() => /^[A-Za-z][A-Za-z0-9_-]{0,40}$/.test(titleDialog.value.code.trim()) && titleDialog.value.titleAr.trim() && titleDialog.value.titleEn.trim());
 function openTitle(existing?: Title) {
+  titleForm.reset();
   titleDialog.value = existing
     ? { show: true, id: existing.id, code: existing.code, titleAr: existing.titleAr, titleEn: existing.titleEn, active: existing.active }
     : { show: true, id: null, code: '', titleAr: '', titleEn: '', active: true };
 }
-async function saveTitle() {
-  busy.value = 'title';
-  try {
+function saveTitle() {
+  return titleForm.submit(async () => {
     const d = titleDialog.value;
     const body = { code: d.code.trim(), titleAr: d.titleAr.trim(), titleEn: d.titleEn.trim(), active: d.active };
     if (d.id) await api.put(`/api/org/positions/${d.id}`, body);
@@ -164,11 +164,7 @@ async function saveTitle() {
     titleDialog.value.show = false;
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    fail(e);
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 async function removeTitle(p: Title) {
   if (!(await confirm({ title: t('org.deleteTitle'), message: t('org.deleteTitleConfirm', { name: title(p) }), color: 'error', confirmText: t('common.delete'), icon: 'trash-2' }))) return;
@@ -293,18 +289,21 @@ onMounted(async () => {
     <v-dialog v-model="unitDialog.show" max-width="560">
       <v-card :title="unitDialog.id ? $t('org.editUnit') : $t('org.newUnit')" class="pa-2">
         <v-card-text>
-          <v-select v-model="unitDialog.parentId" :items="parentItems(units.find((x) => x.id === unitDialog.id))" :label="$t('org.parent')" class="mb-1" />
-          <v-select v-model="unitDialog.type" :items="typeItems" item-title="title" item-value="value" :label="$t('org.type')" class="mb-1" />
-          <v-text-field v-model="unitDialog.code" :label="$t('org.code')" :hint="$t('org.codeHint')" persistent-hint dir="ltr" class="mb-2" />
-          <v-text-field v-model="unitDialog.nameAr" :label="$t('org.nameAr')" />
-          <v-text-field v-model="unitDialog.nameEn" :label="$t('org.nameEn')" dir="ltr" />
-          <v-select v-if="auth.can('users.manage')" v-model="unitDialog.managerId" :items="staffItems" :label="$t('org.manager')" :hint="$t('org.managerHint')" persistent-hint class="mb-2" />
+          <FormErrorAlert :form="unitForm" />
+          <v-form :ref="unitForm.bind" @submit.prevent="saveUnit">
+          <v-select v-model="unitDialog.parentId" :items="parentItems(units.find((x) => x.id === unitDialog.id))" :label="$t('org.parent')" :error-messages="unitForm.errorsFor('parentId')" class="mb-1" />
+          <v-select v-model="unitDialog.type" :items="typeItems" item-title="title" item-value="value" :label="$t('org.type')" :rules="[rules.required]" :error-messages="unitForm.errorsFor('type')" class="mb-1" />
+          <v-text-field v-model="unitDialog.code" :label="$t('org.code') + ' *'" :hint="$t('org.codeHint')" persistent-hint :rules="[rules.required, rules.unitCode]" :error-messages="unitForm.errorsFor('code')" dir="ltr" class="mb-2" />
+          <v-text-field v-model="unitDialog.nameAr" :label="$t('org.nameAr') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="unitForm.errorsFor('nameAr')" dir="rtl" />
+          <v-text-field v-model="unitDialog.nameEn" :label="$t('org.nameEn') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="unitForm.errorsFor('nameEn')" dir="ltr" />
+          <v-select v-if="auth.can('users.manage')" v-model="unitDialog.managerId" :items="staffItems" :label="$t('org.manager')" :hint="$t('org.managerHint')" persistent-hint :error-messages="unitForm.errorsFor('managerId')" class="mb-2" />
           <v-switch v-if="unitDialog.id" v-model="unitDialog.active" :label="$t('company.active')" color="success" hide-details />
+          </v-form>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="unitDialog.show = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn color="primary" :loading="busy === 'unit'" :disabled="!unitOk" @click="saveUnit">{{ $t('common.save') }}</v-btn>
+          <v-btn color="primary" :loading="unitForm.busy.value" @click="saveUnit">{{ $t('common.save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -313,15 +312,18 @@ onMounted(async () => {
     <v-dialog v-model="titleDialog.show" max-width="520">
       <v-card :title="titleDialog.id ? $t('org.editTitle') : $t('org.newTitle')" class="pa-2">
         <v-card-text>
-          <v-text-field v-model="titleDialog.code" :label="$t('org.code')" :hint="$t('org.codeHint')" persistent-hint dir="ltr" class="mb-2" />
-          <v-text-field v-model="titleDialog.titleAr" :label="$t('org.titleAr')" />
-          <v-text-field v-model="titleDialog.titleEn" :label="$t('org.titleEn')" dir="ltr" />
+          <FormErrorAlert :form="titleForm" />
+          <v-form :ref="titleForm.bind" @submit.prevent="saveTitle">
+          <v-text-field v-model="titleDialog.code" :label="$t('org.code') + ' *'" :hint="$t('org.codeHint')" persistent-hint :rules="[rules.required, rules.unitCode]" :error-messages="titleForm.errorsFor('code')" dir="ltr" class="mb-2" />
+          <v-text-field v-model="titleDialog.titleAr" :label="$t('org.titleAr') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="titleForm.errorsFor('titleAr')" dir="rtl" />
+          <v-text-field v-model="titleDialog.titleEn" :label="$t('org.titleEn') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="titleForm.errorsFor('titleEn')" dir="ltr" />
           <v-switch v-if="titleDialog.id" v-model="titleDialog.active" :label="$t('company.active')" color="success" hide-details />
+          </v-form>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="titleDialog.show = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn color="primary" :loading="busy === 'title'" :disabled="!titleOk" @click="saveTitle">{{ $t('common.save') }}</v-btn>
+          <v-btn color="primary" :loading="titleForm.busy.value" @click="saveTitle">{{ $t('common.save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

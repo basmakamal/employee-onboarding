@@ -46,6 +46,19 @@ export interface SessionUser {
   mustChangePassword?: boolean;
 }
 
+/**
+ * For the few raw fetch() calls (multipart uploads): read the API's error
+ * envelope into the same ApiError the helpers throw, so the code — and the
+ * translated message — survive.
+ */
+export async function apiErrorFrom(res: Response): Promise<ApiError> {
+  const data = (await res.json().catch(() => null)) as {
+    error?: { code?: string; message?: string; details?: never };
+  } | null;
+  const err = data?.error;
+  return new ApiError(err?.code ?? 'UNKNOWN', err?.message ?? res.statusText, res.status, err?.details);
+}
+
 export function setAccessToken(token: string) {
   accessToken = token;
 }

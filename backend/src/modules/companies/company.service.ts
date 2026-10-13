@@ -63,7 +63,7 @@ export class CompanyService {
   async create(input: CompanyInput, actor: Actor) {
     const code = input.code.trim().toUpperCase();
     if (await this.db.company.findUnique({ where: { code } })) {
-      throw new GuardFailedError('DUPLICATE_CODE', `a company with code ${code} already exists`);
+      throw new GuardFailedError('DUPLICATE_CODE', `a company with code ${code} already exists`, 'code');
     }
     const row = await this.db.company.create({
       data: {

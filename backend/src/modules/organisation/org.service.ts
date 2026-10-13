@@ -81,7 +81,7 @@ export class OrgService {
     const code = input.code.trim().toUpperCase();
     await this.assertCodeFree(ctx.companyId, code);
     const parent = input.parentId ? await this.getUnit(ctx, input.parentId) : null;
-    if (parent && !parent.active) throw new GuardFailedError('PARENT_INACTIVE', 'the parent unit is inactive');
+    if (parent && !parent.active) throw new GuardFailedError('PARENT_INACTIVE', 'the parent unit is inactive', 'parentId');
     await this.assertManager(input.managerId);
 
     const row = await this.db.$transaction(async (tx) => {
@@ -126,9 +126,9 @@ export class OrgService {
       else {
         const p = await this.getUnit(ctx, changes.parentId);
         if (p.id === unit.id || p.path.startsWith(unit.path)) {
-          throw new GuardFailedError('CYCLE', 'a unit cannot be placed under itself or one of its descendants');
+          throw new GuardFailedError('CYCLE', 'a unit cannot be placed under itself or one of its descendants', 'parentId');
         }
-        if (!p.active) throw new GuardFailedError('PARENT_INACTIVE', 'the parent unit is inactive');
+        if (!p.active) throw new GuardFailedError('PARENT_INACTIVE', 'the parent unit is inactive', 'parentId');
         newParent = p;
       }
     }
@@ -193,13 +193,13 @@ export class OrgService {
 
   private async assertCodeFree(companyId: string, code: string) {
     const clash = await this.db.orgUnit.findUnique({ where: { companyId_code: { companyId, code } }, select: { id: true } });
-    if (clash) throw new GuardFailedError('DUPLICATE_CODE', `a unit with code ${code} already exists in this company`);
+    if (clash) throw new GuardFailedError('DUPLICATE_CODE', `a unit with code ${code} already exists in this company`, 'code');
   }
 
   private async assertManager(userId: string | null | undefined) {
     if (!userId) return;
     const user = await this.db.user.findUnique({ where: { id: userId }, select: { active: true } });
-    if (!user || !user.active) throw new GuardFailedError('BAD_MANAGER', 'the manager must be an active staff account');
+    if (!user || !user.active) throw new GuardFailedError('BAD_MANAGER', 'the manager must be an active staff account', 'managerId');
   }
 
   private auditUnit(ctx: CompanyContext, unitId: string, action: string, metadata: Record<string, string | string[]>) {
@@ -223,7 +223,7 @@ export class OrgService {
   async createPosition(ctx: CompanyContext, input: PositionInput) {
     const code = input.code.trim().toUpperCase();
     const clash = await this.db.position.findUnique({ where: { companyId_code: { companyId: ctx.companyId, code } }, select: { id: true } });
-    if (clash) throw new GuardFailedError('DUPLICATE_CODE', `a title with code ${code} already exists in this company`);
+    if (clash) throw new GuardFailedError('DUPLICATE_CODE', `a title with code ${code} already exists in this company`, 'code');
     const row = await this.db.position.create({
       data: { companyId: ctx.companyId, code, titleAr: input.titleAr.trim(), titleEn: input.titleEn.trim(), active: input.active ?? true },
       select: POSITION_SELECT,
@@ -238,7 +238,7 @@ export class OrgService {
     const code = changes.code !== undefined ? changes.code.trim().toUpperCase() : existing.code;
     if (code !== existing.code) {
       const clash = await this.db.position.findUnique({ where: { companyId_code: { companyId: ctx.companyId, code } }, select: { id: true } });
-      if (clash) throw new GuardFailedError('DUPLICATE_CODE', `a title with code ${code} already exists in this company`);
+      if (clash) throw new GuardFailedError('DUPLICATE_CODE', `a title with code ${code} already exists in this company`, 'code');
     }
     const row = await this.db.position.update({
       where: { id },

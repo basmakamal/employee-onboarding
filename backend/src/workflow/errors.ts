@@ -29,9 +29,12 @@ export class ForbiddenActorError extends DomainError {
 export class GuardFailedError extends DomainError {
   readonly code: string;
   readonly httpStatus = 422;
-  constructor(code: string, message: string) {
+  /** The input field the rule is about, so the form can mark it (e.g. 'code'). */
+  readonly field: string | undefined;
+  constructor(code: string, message: string, field?: string) {
     super(message);
     this.code = code;
+    this.field = field;
   }
 }
 

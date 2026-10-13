@@ -5,10 +5,14 @@
  * applies (which company / unit) is set per user on the Staff page.
  */
 import { computed, onMounted, ref } from 'vue';
+import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../api/client';
+import { api } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
 import PageHeader from '../components/PageHeader.vue';
+import FormErrorAlert from '../components/FormErrorAlert.vue';
+import { useForm } from '../composables/useForm';
+import { rules } from '../validation/rules';
 
 interface Role {
   id: string;
@@ -34,7 +38,7 @@ const loading = ref(true);
 const busy = ref('');
 const snackbar = ref({ show: false, text: '', color: 'success' });
 const notify = (text: string, color = 'success') => (snackbar.value = { show: true, text, color });
-const fail = (e: unknown) => notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+const fail = (e: unknown) => notify(errorText(e), 'error');
 
 /** Permissions grouped by their area prefix, so the editor reads as sections. */
 const groups = computed(() => {
@@ -62,12 +66,14 @@ async function load() {
 const dialog = ref<{ show: boolean; id: string | null; system: boolean; code: string; nameAr: string; nameEn: string; level: Role['level']; permissions: string[]; active: boolean }>({
   show: false, id: null, system: false, code: '', nameAr: '', nameEn: '', level: 'COMPANY', permissions: [], active: true,
 });
-const formOk = computed(() => (dialog.value.id || /^[A-Za-z][A-Za-z0-9_]{1,40}$/.test(dialog.value.code.trim())) && dialog.value.nameAr.trim() && dialog.value.nameEn.trim());
+const form = useForm();
 
 function openCreate() {
+  form.reset();
   dialog.value = { show: true, id: null, system: false, code: '', nameAr: '', nameEn: '', level: 'COMPANY', permissions: [], active: true };
 }
 function openEdit(r: Role) {
+  form.reset();
   dialog.value = { show: true, id: r.id, system: r.system, code: r.code, nameAr: r.nameAr, nameEn: r.nameEn, level: r.level, permissions: r.permissions.map((p) => p.permission), active: r.active };
 }
 function has(code: string) {
@@ -77,9 +83,8 @@ function togglePerm(code: string) {
   dialog.value.permissions = has(code) ? dialog.value.permissions.filter((p) => p !== code) : [...dialog.value.permissions, code];
 }
 
-async function save() {
-  busy.value = 'save';
-  try {
+function save() {
+  return form.submit(async () => {
     const d = dialog.value;
     const body = { nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim(), permissions: d.permissions, ...(d.system ? {} : { level: d.level, active: d.active }) };
     if (d.id) await api.put(`/api/roles/${d.id}`, body);
@@ -87,11 +92,7 @@ async function save() {
     dialog.value.show = false;
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    fail(e);
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 async function remove(r: Role) {
@@ -150,12 +151,21 @@ onMounted(load);
     <v-dialog v-model="dialog.show" max-width="720" scrollable>
       <v-card :title="dialog.id ? $t('roles.edit') : $t('roles.new')" class="pa-2">
         <v-card-text style="max-height: 70vh">
+          <FormErrorAlert :form="form" />
+          <v-form :ref="form.bind" @submit.prevent="save">
           <v-row dense>
             <v-col cols="12" sm="4">
-              <v-text-field v-model="dialog.code" :label="$t('roles.code')" :disabled="!!dialog.id" dir="ltr" />
+              <v-text-field
+                v-model="dialog.code"
+                :label="$t('roles.code') + ' *'"
+                :disabled="!!dialog.id"
+                :rules="dialog.id ? [] : [rules.required, rules.handle, rules.maxLength(41)]"
+                :error-messages="form.errorsFor('code')"
+                dir="ltr"
+              />
             </v-col>
-            <v-col cols="12" sm="4"><v-text-field v-model="dialog.nameAr" :label="$t('org.nameAr')" /></v-col>
-            <v-col cols="12" sm="4"><v-text-field v-model="dialog.nameEn" :label="$t('org.nameEn')" dir="ltr" /></v-col>
+            <v-col cols="12" sm="4"><v-text-field v-model="dialog.nameAr" :label="$t('org.nameAr') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="form.errorsFor('nameAr')" dir="rtl" /></v-col>
+            <v-col cols="12" sm="4"><v-text-field v-model="dialog.nameEn" :label="$t('org.nameEn') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="form.errorsFor('nameEn')" dir="ltr" /></v-col>
             <v-col cols="12" sm="6">
               <v-select
                 v-model="dialog.level"
@@ -187,11 +197,12 @@ onMounted(load);
               />
             </div>
           </div>
+          </v-form>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="dialog.show = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn color="primary" :loading="busy === 'save'" :disabled="!formOk" @click="save">{{ $t('common.save') }}</v-btn>
+          <v-btn color="primary" :loading="form.busy.value" @click="save">{{ $t('common.save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
