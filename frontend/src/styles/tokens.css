@@ -46,6 +46,10 @@
 /* Lucide icons size with the surrounding text and sit on the baseline. */
 .lucide-icon { display: inline-block; vertical-align: -0.125em; flex: none; }
 .v-icon .lucide-icon { width: 1em; height: 1em; }
+/* Fluent Color icons (navigation, headers) bring their own colours: never tinted, never faded. */
+.fluent-icon { display: inline-block; vertical-align: -0.15em; flex: none; }
+.v-icon .fluent-icon { width: 1em; height: 1em; }
+.v-icon:has(> .fluent-icon) { color: inherit !important; opacity: 1 !important; }
 
 /* Section labels: small, medium weight, sentence case — no shouting. */
 .label-caps {

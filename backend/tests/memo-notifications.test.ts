@@ -172,8 +172,7 @@ describe('the onboarding steps send what the memo says', () => {
     };
     const notifications = {
       notifyExternal: vi.fn().mockResolvedValue(undefined),
-      notifyHr: vi.fn().mockResolvedValue(undefined),
-      notifyRoleAndUsers: vi.fn().mockResolvedValue(undefined),
+      notifyTeam: vi.fn().mockResolvedValue(undefined),
     };
     const scope = { ...repos, workflow, markLinkUsed: links.markUsed };
     const transact = (fn: (s: typeof scope) => Promise<unknown>) => fn(scope);
@@ -203,7 +202,8 @@ describe('the onboarding steps send what the memo says', () => {
       { entity: 'EMPLOYEE', entityId: 'e1' },
       'ar',
     );
-    expect(notifications.notifyHr).toHaveBeenCalledWith(
+    expect(notifications.notifyTeam).toHaveBeenCalledWith(
+      { processKey: 'EMPLOYEE', status: 'AWAITING_FORM', role: 'HR', ownerIds: [] },
       'staff.form_missing',
       expect.objectContaining({ missingItems: 'IBAN letter is blurry' }),
       { entity: 'EMPLOYEE', entityId: 'e1' },
@@ -213,7 +213,8 @@ describe('the onboarding steps send what the memo says', () => {
   it('row 6 — documents accepted: the team hears the file is ready for the contract', async () => {
     const { service, notifications } = makeService();
     await service.acceptDocuments('e1', HR);
-    expect(notifications.notifyHr).toHaveBeenCalledWith(
+    expect(notifications.notifyTeam).toHaveBeenCalledWith(
+      { processKey: 'EMPLOYEE', status: 'CONTRACT_CREATION', role: 'HR', ownerIds: [] },
       'hr.ready_for_contract',
       { name: 'Nora Khalid' },
       { entity: 'EMPLOYEE', entityId: 'e1' },
@@ -244,7 +245,8 @@ describe('the onboarding steps send what the memo says', () => {
     const { service, notifications } = makeService({ status: 'AWAITING_CONTRACT_APPROVAL' });
     await service.setContractStatus('e1', 'ACTIVE', HR);
     for (const key of ['hr.contract_status_active', 'hr.employee_activated']) {
-      expect(notifications.notifyHr).toHaveBeenCalledWith(
+      expect(notifications.notifyTeam).toHaveBeenCalledWith(
+        { processKey: 'EMPLOYEE', status: 'ACTIVE', role: 'HR', ownerIds: [] },
         key,
         { name: 'Nora Khalid', employeeNo: 'EMP-0042' },
         { entity: 'EMPLOYEE', entityId: 'e1' },
@@ -255,25 +257,24 @@ describe('the onboarding steps send what the memo says', () => {
   it('row 12 — Rejected: the team gets the reason', async () => {
     const { service, notifications } = makeService({ status: 'AWAITING_CONTRACT_APPROVAL' });
     await service.setContractStatus('e1', 'REJECTED', HR, { reason: 'salary band' });
-    expect(notifications.notifyHr).toHaveBeenCalledWith(
+    expect(notifications.notifyTeam).toHaveBeenCalledWith(
+      { processKey: 'EMPLOYEE', status: 'CONTRACT_CREATION', role: 'HR', ownerIds: [] },
       'hr.contract_rejected',
       { name: 'Nora Khalid', rejectReason: 'salary band' },
       { entity: 'EMPLOYEE', entityId: 'e1' },
     );
   });
 
-  it('named owners receive team notices in addition to the HR group, never instead', async () => {
+  it('named owners travel with the team target so the notification layer can add them', async () => {
     const { service, notifications, responsibility } = makeService();
     responsibility.get.mockResolvedValue(['u-fatoun']);
     await service.acceptDocuments('e1', HR);
-    expect(notifications.notifyRoleAndUsers).toHaveBeenCalledWith(
-      'HR',
-      ['u-fatoun'],
+    expect(notifications.notifyTeam).toHaveBeenCalledWith(
+      { processKey: 'EMPLOYEE', status: 'CONTRACT_CREATION', role: 'HR', ownerIds: ['u-fatoun'] },
       'hr.ready_for_contract',
       { name: 'Nora Khalid' },
       { entity: 'EMPLOYEE', entityId: 'e1' },
     );
-    expect(notifications.notifyHr).not.toHaveBeenCalled();
   });
 });
 

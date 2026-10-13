@@ -47,28 +47,28 @@ const GROUPS: NavGroup[] = [
   {
     key: 'nav.groupWork',
     items: [
-      { to: '/', icon: 'layout-dashboard', key: 'nav.home', roles: [] },
-      { to: '/employees', icon: 'users', key: 'nav.employees', roles: [] },
+      { to: '/', icon: 'fluent:home', key: 'nav.home', roles: [] },
+      { to: '/employees', icon: 'fluent:people', key: 'nav.employees', roles: [] },
     ],
   },
   {
     key: 'nav.groupInsights',
     items: [
-      { to: '/emails', icon: 'mail', key: 'nav.emailLog', roles: ['HR'] },
-      { to: '/reports', icon: 'chart-column', key: 'nav.reports', roles: ['HR'] },
-      { to: '/assistant', icon: 'sparkles', key: 'nav.assistant', roles: ['HR'] },
+      { to: '/emails', icon: 'fluent:mail', key: 'nav.emailLog', roles: ['HR'] },
+      { to: '/reports', icon: 'fluent:data-trending', key: 'nav.reports', roles: ['HR'] },
+      { to: '/assistant', icon: 'fluent:bot-sparkle', key: 'nav.assistant', roles: ['HR'] },
     ],
   },
   {
     key: 'nav.groupAdmin',
     items: [
-      { to: '/users', icon: 'user-cog', key: 'nav.users', roles: ['ADMIN'] },
-      { to: '/ownership', icon: 'network', key: 'nav.ownership', roles: ['ADMIN'] },
-      { to: '/lists', icon: 'list-checks', key: 'nav.lists', roles: ['ADMIN'] },
-      { to: '/automation', icon: 'zap', key: 'nav.automation', roles: ['ADMIN'] },
-      { to: '/email-templates', icon: 'mail-open', key: 'nav.emailTemplates', roles: ['ADMIN'] },
-      { to: '/calendar', icon: 'calendar-days', key: 'nav.calendar', roles: ['ADMIN'] },
-      { to: '/settings', icon: 'settings', key: 'nav.settings', roles: ['ADMIN'] },
+      { to: '/users', icon: 'fluent:person-key', key: 'nav.users', roles: ['ADMIN'] },
+      { to: '/ownership', icon: 'fluent:people-team', key: 'nav.ownership', roles: ['ADMIN'] },
+      { to: '/lists', icon: 'fluent:text-bullet-list-square', key: 'nav.lists', roles: ['ADMIN'] },
+      { to: '/automation', icon: 'fluent:clock-alarm', key: 'nav.automation', roles: ['ADMIN'] },
+      { to: '/email-templates', icon: 'fluent:mail-multiple', key: 'nav.emailTemplates', roles: ['ADMIN'] },
+      { to: '/calendar', icon: 'fluent:calendar', key: 'nav.calendar', roles: ['ADMIN'] },
+      { to: '/settings', icon: 'fluent:settings', key: 'nav.settings', roles: ['ADMIN'] },
     ],
   },
 ];
@@ -94,9 +94,9 @@ const currentKey = computed(() => {
 /** Phone bottom bar: the places HR goes most, plus the one big action. */
 const bottomItems = computed(() =>
   [
-    { to: '/', icon: 'layout-dashboard', key: 'nav.home', roles: [] as string[] },
-    { to: '/employees', icon: 'users', key: 'nav.people', roles: [] as string[] },
-    { to: '/emails', icon: 'mail', key: 'nav.inbox', roles: ['HR'] },
+    { to: '/', icon: 'fluent:home', key: 'nav.home', roles: [] as string[] },
+    { to: '/employees', icon: 'fluent:people', key: 'nav.people', roles: [] as string[] },
+    { to: '/emails', icon: 'fluent:mail', key: 'nav.inbox', roles: ['HR'] },
   ].filter((i) => i.roles.length === 0 || auth.hasRole(...i.roles)),
 );
 
@@ -149,7 +149,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         class="shell-drawer"
       >
         <div class="shell-brand" :class="{ 'shell-brand--rail': isRail }">
-          <img src="/riyada-logo.png" alt="Riyada" class="shell-brand__logo" />
+          <span class="shell-brand__tile"><img src="/riyada-logo.png" alt="Riyada" class="shell-brand__logo" /></span>
           <b v-if="!isRail" class="shell-brand__text">{{ $t('app.title') }}</b>
           <v-btn
             v-if="display.mdAndUp.value && !rail"
@@ -333,16 +333,37 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
   border-inline-end: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)) !important;
 }
 .shell-drawer .v-navigation-drawer__content { display: flex; flex-direction: column; }
+/* The brand sits in a violet band — the one saturated block in the shell, so
+   the eye finds "where am I" first; everything under it stays quiet. */
 .shell-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 14px 10px;
+  margin: 10px 10px 6px;
+  padding: 10px 12px;
   min-height: 52px;
+  border-radius: 12px;
+  /* on-primary flips with the theme: white on deep violet, ink on dark-mode lavender. */
+  color: rgb(var(--v-theme-on-primary));
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.18), transparent 55%),
+    linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, color-mix(in srgb, rgb(var(--v-theme-primary)) 70%, #a78bfa) 100%);
+  box-shadow: 0 8px 20px -10px rgba(var(--v-theme-primary), 0.55);
 }
-.shell-brand--rail { justify-content: center; padding-inline: 8px; }
-.shell-brand__logo { height: 22px; width: auto; display: block; }
+.shell-brand--rail { justify-content: center; padding-inline: 8px; margin-inline: 8px; }
+.shell-brand__tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: #fff;
+  flex: none;
+}
+.shell-brand__logo { height: 18px; width: auto; display: block; }
 .shell-brand__text { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+.shell-brand .v-btn { color: rgba(var(--v-theme-on-primary), 0.85); }
 .shell-search {
   display: flex;
   align-items: center;
@@ -371,22 +392,37 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
   background: rgb(var(--v-theme-surface));
 }
 .shell-nav { padding-inline: 10px; }
-.shell-nav__group { padding: 18px 10px 6px; font-size: 11.5px; font-weight: 500; letter-spacing: 0.02em; }
-.shell-nav .v-list-item { margin-bottom: 1px; }
-.shell-nav__item { min-height: 34px; padding-inline: 10px !important; font-size: 13.5px; }
+.shell-nav__group { padding: 18px 10px 6px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; color: rgba(var(--v-theme-primary), 0.75); }
+.shell-nav .v-list-item { margin-bottom: 2px; }
+.shell-nav__item { min-height: 38px; padding-inline: 10px !important; font-size: 13.5px; position: relative; }
 .shell-nav__item .v-list-item-title { font-size: 13.5px; font-weight: 500; letter-spacing: 0; }
-.shell-nav__item .v-list-item__prepend > .v-icon { opacity: 0.7; margin-inline-end: -6px; }
-.shell-nav__item .v-list-item__prepend { width: 34px; }
+/* Fluent icons carry their own colours — full strength, a touch larger than text icons. */
+.shell-nav__item .v-list-item__prepend > .v-icon { opacity: 1; margin-inline-end: -4px; font-size: 22px; }
+.shell-nav__item .v-list-item__prepend { width: 36px; }
 .shell-nav__item:hover .v-list-item__overlay { opacity: 0.04; }
-.shell-nav__item { transition: background var(--app-duration) var(--app-ease), color var(--app-duration) var(--app-ease); }
+.shell-nav__item { transition: background var(--app-duration) var(--app-ease), color var(--app-duration) var(--app-ease), transform var(--app-duration) var(--app-ease); }
+.shell-nav__item:hover .v-list-item__prepend > .v-icon { transform: translateY(-1px) scale(1.06); }
+.shell-nav__item .v-list-item__prepend > .v-icon { transition: transform var(--app-duration) var(--app-ease); }
 .shell-nav__item.v-list-item--active {
   color: rgb(var(--v-theme-primary));
   background: rgba(var(--v-theme-primary), 0.1);
 }
 .shell-nav__item.v-list-item--active .v-list-item-title { font-weight: 600; }
-.shell-nav__item.v-list-item--active .v-list-item__prepend > .v-icon { color: rgb(var(--v-theme-primary)); opacity: 1; }
 .shell-nav__item.v-list-item--active .v-list-item__overlay { opacity: 0; }
-.shell-nav__item.v-list-item--active::after { display: none; }
+/* A short bar on the inline-start edge marks the current page, as in the reference. */
+.shell-nav__item.v-list-item--active::after {
+  content: '';
+  display: block;
+  position: absolute;
+  inset-inline-start: -10px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 3px;
+  background: rgb(var(--v-theme-primary));
+  opacity: 1;
+  border: 0;
+}
 .shell-user {
   display: flex;
   align-items: center;

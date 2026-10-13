@@ -73,6 +73,7 @@ function makeService(overrides: { employee?: Partial<Employee>; contract?: unkno
   const notifications = {
     notifyExternal: vi.fn().mockResolvedValue(undefined),
     notifyHr: vi.fn().mockResolvedValue(undefined),
+    notifyTeam: vi.fn().mockResolvedValue(undefined),
   };
   const halter = { halt: vi.fn().mockResolvedValue({ links: 1, assetForms: 1, processes: [] }) };
   // Unit of work under test = the same fakes; the consumed link's stamp

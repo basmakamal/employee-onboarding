@@ -6,6 +6,7 @@ import type { NotificationService } from './notification.service.js';
 import { MACHINE_STATUSES, STAFF_ROLES, TEMPLATE_CATALOG } from './template-catalog.js';
 import { localeOf } from './locale.js';
 import { contractParams } from './contract-params.js';
+import type { GroupMember } from './notification-group.repository.js';
 
 const CACHE_MS = 30_000;
 
@@ -21,8 +22,10 @@ export interface TriggerInput {
   processKey: string;
   status: string;
   templateKey: string;
-  recipient: 'SUBJECT' | 'ROLE';
+  recipient: 'SUBJECT' | 'ROLE' | 'GROUP';
   role?: string | null;
+  /** The responsible team when recipient = GROUP. */
+  groupId?: string | null;
   /** Extra addresses that get their own copy — e.g. an admin checking the wording. */
   ccEmails?: string[] | null;
   active?: boolean;
@@ -65,6 +68,12 @@ export class TriggerService {
         anchors: { employeeId: string },
       ): Promise<{ url: string }>;
     },
+    /** Responsible teams — GROUP recipients resolve through this. */
+    private readonly groups?: {
+      list(): Promise<Array<{ id: string; nameAr: string; nameEn: string }>>;
+      findById(id: string): Promise<unknown | null>;
+      membersOf(groupId: string): Promise<GroupMember[]>;
+    },
   ) {}
 
   list() {
@@ -88,7 +97,10 @@ export class TriggerService {
           nameEn: m.nameEn,
           audience: m.audience,
         }));
-    return { processes: MACHINE_STATUSES, roles: STAFF_ROLES, templates };
+    const groups = this.groups
+      ? (await this.groups.list()).map((g) => ({ id: g.id, nameAr: g.nameAr, nameEn: g.nameEn }))
+      : [];
+    return { processes: MACHINE_STATUSES, roles: STAFF_ROLES, templates, groups };
   }
 
   private async validate(input: TriggerInput): Promise<void> {
@@ -106,6 +118,10 @@ export class TriggerService {
     if (input.recipient === 'ROLE' && !(STAFF_ROLES as readonly string[]).includes(input.role ?? '')) {
       throw new GuardFailedError('BAD_ROLE', 'a staff role is required for ROLE recipients');
     }
+    if (input.recipient === 'GROUP') {
+      const known = input.groupId && this.groups ? await this.groups.findById(input.groupId) : null;
+      if (!known) throw new GuardFailedError('BAD_GROUP', 'a responsible team is required for GROUP recipients');
+    }
   }
 
   async create(input: TriggerInput, userId?: string): Promise<EmailTrigger> {
@@ -117,6 +133,7 @@ export class TriggerService {
         templateKey: input.templateKey,
         recipient: input.recipient,
         role: input.recipient === 'ROLE' ? input.role ?? null : null,
+        groupId: input.recipient === 'GROUP' ? input.groupId ?? null : null,
         ccEmails: joinCc(input.ccEmails),
         active: input.active ?? true,
         createdById: userId ?? null,
@@ -135,6 +152,7 @@ export class TriggerService {
       templateKey: changes.templateKey ?? existing.templateKey,
       recipient: changes.recipient ?? existing.recipient,
       role: changes.role !== undefined ? changes.role : existing.role,
+      groupId: changes.groupId !== undefined ? changes.groupId : existing.groupId,
       ccEmails: changes.ccEmails !== undefined ? changes.ccEmails : splitCc(existing.ccEmails),
       active: changes.active ?? existing.active,
     };
@@ -147,6 +165,7 @@ export class TriggerService {
         templateKey: merged.templateKey,
         recipient: merged.recipient,
         role: merged.recipient === 'ROLE' ? merged.role ?? null : null,
+        groupId: merged.recipient === 'GROUP' ? merged.groupId ?? null : null,
         ccEmails: joinCc(merged.ccEmails),
         active: merged.active ?? true,
       },
@@ -225,6 +244,15 @@ export class TriggerService {
         } else {
           await attempt('subject', trigger.id, () =>
             this.notifications.notifyExternal(employee.email, trigger.templateKey, params, ref, localeOf(employee)),
+          );
+        }
+      } else if (trigger.recipient === 'GROUP') {
+        const members = trigger.groupId && this.groups ? await this.groups.membersOf(trigger.groupId) : [];
+        if (members.length === 0) {
+          logger.warn({ triggerId: trigger.id }, 'trigger points at a team with no members');
+        } else {
+          await attempt('group', trigger.id, () =>
+            this.notifications.notifyMembers(members, trigger.templateKey, staffParams, ref),
           );
         }
       } else {

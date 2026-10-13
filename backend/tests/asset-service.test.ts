@@ -44,8 +44,7 @@ function makeService(formOverrides: Partial<Record<string, unknown>> = {}, itemC
   };
   const notifications = {
     notifyExternal: vi.fn().mockResolvedValue(undefined),
-    notifyHr: vi.fn().mockResolvedValue(undefined),
-    notifyRole: vi.fn().mockResolvedValue(undefined),
+    notifyTeam: vi.fn().mockResolvedValue(undefined),
   };
   // Unit of work under test = the same fakes; the consumed link's stamp
   // delegates to the fake links service so assertions stay in one place.
@@ -110,8 +109,8 @@ describe('AssetService', () => {
     );
     expect(links.markUsed).toHaveBeenCalled();
     // Custody is IT's process (memo row 17); the reason travels with the notice.
-    expect(notifications.notifyRole).toHaveBeenCalledWith(
-      'IT',
+    expect(notifications.notifyTeam).toHaveBeenCalledWith(
+      { processKey: 'ASSET_FORM', status: 'REJECTED', role: 'IT', ownerIds: [] },
       'hr.asset_rejected',
       expect.objectContaining({ name: 'Nora Khalid', rejectReason: 'wrong laptop model' }),
       { entity: 'ASSET_FORM', entityId: 'f1' },

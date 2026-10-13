@@ -43,7 +43,7 @@ function makeService() {
     verify: vi.fn().mockResolvedValue({ id: 'tok1', purpose: 'CONTRACT_APPROVAL', employee: EMPLOYEE }),
     markUsed: vi.fn().mockResolvedValue({}),
   };
-  const notifications = { notifyHr: vi.fn().mockResolvedValue(undefined) };
+  const notifications = { notifyTeam: vi.fn().mockResolvedValue(undefined) };
   const scope = { ...repos, workflow, markLinkUsed: links.markUsed };
   const transact = (fn: (s: typeof scope) => Promise<unknown>) => fn(scope);
   const service = new OnboardingService(
@@ -76,12 +76,14 @@ describe('OnboardingService.decideContract', () => {
     expect(repos.employees.completeActivation).toHaveBeenCalledWith('e1', 'EMP-0042', expect.any(Date));
     expect(links.markUsed).toHaveBeenCalledWith('tok1');
     // Memo rows 11 and 13, sent from the same path HR's manual approval uses.
-    expect(notifications.notifyHr).toHaveBeenCalledWith(
+    expect(notifications.notifyTeam).toHaveBeenCalledWith(
+      expect.objectContaining({ processKey: 'EMPLOYEE', status: 'ACTIVE', role: 'HR' }),
       'hr.contract_status_active',
       expect.objectContaining({ name: 'Nora Khalid', employeeNo: 'EMP-0042' }),
       expect.anything(),
     );
-    expect(notifications.notifyHr).toHaveBeenCalledWith(
+    expect(notifications.notifyTeam).toHaveBeenCalledWith(
+      expect.objectContaining({ processKey: 'EMPLOYEE', status: 'ACTIVE', role: 'HR' }),
       'hr.employee_activated',
       expect.objectContaining({ name: 'Nora Khalid', employeeNo: 'EMP-0042' }),
       expect.anything(),
@@ -101,7 +103,8 @@ describe('OnboardingService.decideContract', () => {
       { reason: 'Salary does not match' },
     );
     expect(repos.employees.completeActivation).not.toHaveBeenCalled();
-    expect(notifications.notifyHr).toHaveBeenCalledWith(
+    expect(notifications.notifyTeam).toHaveBeenCalledWith(
+      expect.objectContaining({ processKey: 'EMPLOYEE', status: 'CONTRACT_CREATION', role: 'HR' }),
       'hr.contract_rejected',
       expect.objectContaining({ rejectReason: 'Salary does not match' }),
       expect.anything(),

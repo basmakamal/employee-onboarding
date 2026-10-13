@@ -254,12 +254,13 @@ export class AssetService {
     };
     const ref = { entity: 'ASSET_FORM', entityId: form.id };
     const template = decision === 'APPROVE' ? 'hr.asset_approved' : 'hr.asset_rejected';
-    const owners = (await this.responsibility?.get('ASSET_FORM')) ?? [];
-    if (owners.length > 0) {
-      await this.notifications.notifyRoleAndUsers('IT', owners, template, params, ref);
-    } else {
-      await this.notifications.notifyRole('IT', template, params, ref);
-    }
+    const ownerIds = (await this.responsibility?.get('ASSET_FORM')) ?? [];
+    await this.notifications.notifyTeam(
+      { processKey: 'ASSET_FORM', status: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED', role: 'IT', ownerIds },
+      template,
+      params,
+      ref,
+    );
     return result;
   }
 

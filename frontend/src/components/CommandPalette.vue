@@ -39,17 +39,17 @@ const searching = ref(false);
 const inputEl = ref<HTMLInputElement | null>(null);
 
 const PAGES: Array<{ to: string; key: string; icon: string; roles: string[] }> = [
-  { to: '/', key: 'nav.home', icon: 'layout-dashboard', roles: [] },
-  { to: '/employees', key: 'nav.employees', icon: 'users', roles: [] },
-  { to: '/reports', key: 'nav.reports', icon: 'chart-column', roles: ['HR'] },
-  { to: '/emails', key: 'nav.emailLog', icon: 'mail', roles: ['HR'] },
-  { to: '/assistant', key: 'nav.assistant', icon: 'sparkles', roles: ['HR'] },
-  { to: '/users', key: 'nav.users', icon: 'user-cog', roles: ['ADMIN'] },
-  { to: '/ownership', key: 'nav.ownership', icon: 'network', roles: ['ADMIN'] },
-  { to: '/automation', key: 'nav.automation', icon: 'zap', roles: ['ADMIN'] },
-  { to: '/email-templates', key: 'nav.emailTemplates', icon: 'mail-open', roles: ['ADMIN'] },
-  { to: '/calendar', key: 'nav.calendar', icon: 'calendar-days', roles: ['ADMIN'] },
-  { to: '/settings', key: 'nav.settings', icon: 'settings', roles: ['ADMIN'] },
+  { to: '/', key: 'nav.home', icon: 'fluent:home', roles: [] },
+  { to: '/employees', key: 'nav.employees', icon: 'fluent:people', roles: [] },
+  { to: '/reports', key: 'nav.reports', icon: 'fluent:data-trending', roles: ['HR'] },
+  { to: '/emails', key: 'nav.emailLog', icon: 'fluent:mail', roles: ['HR'] },
+  { to: '/assistant', key: 'nav.assistant', icon: 'fluent:bot-sparkle', roles: ['HR'] },
+  { to: '/users', key: 'nav.users', icon: 'fluent:person-key', roles: ['ADMIN'] },
+  { to: '/ownership', key: 'nav.ownership', icon: 'fluent:people-team', roles: ['ADMIN'] },
+  { to: '/automation', key: 'nav.automation', icon: 'fluent:clock-alarm', roles: ['ADMIN'] },
+  { to: '/email-templates', key: 'nav.emailTemplates', icon: 'fluent:mail-multiple', roles: ['ADMIN'] },
+  { to: '/calendar', key: 'nav.calendar', icon: 'fluent:calendar', roles: ['ADMIN'] },
+  { to: '/settings', key: 'nav.settings', icon: 'fluent:settings', roles: ['ADMIN'] },
 ];
 
 const RECENT_KEY = 'cmdk-recent';

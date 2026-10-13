@@ -1,5 +1,6 @@
 /**
- * Seed — staff users + the BRD's five SLA automation rules.
+ * Seed — staff users, the BRD's SLA automation rules, status ownership,
+ * the responsible teams from HR's memo, and the employee-number counter.
  * Idempotent: safe to run repeatedly. Run with: npx prisma db seed
  */
 import 'dotenv/config';
@@ -263,6 +264,131 @@ const OWNERSHIP: Array<{ processKey: string; status: string; roles: string[] }> 
   { processKey: 'OFFBOARDING', status: 'SETTLEMENT', roles: ['FINANCE'] },
 ];
 
+/**
+ * Responsible teams from HR's assignment memo (Sept 2026): who follows up
+ * which statuses. Members are e-mail addresses — the people need no account
+ * for the notices to reach them; an admin links accounts later in Settings.
+ * Where a status has a team, the team replaces the HR-wide broadcast.
+ *
+ * Seeded ONLY when the team does not exist yet, so an admin's edits to
+ * members or statuses are never overwritten by a re-run (also under
+ * --rules-only).
+ */
+const FUTOON = { name: 'فتون عبدالعزيز', email: 'Futoon.Abdulaziz@riyada-ksa.com' };
+const AYMAN = { name: 'أيمن تقي الدين', email: 'Ayman.takyeldin@riyada-ksa.com' };
+const ALJOHARA = { name: 'الجوهرة العلي', email: 'Aljohara.Alaalie@riyada-ksa.com' };
+const RAWAN = { name: 'روان عادل', email: 'rawan.Adel@riyada-ksa.com' };
+
+const GROUPS: Array<{
+  key: string;
+  nameAr: string;
+  nameEn: string;
+  description: string;
+  members: Array<{ name: string; email: string }>;
+  assignments: Array<{ processKey: string; status: string }>;
+}> = [
+  {
+    key: 'ONBOARDING_DATA',
+    nameAr: 'التعيين واستكمال البيانات',
+    nameEn: 'Employee Onboarding & Data Completion',
+    description: 'إنشاء سجل المتدرب وإرسال نموذج استكمال البيانات · متابعة استكمال البيانات والمستندات',
+    members: [FUTOON],
+    assignments: [
+      { processKey: 'EMPLOYEE', status: 'CREATED' },
+      { processKey: 'EMPLOYEE', status: 'AWAITING_FORM' },
+      { processKey: 'EMPLOYEE', status: 'FORM_RECEIVED' },
+    ],
+  },
+  {
+    key: 'EMPLOYMENT_CONTRACT',
+    nameAr: 'عقد العمل',
+    nameEn: 'Employment Contract',
+    description: 'إنشاء عقد العمل وإرساله · متابعة حالة العقد والموافقة عليه',
+    members: [AYMAN, ALJOHARA],
+    assignments: [
+      { processKey: 'EMPLOYEE', status: 'CONTRACT_CREATION' },
+      { processKey: 'EMPLOYEE', status: 'AWAITING_CONTRACT_APPROVAL' },
+      { processKey: 'EMPLOYEE', status: 'EXPIRED' },
+    ],
+  },
+  {
+    key: 'ACTIVATION_GOSI',
+    nameAr: 'تفعيل الموظف والتأمينات الاجتماعية',
+    nameEn: 'Employee Activation & GOSI',
+    description: 'تحويل المتدرب إلى موظف بعد اكتمال التعاقد · التأمينات الاجتماعية (GOSI)',
+    members: [AYMAN, ALJOHARA],
+    assignments: [
+      { processKey: 'EMPLOYEE', status: 'ACTIVE' },
+      { processKey: 'GOSI', status: 'PENDING' },
+      { processKey: 'GOSI', status: 'ON_HOLD' },
+      { processKey: 'GOSI', status: 'DONE' },
+    ],
+  },
+  {
+    key: 'MEDICAL_INSURANCE',
+    nameAr: 'التأمين الطبي',
+    nameEn: 'Medical Insurance',
+    description: 'التأمين الطبي',
+    members: [FUTOON, ALJOHARA],
+    assignments: [
+      { processKey: 'MEDICAL_INSURANCE', status: 'PENDING' },
+      { processKey: 'MEDICAL_INSURANCE', status: 'ON_HOLD' },
+      { processKey: 'MEDICAL_INSURANCE', status: 'DONE' },
+    ],
+  },
+  {
+    key: 'CRIMINAL_RECORD',
+    nameAr: 'شهادة خلو السوابق',
+    nameEn: 'Criminal Record Certificate',
+    description: 'شهادة خلو السوابق',
+    members: [RAWAN],
+    assignments: [
+      { processKey: 'CRIMINAL_RECORD', status: 'TRAINING' },
+      { processKey: 'CRIMINAL_RECORD', status: 'REQUEST_SENT' },
+      { processKey: 'CRIMINAL_RECORD', status: 'PENDING' },
+      { processKey: 'CRIMINAL_RECORD', status: 'DONE' },
+    ],
+  },
+  {
+    key: 'ASSETS',
+    nameAr: 'إدارة العهد',
+    nameEn: 'Assets Management',
+    description: 'إدارة العهد',
+    members: [RAWAN],
+    assignments: [
+      { processKey: 'ASSET_FORM', status: 'SENT' },
+      { processKey: 'ASSET_FORM', status: 'PENDING_EMPLOYEE_APPROVAL' },
+      { processKey: 'ASSET_FORM', status: 'APPROVED' },
+      { processKey: 'ASSET_FORM', status: 'REJECTED' },
+    ],
+  },
+];
+
+async function seedGroups() {
+  let order = 0;
+  for (const group of GROUPS) {
+    order += 10;
+    const existing = await prisma.notificationGroup.findUnique({ where: { key: group.key } });
+    if (existing) continue;
+    await prisma.notificationGroup.create({
+      data: {
+        key: group.key,
+        nameAr: group.nameAr,
+        nameEn: group.nameEn,
+        description: group.description,
+        sortOrder: order,
+        members: {
+          create: group.members.map((m) => ({ name: m.name, email: m.email.toLowerCase() })),
+        },
+        assignments: { create: group.assignments },
+      },
+    });
+    console.log(
+      `seeded team  ${group.key.padEnd(20)} ${group.members.map((m) => m.name).join(' + ')} → ${group.assignments.length} statuses`,
+    );
+  }
+}
+
 async function seedOwnership() {
   for (const row of OWNERSHIP) {
     // Never overwrite an admin's customization — only create missing rows.
@@ -288,6 +414,7 @@ async function seedSequences() {
 
 main()
   .then(seedOwnership)
+  .then(seedGroups)
   .then(seedSequences)
   .catch((e) => {
     console.error(e);

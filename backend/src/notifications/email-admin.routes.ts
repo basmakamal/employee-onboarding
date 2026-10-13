@@ -112,8 +112,9 @@ const triggerSchema = z.object({
   processKey: z.string().min(1),
   status: z.string().min(1),
   templateKey: z.string().min(1),
-  recipient: z.enum(['SUBJECT', 'ROLE']),
+  recipient: z.enum(['SUBJECT', 'ROLE', 'GROUP']),
   role: z.string().nullable().optional(),
+  groupId: z.string().nullable().optional(),
   ccEmails: z.array(z.string().email()).max(10).nullable().optional(),
   active: z.boolean().optional(),
 });

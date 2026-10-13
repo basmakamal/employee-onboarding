@@ -56,6 +56,7 @@ staffApi.use(
     container.ownershipService,
     container.repos.holidays,
     container.responsibilityService,
+    container.repos.notificationGroups,
   ),
 );
 staffApi.use('/users', usersRouter(container.repos.users, container.notifications, config.APP_URL));

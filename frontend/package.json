@@ -19,6 +19,7 @@
     "vuetify": "^3.8.0"
   },
   "devDependencies": {
+    "@iconify-json/fluent-color": "^1.2.21",
     "@vitejs/plugin-vue": "^5.2.1",
     "sass": "^1.83.0",
     "typescript": "^5.7.2",

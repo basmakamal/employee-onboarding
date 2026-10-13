@@ -178,7 +178,7 @@ export class OnboardingService {
       localeOf(employee),
     );
     await this.auditLinkSent(employee.id, 'DATA_FORM', actor);
-    await this.notifyTeam('staff.form_missing', { name, ...missing }, employee.id);
+    await this.notifyTeam('staff.form_missing', { name, ...missing }, employee.id, 'AWAITING_FORM');
     return { ...result, url: link.url };
   }
 
@@ -188,7 +188,7 @@ export class OnboardingService {
     const result = await this.transact((s) =>
       s.workflow.transition(employee, 'ACCEPT_DOCUMENTS', actor),
     );
-    await this.notifyTeam('hr.ready_for_contract', { name: fullName(employee) }, employee.id);
+    await this.notifyTeam('hr.ready_for_contract', { name: fullName(employee) }, employee.id, 'CONTRACT_CREATION');
     return result;
   }
 
@@ -296,8 +296,8 @@ export class OnboardingService {
         return { result: r, employeeNo };
       });
       // Memo rows 11 and 13: the status moved to Active, and the employee file exists.
-      await this.notifyTeam('hr.contract_status_active', { name, employeeNo }, employee.id);
-      await this.notifyTeam('hr.employee_activated', { name, employeeNo }, employee.id);
+      await this.notifyTeam('hr.contract_status_active', { name, employeeNo }, employee.id, 'ACTIVE');
+      await this.notifyTeam('hr.employee_activated', { name, employeeNo }, employee.id, 'ACTIVE');
       return { ...result, contractStatus: status, employeeNo };
     }
 
@@ -345,6 +345,7 @@ export class OnboardingService {
         'hr.contract_rejected',
         { name, ...(opts.reason ? { rejectReason: opts.reason } : {}) },
         employee.id,
+        'CONTRACT_CREATION',
       );
     }
     return { ...result, contractStatus: status };
@@ -549,7 +550,7 @@ export class OnboardingService {
     });
 
     // Memo row 3: the team is told the form is in, with a link to the file.
-    await this.notifyTeam('hr.form_submitted', { name: fullName(employee) }, employee.id);
+    await this.notifyTeam('hr.form_submitted', { name: fullName(employee) }, employee.id, 'FORM_RECEIVED');
     return { ...result, orphanedKeys: [...replacedKeys, ...unknown.map((u) => u.storageKey)] };
   }
 
@@ -560,14 +561,25 @@ export class OnboardingService {
    * primary owners of the pipeline (Responsibility settings) when configured.
    * Names steer notifications only — anyone authorised may still act.
    */
-  private async notifyTeam(templateKey: string, params: TemplateParams, employeeId: string) {
+  /**
+   * The team notice for the status the record has just reached. A responsible
+   * team assigned to that status replaces the HR broadcast; otherwise HR (and
+   * any named owners) hear about it.
+   */
+  private async notifyTeam(
+    templateKey: string,
+    params: TemplateParams,
+    employeeId: string,
+    status: string,
+  ) {
     const ref = { entity: 'EMPLOYEE', entityId: employeeId };
-    const owners = (await this.responsibility?.get('EMPLOYEE')) ?? [];
-    if (owners.length > 0) {
-      await this.notifications.notifyRoleAndUsers('HR', owners, templateKey, params, ref);
-    } else {
-      await this.notifications.notifyHr(templateKey, params, ref);
-    }
+    const ownerIds = (await this.responsibility?.get('EMPLOYEE')) ?? [];
+    await this.notifications.notifyTeam(
+      { processKey: 'EMPLOYEE', status, role: 'HR', ownerIds },
+      templateKey,
+      params,
+      ref,
+    );
   }
 
   private async mustFind(id: string): Promise<Employee> {
