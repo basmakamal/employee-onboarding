@@ -14,6 +14,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApiError } from '../api/client';
 import { useAuthStore } from '../stores/auth';
+import { rules } from '../validation/rules';
+import { errorText } from '../validation/errors';
 import { usePreferencesStore } from '../stores/preferences';
 import LanguageToggle from '../components/LanguageToggle.vue';
 
@@ -29,7 +31,8 @@ const showPassword = ref(false);
 const loading = ref(false);
 const error = ref('');
 
-const canSubmit = computed(() => !!email.value.trim() && !!password.value && !loading.value);
+/** The sign-in form — its rules mark empty / malformed fields when Sign in is pressed. */
+const formRef = ref<{ validate(): Promise<{ valid: boolean }> } | null>(null);
 
 /** A greeting that fits the hour — the first thing anyone reads here. */
 const greeting = computed(() => {
@@ -40,15 +43,23 @@ const greeting = computed(() => {
 });
 
 async function submit() {
-  if (!canSubmit.value) return;
-  loading.value = true;
+  if (loading.value) return;
   error.value = '';
+  const { valid } = (await formRef.value?.validate()) ?? { valid: true };
+  if (!valid) {
+    error.value = t('errors.fixFields');
+    return;
+  }
+  loading.value = true;
   try {
     await auth.login(email.value.trim(), password.value);
     await router.replace((route.query['redirect'] as string) ?? '/');
   } catch (e) {
-    error.value =
-      e instanceof ApiError && e.status === 401 ? t('login.invalid') : t('login.unreachable');
+    // Wrong credentials, too many attempts and "server down" are three different situations.
+    if (e instanceof ApiError && e.status === 401) error.value = t('login.invalid');
+    else if (e instanceof ApiError && e.status === 429) error.value = t('errors.codes.RATE_LIMITED');
+    else if (e instanceof ApiError) error.value = errorText(e);
+    else error.value = t('login.unreachable');
   } finally {
     loading.value = false;
   }
@@ -116,9 +127,10 @@ async function submit() {
             </v-alert>
           </v-expand-transition>
 
-          <v-form @submit.prevent="submit">
+          <v-form ref="formRef" @submit.prevent="submit">
             <v-text-field
               v-model="email"
+              :rules="[rules.required, rules.email]"
               :label="$t('login.email')"
               :placeholder="$t('login.emailPlaceholder')"
               type="email"
@@ -130,6 +142,7 @@ async function submit() {
             />
             <v-text-field
               v-model="password"
+              :rules="[rules.required]"
               :label="$t('login.password')"
               :type="showPassword ? 'text' : 'password'"
               prepend-inner-icon="lock"
@@ -147,7 +160,6 @@ async function submit() {
               rounded="lg"
               class="mt-5"
               :loading="loading"
-              :disabled="!canSubmit"
               append-icon="arrow-right"
             >
               {{ $t('login.signIn') }}

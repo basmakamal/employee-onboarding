@@ -62,7 +62,7 @@ export class AssignmentService {
   async createRole(input: RoleInput, actor: Actor) {
     const code = input.code.trim().toUpperCase();
     if (await this.db.roleDefinition.findUnique({ where: { code } })) {
-      throw new GuardFailedError('DUPLICATE_CODE', `a role with code ${code} already exists`);
+      throw new GuardFailedError('DUPLICATE_CODE', `a role with code ${code} already exists`, 'code');
     }
     const permissions = this.cleanPermissions(input.permissions);
     const row = await this.db.roleDefinition.create({
@@ -222,7 +222,7 @@ export class AssignmentService {
 
     if (nextUserId) {
       const user = await this.db.user.findUnique({ where: { id: nextUserId }, select: { id: true, active: true } });
-      if (!user || !user.active) throw new GuardFailedError('BAD_MANAGER', 'the manager must be an active staff account');
+      if (!user || !user.active) throw new GuardFailedError('BAD_MANAGER', 'the manager must be an active staff account', 'managerId');
     }
     await this.db.$transaction(async (tx) => {
       if (previousUserId) {

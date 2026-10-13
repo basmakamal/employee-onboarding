@@ -41,11 +41,11 @@ export async function resolvePlacement(
     if (input.orgUnitId === null) out.orgUnitId = null;
     else {
       const unit = await lookups.findOrgUnit(companyId, input.orgUnitId);
-      if (!unit) throw new GuardFailedError('BAD_ORG_UNIT', 'please select a valid branch or department of this company');
-      if (!unit.active) throw new GuardFailedError('BAD_ORG_UNIT', 'that branch or department is inactive');
+      if (!unit) throw new GuardFailedError('BAD_ORG_UNIT', 'please select a valid branch or department of this company', 'orgUnitId');
+      if (!unit.active) throw new GuardFailedError('BAD_ORG_UNIT', 'that branch or department is inactive', 'orgUnitId');
       const scope = actor.scope ?? { companyId, all: true, orgUnitPaths: [] };
       if (!pathInScope(scope, unit.path)) {
-        throw new GuardFailedError('OUT_OF_SCOPE', 'you can only place people inside your own branch or department');
+        throw new GuardFailedError('OUT_OF_SCOPE', 'you can only place people inside your own branch or department', 'orgUnitId');
       }
       out.orgUnitId = unit.id;
       out.department = unit.nameEn;
@@ -56,8 +56,8 @@ export async function resolvePlacement(
     if (input.positionId === null) out.positionId = null;
     else {
       const position = await lookups.findPosition(companyId, input.positionId);
-      if (!position) throw new GuardFailedError('BAD_POSITION', 'please select a valid job title of this company');
-      if (!position.active) throw new GuardFailedError('BAD_POSITION', 'that job title is inactive');
+      if (!position) throw new GuardFailedError('BAD_POSITION', 'please select a valid job title of this company', 'positionId');
+      if (!position.active) throw new GuardFailedError('BAD_POSITION', 'that job title is inactive', 'positionId');
       out.positionId = position.id;
       out.jobTitle = position.titleEn;
     }
@@ -67,10 +67,10 @@ export async function resolvePlacement(
     if (input.managerId === null) out.managerId = null;
     else {
       if (options.selfId && input.managerId === options.selfId) {
-        throw new GuardFailedError('BAD_MANAGER', 'an employee cannot be their own manager');
+        throw new GuardFailedError('BAD_MANAGER', 'an employee cannot be their own manager', 'managerId');
       }
       const manager = await lookups.findColleague(companyId, input.managerId);
-      if (!manager) throw new GuardFailedError('BAD_MANAGER', 'please select a valid manager from this company');
+      if (!manager) throw new GuardFailedError('BAD_MANAGER', 'please select a valid manager from this company', 'managerId');
       out.managerId = manager.id;
       out.directManager = `${manager.firstName} ${manager.lastName}`.trim();
     }

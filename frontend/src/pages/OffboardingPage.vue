@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import { api, ApiError } from '../api/client';
+import { api } from '../api/client';
 import { useAuthStore } from '../stores/auth';
+import FormErrorAlert from '../components/FormErrorAlert.vue';
+import { useForm } from '../composables/useForm';
+import { rules } from '../validation/rules';
 
 interface AssetItem {
   id: string;
@@ -56,6 +60,7 @@ const record = ref<OffboardingDetail | null>(null);
 const busy = ref('');
 const snackbar = ref({ show: false, text: '', color: 'success' });
 const settlement = ref({ workingDays: '', leaveDays: '', deductions: '', entitlements: '', notes: '' });
+const settlementForm = useForm();
 
 const currentStep = computed(() =>
   record.value ? Math.max(0, STAGES.indexOf(record.value.status)) : 0,
@@ -89,7 +94,7 @@ async function runAction(action: string) {
     notify(t('common.done'));
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
   }
@@ -101,15 +106,14 @@ async function markReturned(itemId: string) {
     await api.put(`/api/offboardings/${id}/assets/${itemId}/return`);
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     busy.value = '';
   }
 }
 
-async function saveSettlement() {
-  busy.value = 'settlement';
-  try {
+function saveSettlement() {
+  return settlementForm.submit(async () => {
     await api.put(`/api/offboardings/${id}/settlement`, {
       workingDays: Number(settlement.value.workingDays),
       leaveDays: Number(settlement.value.leaveDays),
@@ -119,11 +123,7 @@ async function saveSettlement() {
     });
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    busy.value = '';
-  }
+  });
 }
 
 onMounted(load);
@@ -256,11 +256,15 @@ onMounted(load);
               {{ $t('offboarding.settlementLater') }}
             </v-alert>
             <template v-else>
+              <FormErrorAlert :form="settlementForm" />
+              <v-form :ref="settlementForm.bind" @submit.prevent="saveSettlement">
               <v-row dense>
                 <v-col cols="6">
                   <v-text-field
                     v-model="settlement.workingDays"
-                    :label="$t('offboarding.workingDays')"
+                    :rules="[rules.required, rules.integer(0)]"
+                    :error-messages="settlementForm.errorsFor('workingDays')"
+                    :label="$t('offboarding.workingDays') + ' *'"
                     type="number"
                     :readonly="record.status !== 'SETTLEMENT'"
                   />
@@ -268,6 +272,8 @@ onMounted(load);
                 <v-col cols="6">
                   <v-text-field
                     v-model="settlement.leaveDays"
+                    :rules="[rules.integer(0)]"
+                    :error-messages="settlementForm.errorsFor('leaveDays')"
                     :label="$t('offboarding.leaveDays')"
                     type="number"
                     :readonly="record.status !== 'SETTLEMENT'"
@@ -276,6 +282,8 @@ onMounted(load);
                 <v-col cols="6">
                   <v-text-field
                     v-model="settlement.deductions"
+                    :rules="[rules.number(0)]"
+                    :error-messages="settlementForm.errorsFor('deductions')"
                     :label="$t('offboarding.deductions')"
                     type="number"
                     :readonly="record.status !== 'SETTLEMENT'"
@@ -284,7 +292,9 @@ onMounted(load);
                 <v-col cols="6">
                   <v-text-field
                     v-model="settlement.entitlements"
-                    :label="$t('offboarding.entitlements')"
+                    :rules="[rules.required, rules.number(0)]"
+                    :error-messages="settlementForm.errorsFor('entitlements')"
+                    :label="$t('offboarding.entitlements') + ' *'"
                     type="number"
                     :readonly="record.status !== 'SETTLEMENT'"
                   />
@@ -298,11 +308,11 @@ onMounted(load);
                   />
                 </v-col>
               </v-row>
+              </v-form>
               <v-btn
                 v-if="record.status === 'SETTLEMENT' && auth.can('settlement.approve', 'offboarding.manage')"
                 color="primary"
-                :loading="busy === 'settlement'"
-                :disabled="!settlement.workingDays || !settlement.entitlements"
+                :loading="settlementForm.busy.value"
                 @click="saveSettlement"
               >
                 {{ $t('common.save') }}

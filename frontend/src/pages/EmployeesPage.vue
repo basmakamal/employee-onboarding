@@ -5,14 +5,18 @@
  * get the same rows as cards. Creating an employee is three short steps.
  */
 import { computed, onMounted, ref, watch } from 'vue';
+import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
-import { api, ApiError } from '../api/client';
+import { api } from '../api/client';
 import StatusChip from '../components/StatusChip.vue';
 import EntityCard from '../components/EntityCard.vue';
 import SkeletonBlock from '../components/SkeletonBlock.vue';
 import PageHeader from '../components/PageHeader.vue';
+import FormErrorAlert from '../components/FormErrorAlert.vue';
+import { useForm } from '../composables/useForm';
+import { rules } from '../validation/rules';
 import { useOrgOptions } from '../composables/useOrgOptions';
 import EmptyState from '../components/EmptyState.vue';
 import { useAuthStore } from '../stores/auth';
@@ -190,7 +194,7 @@ async function bulkSendForm() {
     selected.value = [];
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     bulkBusy.value = false;
   }
@@ -213,7 +217,7 @@ async function bulkResendForm() {
     selected.value = [];
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   } finally {
     bulkBusy.value = false;
   }
@@ -233,7 +237,7 @@ async function resendForm(target: EmployeeRow) {
     notify(t('employees.resendFormDone'));
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   }
 }
 
@@ -267,15 +271,14 @@ async function removeEmployee(target: EmployeeRow) {
     await api.delete(`/api/employees/${target.id}`);
     await load();
   } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+    notify(errorText(e), 'error');
   }
 }
 
 // ------------------------------------------------------------- create (3 steps)
 const dialog = ref(route.query['new'] === '1');
 const step = ref(1);
-const saving = ref(false);
-const error = ref('');
+const createForm = useForm();
 const org = useOrgOptions();
 const form = ref({
   mode: 'onboarding' as 'onboarding' | 'direct',
@@ -294,21 +297,62 @@ const form = ref({
 });
 const sendFormNow = ref(true);
 
-const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.value.email.trim()));
-const emailError = computed(() => (form.value.email && !emailValid.value ? [t('employees.invalidEmail')] : []));
-const step1Ok = computed(() => !!form.value.firstName.trim() && !!form.value.lastName.trim() && emailValid.value);
-const step3Ok = computed(() => form.value.mode === 'onboarding' || !!form.value.hireDate);
+/**
+ * The wizard shows one step at a time, so a step's fields are checked in code
+ * when Continue / Create is pressed: the bad fields turn red and the alert
+ * says what to fix. A server refusal is shown on its field, and the wizard
+ * jumps back to the step that holds that field.
+ */
+const STEP_OF: Record<string, number> = {
+  firstName: 1, lastName: 1, email: 1, phone: 1, nationalId: 1, preferredLanguage: 1,
+  orgUnitId: 2, positionId: 2, managerId: 2, project: 2,
+  hireDate: 3,
+};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function stepProblems(n: number): Record<string, string[]> {
+  const f = form.value;
+  const req = [t('errors.field.required')];
+  const out: Record<string, string[]> = {};
+  if (n === 1) {
+    if (!f.firstName.trim()) out['firstName'] = req;
+    if (!f.lastName.trim()) out['lastName'] = req;
+    if (!f.email.trim()) out['email'] = req;
+    else if (!EMAIL_RE.test(f.email.trim())) out['email'] = [t('errors.field.email')];
+  }
+  if (n === 3 && f.mode === 'direct' && !f.hireDate) out['hireDate'] = req;
+  return out;
+}
+
+/** Checks the given steps; on a problem, opens the first failing step and marks its fields. */
+function checkSteps(...steps: number[]): boolean {
+  for (const n of steps) {
+    const problems = stepProblems(n);
+    if (Object.keys(problems).length) {
+      step.value = n;
+      createForm.invalid(problems);
+      return false;
+    }
+  }
+  return true;
+}
+
+function nextStep() {
+  if (!checkSteps(step.value)) return;
+  createForm.reset();
+  step.value += 1;
+}
 
 function openCreate() {
   step.value = 1;
-  error.value = '';
+  createForm.reset();
   dialog.value = true;
 }
 
 watch(dialog, (open) => {
   if (!open) {
     step.value = 1;
-    error.value = '';
+    createForm.reset();
     return;
   }
   // However the dialog was opened (button or ?new=1), the placement options must be there.
@@ -316,9 +360,8 @@ watch(dialog, (open) => {
 });
 
 async function createEmployee() {
-  saving.value = true;
-  error.value = '';
-  try {
+  if (!checkSteps(1, 3)) return;
+  await createForm.submit(async () => {
     const body: Record<string, unknown> = {
       direct: form.value.mode === 'direct',
       preferredLanguage: form.value.preferredLanguage,
@@ -337,11 +380,10 @@ async function createEmployee() {
     const created = await api.post<EmployeeRow>('/api/employees', body);
     dialog.value = false;
     await router.push(`/employees/${created.id}`);
-  } catch (e) {
-    error.value = e instanceof ApiError ? e.message : t('common.error');
-  } finally {
-    saving.value = false;
-  }
+  });
+  // Refused by the server: show the step that holds the first bad field.
+  const first = Object.keys(createForm.fields.value).map((k) => STEP_OF[k.split('.')[0] ?? '']).find(Boolean);
+  if (first) step.value = first;
 }
 
 const headers = computed(() => [
@@ -552,16 +594,16 @@ onMounted(loadOptions);
         </div>
 
         <v-card-text class="px-6 pt-4">
-          <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
+          <FormErrorAlert :form="createForm" />
 
           <v-window v-model="step" :touch="false">
             <v-window-item :value="1">
               <v-row dense>
-                <v-col cols="12" sm="6"><v-text-field v-model="form.firstName" :label="$t('fields.firstName')" autofocus /></v-col>
-                <v-col cols="12" sm="6"><v-text-field v-model="form.lastName" :label="$t('fields.lastName')" /></v-col>
-                <v-col cols="12"><v-text-field v-model="form.email" :label="$t('fields.email')" type="email" dir="ltr" prepend-inner-icon="mail" :error-messages="emailError" /></v-col>
-                <v-col cols="12" sm="6"><v-text-field v-model="form.phone" :label="$t('fields.phone')" dir="ltr" prepend-inner-icon="phone" /></v-col>
-                <v-col cols="12" sm="6"><v-text-field v-model="form.nationalId" :label="$t('fields.nationalId')" dir="ltr" prepend-inner-icon="id-card" /></v-col>
+                <v-col cols="12" sm="6"><v-text-field v-model="form.firstName" :label="$t('fields.firstName') + ' *'" :rules="[rules.required, rules.maxLength(100)]" :error-messages="createForm.errorsFor('firstName')" autofocus /></v-col>
+                <v-col cols="12" sm="6"><v-text-field v-model="form.lastName" :label="$t('fields.lastName') + ' *'" :rules="[rules.required, rules.maxLength(100)]" :error-messages="createForm.errorsFor('lastName')" /></v-col>
+                <v-col cols="12"><v-text-field v-model="form.email" :label="$t('fields.email') + ' *'" type="email" dir="ltr" prepend-inner-icon="mail" :rules="[rules.required, rules.email]" :error-messages="createForm.errorsFor('email')" /></v-col>
+                <v-col cols="12" sm="6"><v-text-field v-model="form.phone" :label="$t('fields.phone')" dir="ltr" prepend-inner-icon="phone" :error-messages="createForm.errorsFor('phone')" /></v-col>
+                <v-col cols="12" sm="6"><v-text-field v-model="form.nationalId" :label="$t('fields.nationalId')" dir="ltr" prepend-inner-icon="id-card" :error-messages="createForm.errorsFor('nationalId')" /></v-col>
                 <v-col cols="12">
                   <v-select
                     v-model="form.preferredLanguage"
@@ -578,10 +620,10 @@ onMounted(loadOptions);
             <v-window-item :value="2">
               <v-row dense>
                 <v-col cols="12" sm="6">
-                  <v-select v-model="form.orgUnitId" :items="org.unitItems.value" :label="$t('fields.orgUnit')" :hint="org.hasUnits.value ? '' : $t('fields.orgNone')" persistent-hint clearable />
+                  <v-select v-model="form.orgUnitId" :items="org.unitItems.value" :label="$t('fields.orgUnit')" :hint="org.hasUnits.value ? '' : $t('fields.orgNone')" persistent-hint clearable :error-messages="createForm.errorsFor('orgUnitId')" />
                 </v-col>
                 <v-col cols="12" sm="6">
-                  <v-select v-model="form.positionId" :items="org.titleItems.value" :label="$t('fields.position')" :hint="org.hasTitles.value ? '' : $t('fields.titlesNone')" persistent-hint clearable />
+                  <v-select v-model="form.positionId" :items="org.titleItems.value" :label="$t('fields.position')" :hint="org.hasTitles.value ? '' : $t('fields.titlesNone')" persistent-hint clearable :error-messages="createForm.errorsFor('positionId')" />
                 </v-col>
                 <v-col cols="12" sm="6">
                   <v-autocomplete
@@ -592,6 +634,7 @@ onMounted(loadOptions);
                     persistent-hint
                     clearable
                     no-filter
+                    :error-messages="createForm.errorsFor('managerId')"
                     @update:search="(q: string) => org.searchManagers(q)"
                   />
                 </v-col>
@@ -614,7 +657,7 @@ onMounted(loadOptions);
                   <span class="text-caption text-medium-emphasis">{{ $t('employees.directHint') }}</span>
                 </button>
               </div>
-              <v-text-field v-if="form.mode === 'direct'" v-model="form.hireDate" :label="$t('employees.hireDate')" type="date" class="mt-4" />
+              <v-text-field v-if="form.mode === 'direct'" v-model="form.hireDate" :label="$t('employees.hireDate') + ' *'" type="date" class="mt-4" :rules="[rules.required]" :error-messages="createForm.errorsFor('hireDate')" />
               <v-switch v-else v-model="sendFormNow" color="primary" hide-details class="mt-3">
                 <template #label>
                   <div class="ms-2">
@@ -638,12 +681,12 @@ onMounted(loadOptions);
         </v-card-text>
 
         <v-card-actions class="px-6 pb-5 pt-2">
-          <v-btn v-if="step > 1" variant="text" prepend-icon="arrow-left" class="flip-icon" @click="step -= 1">{{ $t('employees.back') }}</v-btn>
+          <v-btn v-if="step > 1" variant="text" prepend-icon="arrow-left" class="flip-icon" @click="createForm.reset(); step -= 1">{{ $t('employees.back') }}</v-btn>
           <v-spacer />
-          <v-btn v-if="step < 3" color="primary" variant="flat" class="px-5" :disabled="step === 1 && !step1Ok" append-icon="arrow-right" @click="step += 1">
+          <v-btn v-if="step < 3" color="primary" variant="flat" class="px-5" append-icon="arrow-right" @click="nextStep">
             {{ $t('employees.continue') }}
           </v-btn>
-          <v-btn v-else color="primary" variant="flat" class="px-5" :loading="saving" :disabled="!step1Ok || !step3Ok" @click="createEmployee">
+          <v-btn v-else color="primary" variant="flat" class="px-5" :loading="createForm.busy.value" @click="createEmployee">
             {{ form.mode === 'onboarding' && sendFormNow ? $t('employees.createAndSend') : $t('common.create') }}
           </v-btn>
         </v-card-actions>

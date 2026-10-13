@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../api/client';
+import { api } from '../api/client';
 import PageHeader from '../components/PageHeader.vue';
+import FormErrorAlert from '../components/FormErrorAlert.vue';
+import { useForm } from '../composables/useForm';
+import { rules } from '../validation/rules';
 
 interface MailSettings {
   provider: 'console' | 'gmail' | 'microsoft' | 'custom';
@@ -33,6 +36,8 @@ const form = ref({
   hasPassword: false,
 });
 const testTo = ref('');
+const mailForm = useForm();
+const testForm = useForm();
 
 function notify(text: string, color = 'success') {
   snackbar.value = { show: true, text, color };
@@ -60,9 +65,8 @@ async function load() {
   loaded.value = true;
 }
 
-async function save() {
-  saving.value = true;
-  try {
+function save() {
+  return mailForm.submit(async () => {
     const body: Record<string, unknown> = { provider: form.value.provider };
     if (form.value.provider !== 'console') {
       body['host'] = form.value.host || undefined;
@@ -74,23 +78,14 @@ async function save() {
     await api.put('/api/settings/mail', body);
     notify(t('common.saved'));
     await load();
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    saving.value = false;
-  }
+  });
 }
 
-async function sendTest() {
-  testing.value = true;
-  try {
+function sendTest() {
+  return testForm.submit(async () => {
     await api.post('/api/settings/mail/test', { to: testTo.value.trim() });
     notify(t('settings.testSent'));
-  } catch (e) {
-    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
-  } finally {
-    testing.value = false;
-  }
+  });
 }
 
 onMounted(load);
@@ -102,6 +97,9 @@ onMounted(load);
 
     <v-card v-if="loaded" :title="$t('settings.mail')">
       <v-card-text>
+        <FormErrorAlert :form="mailForm" />
+        <FormErrorAlert :form="testForm" />
+        <v-form :ref="mailForm.bind" @submit.prevent="save">
         <v-select
           v-model="form.provider"
           :items="[
@@ -119,20 +117,25 @@ onMounted(load);
             <v-col cols="8">
               <v-text-field
                 v-model="form.host"
-                :label="$t('settings.host')"
+                :label="$t('settings.host') + ' *'"
                 :readonly="form.provider !== 'custom'"
+                :rules="[rules.required]"
+                :error-messages="mailForm.errorsFor('host')"
+                dir="ltr"
               />
             </v-col>
             <v-col cols="4">
               <v-text-field
                 v-model="form.port"
-                :label="$t('settings.port')"
+                :label="$t('settings.port') + ' *'"
                 type="number"
                 :readonly="form.provider !== 'custom'"
+                :rules="[rules.required, rules.integer(1)]"
+                :error-messages="mailForm.errorsFor('port')"
               />
             </v-col>
             <v-col cols="12">
-              <v-text-field v-model="form.user" :label="$t('settings.user')" autocomplete="off" />
+              <v-text-field v-model="form.user" :label="$t('settings.user') + ' *'" autocomplete="off" :rules="[rules.required]" :error-messages="mailForm.errorsFor('user')" dir="ltr" />
             </v-col>
             <v-col cols="12">
               <v-text-field
@@ -142,10 +145,12 @@ onMounted(load);
                 autocomplete="new-password"
                 :placeholder="form.hasPassword ? $t('settings.passwordKept') : ''"
                 persistent-placeholder
+                :rules="form.hasPassword ? [] : [rules.required]"
+                :error-messages="mailForm.errorsFor('password')"
               />
             </v-col>
             <v-col cols="12">
-              <v-text-field v-model="form.from" :label="$t('settings.from')" />
+              <v-text-field v-model="form.from" :label="$t('settings.from') + ' *'" :rules="[rules.required, rules.email]" :error-messages="mailForm.errorsFor('from')" dir="ltr" />
             </v-col>
           </v-row>
           <v-alert v-if="form.provider === 'gmail'" type="info" variant="tonal" density="compact">
@@ -155,30 +160,35 @@ onMounted(load);
         <v-alert v-else type="info" variant="tonal" density="compact">
           {{ $t('settings.consoleHint') }}
         </v-alert>
+        </v-form>
       </v-card-text>
 
       <v-card-actions class="px-4 pb-4">
-        <v-btn color="primary" variant="flat" :loading="saving" @click="save">
+        <v-btn color="primary" variant="flat" :loading="mailForm.busy.value" @click="save">
           {{ $t('common.save') }}
         </v-btn>
         <v-spacer />
+        <v-form :ref="testForm.bind" class="d-flex align-start" @submit.prevent="sendTest">
         <v-text-field
           v-model="testTo"
-          :label="$t('settings.testTo')"
+          :label="$t('settings.testTo') + ' *'"
           density="compact"
-          hide-details
-          style="max-width: 260px"
+          hide-details="auto"
+          :rules="[rules.required, rules.email]"
+          :error-messages="testForm.errorsFor('to')"
+          style="min-width: 240px; max-width: 260px"
           class="me-2"
+          dir="ltr"
         />
         <v-btn
           variant="tonal"
           prepend-icon="mail-check"
-          :loading="testing"
-          :disabled="!testTo.includes('@')"
-          @click="sendTest"
+          :loading="testForm.busy.value"
+          type="submit"
         >
           {{ $t('settings.sendTest') }}
         </v-btn>
+        </v-form>
       </v-card-actions>
     </v-card>
 

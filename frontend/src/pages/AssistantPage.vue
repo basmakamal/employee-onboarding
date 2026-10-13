@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue';
+import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../api/client';
+import { api } from '../api/client';
 import PageHeader from '../components/PageHeader.vue';
 
 interface ChatTurn {
@@ -30,7 +31,7 @@ async function send() {
     });
     turns.value.push({ role: 'assistant', content: reply });
   } catch (e) {
-    error.value = e instanceof ApiError ? e.message : t('common.error');
+    error.value = errorText(e);
     turns.value.pop(); // let the user retry the same question
     input.value = question;
   } finally {
