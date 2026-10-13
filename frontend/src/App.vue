@@ -337,7 +337,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
           :aria-label="$t('common.search')"
           @click="palette = true"
         />
-        <LanguageToggle v-if="display.mdAndUp.value" class="me-2" />
         <v-btn
           :icon="prefs.dark ? 'sun' : 'moon'"
           variant="text"
@@ -346,7 +345,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         />
         <NotificationBell />
 
-        <!-- Account menu: profile, password, sign out -->
+        <!-- Account menu: profile, language, password, sign out -->
         <v-menu>
           <template #activator="{ props }">
             <v-btn v-bind="props" icon variant="text" class="ms-1" :aria-label="$t('account.menu')">
@@ -356,7 +355,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
               </v-avatar>
             </v-btn>
           </template>
-          <v-card min-width="240">
+          <v-card min-width="300">
             <div class="d-flex align-center ga-3 px-4 pt-4 pb-2">
               <v-avatar color="primary" variant="tonal" size="40">
                 <v-img v-if="avatar.url.value" :src="avatar.url.value" cover />
@@ -370,6 +369,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
             <v-divider />
             <v-list density="compact">
               <v-list-item prepend-icon="user" :title="$t('account.title')" @click="profileOpen = true" />
+              <!-- Language lives here (not in the top bar). The choice is remembered on this device. -->
+              <v-list-item prepend-icon="languages" :title="$t('account.language')" :ripple="false" class="account-lang">
+                <template #append>
+                  <LanguageToggle class="ms-3" />
+                </template>
+              </v-list-item>
               <v-list-item prepend-icon="key-round" :title="$t('changePassword.menu')" to="/change-password" />
               <v-list-item prepend-icon="log-out" :title="$t('login.signOut')" @click="logout" />
             </v-list>
