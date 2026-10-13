@@ -73,3 +73,15 @@ export class ForbiddenError extends DomainError {
     super(message);
   }
 }
+
+/**
+ * A company-owned route was called without a selected company. Clients
+ * send the user to the company selector; nothing falls back to "all".
+ */
+export class CompanyRequiredError extends DomainError {
+  readonly code = 'COMPANY_REQUIRED';
+  readonly httpStatus = 403;
+  constructor() {
+    super('select a company to continue');
+  }
+}

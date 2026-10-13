@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, validate } from '../../common/http.js';
-import { requireRole } from '../../auth/require-auth.middleware.js';
+import { requirePermission } from '../../auth/authz/authorize.js';
 import type { ListService } from './list.service.js';
 
 const createSchema = z.object({
@@ -30,7 +30,7 @@ export function listsRouter(lists: ListService): Router {
 
   router.post(
     '/:key/values',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('lists.manage', 'employees.write'),
     validate(createSchema),
     asyncHandler(async (req, res) => {
       const body = req.body as z.infer<typeof createSchema>;
@@ -40,7 +40,7 @@ export function listsRouter(lists: ListService): Router {
 
   router.put(
     '/:key/values/:id',
-    requireRole('ADMIN'),
+    requirePermission('lists.manage'),
     validate(updateSchema),
     asyncHandler(async (req, res) => {
       const body = req.body as z.infer<typeof updateSchema>;
@@ -50,7 +50,7 @@ export function listsRouter(lists: ListService): Router {
 
   router.delete(
     '/:key/values/:id',
-    requireRole('ADMIN'),
+    requirePermission('lists.manage'),
     asyncHandler(async (req, res) => {
       await lists.remove(req.params['key'] as string, req.params['id'] as string);
       res.status(204).end();

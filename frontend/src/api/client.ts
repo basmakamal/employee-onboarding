@@ -19,11 +19,27 @@ export class ApiError extends Error {
 let accessToken = '';
 let onSession: (user: SessionUser | null, token: string) => void = () => {};
 
+export interface SessionCompany {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn: string;
+}
+
 export interface SessionUser {
   id: string;
   name: string;
   email: string;
+  /** Legacy single role — `roles` and `permissions` are what the UI should read. */
   role: string;
+  /** Role codes in force in the active company (global roles always). */
+  roles: string[];
+  /** Permission codes — decide what to SHOW; the server decides what is allowed. */
+  permissions: string[];
+  /** Companies this user may work in. */
+  companies: SessionCompany[];
+  /** The selected workspace, or null when one still has to be chosen. */
+  activeCompany: SessionCompany | null;
   /** A profile picture exists at /api/auth/me/photo. */
   hasPhoto?: boolean;
   /** Still on a temporary password — the app forces a change before anything else. */

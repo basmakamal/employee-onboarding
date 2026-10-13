@@ -51,6 +51,7 @@ import { withAfterCommit } from './common/after-commit.js';
 import { OpenWorkHalter, type HaltScope } from './workflow/halt-open-work.js';
 import { ResponsibilityService } from './workflow/responsibility.service.js';
 import { NotificationGroupRepository } from './notifications/notification-group.repository.js';
+import { CompanyRepository } from './auth/company.repository.js';
 
 /**
  * Composition root — the ONLY place where concrete implementations are
@@ -209,6 +210,8 @@ export function buildContainer() {
     ],
   );
 
+  // Companies + unit paths resolve each request's workspace and scope.
+  const companies = new CompanyRepository(prisma);
   const authService = new AuthService(
     users,
     {
@@ -217,6 +220,8 @@ export function buildContainer() {
     },
     // Refresh tokens become single-use + revocable when Redis is present.
     redisEnabled ? new RedisRefreshTokenStore(getSharedRedis()) : undefined,
+    companies,
+    audit,
   );
 
   const listValues = new ListValueRepository(prisma);
@@ -279,6 +284,7 @@ export function buildContainer() {
       employeeDocuments,
       notificationRepo,
       notificationGroups,
+      companies,
     },
     notifications,
     notifier,

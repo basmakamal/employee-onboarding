@@ -17,7 +17,7 @@ import {
   verifyUploadedFiles,
 } from '../../common/storage.js';
 import { GuardFailedError } from '../../workflow/errors.js';
-import { requireRole } from '../../auth/require-auth.middleware.js';
+import { requirePermission } from '../../auth/authz/authorize.js';
 import type { EmployeeService } from './employee.service.js';
 import type { OnboardingService } from './onboarding.service.js';
 import type { Actor } from '../../workflow/engine.js';
@@ -178,7 +178,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** New hire (onboarding pipeline) by default; `direct: true` for existing staff. */
   router.post(
     '/',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('employees.write'),
     validate(createEmployeeSchema),
     asyncHandler(async (req, res) => {
       const { direct, sendForm, documentTypes, ...rest } = req.body as z.infer<
@@ -228,7 +228,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** Onboarding pipeline actions (BRD stage 1) on the same record. */
   router.post(
     '/:id/actions/:action',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('onboarding.manage'),
     validate(notesSchema),
     asyncHandler(async (req, res) => {
       const method = ONBOARDING_ACTIONS[req.params['action'] as string];
@@ -251,7 +251,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** Contract draft — editable only during CONTRACT_CREATION. */
   router.put(
     '/:id/contract',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('contracts.write'),
     validate(contractSchema),
     asyncHandler(async (req, res) => {
       const { details, externalRef } = req.body as z.infer<typeof contractSchema>;
@@ -269,7 +269,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** The contract document (scan / photo / PDF); typed terms stay optional. */
   router.post(
     '/:id/contract/file',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('contracts.write'),
     (req, _res, next) => {
       req.uploadSubdir = employeeSubdir(req.params['id'] as string);
       next();
@@ -309,7 +309,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
    */
   router.put(
     '/:id/contract/status',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('contracts.write'),
     validate(contractStatusSchema),
     asyncHandler(async (req, res) => {
       const { status, reason } = req.body as z.infer<typeof contractStatusSchema>;
@@ -327,7 +327,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** The trainee withdrew before activation — stops every open action on the file. */
   router.post(
     '/:id/withdraw',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('onboarding.manage'),
     validate(withdrawSchema),
     asyncHandler(async (req, res) => {
       const { reason } = req.body as z.infer<typeof withdrawSchema>;
@@ -338,7 +338,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** Onboarding checklist file download (HR review). */
   router.get(
     '/:id/onboarding-documents/:docId/download',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('documents.read'),
     asyncHandler(async (req, res) => {
       const doc = await onboarding.getDocument(
         req.params['id'] as string,
@@ -351,7 +351,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** DELETE /:id — ADMIN-only hard delete with full child cleanup. */
   router.delete(
     '/:id',
-    requireRole('ADMIN'),
+    requirePermission('employees.delete'),
     asyncHandler(async (req, res) => {
       const storageKeys = await service.remove(req.params['id'] as string, actor(req));
       // Disk cleanup only after the delete committed — files first would
@@ -364,7 +364,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** PUT /:id — HR edits the profile (the reference's "edit data" button). */
   router.put(
     '/:id',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('employees.write'),
     validate(updateEmployeeSchema),
     asyncHandler(async (req, res) => {
       const input = compact(req.body as z.infer<typeof updateEmployeeSchema>);
@@ -375,7 +375,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** Profile photo: upload (HR) and authenticated serving (any staff). */
   router.post(
     '/:id/photo',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('employees.write'),
     (req, _res, next) => {
       // Shard the photo into the employee's directory before multer runs.
       req.uploadSubdir = employeeSubdir(req.params['id'] as string);
@@ -426,7 +426,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
    */
   router.post(
     '/:id/requests',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('requests.write'),
     (req, _res, next) => {
       req.uploadSubdir = employeeSubdir(req.params['id'] as string);
       next();
@@ -465,7 +465,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
    */
   router.put(
     '/:id/requests/:requestId/document',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('requests.write'),
     (req, _res, next) => {
       req.uploadSubdir = employeeSubdir(req.params['id'] as string);
       next();
@@ -493,7 +493,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** The request's document, for the in-page viewer. */
   router.get(
     '/:id/requests/:requestId/document',
-    requireRole('HR', 'ADMIN'),
+    requirePermission('documents.read'),
     asyncHandler(async (req, res) => {
       const doc = await service.getRequestDocument(
         req.params['id'] as string,

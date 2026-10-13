@@ -19,7 +19,17 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => user.value !== null);
 
-  /** Group check for UI gating — ADMIN passes everything. */
+  /**
+   * Permission check for UI gating only (what to show). Any of the listed
+   * codes is enough. The server re-checks every call — never rely on this
+   * for security.
+   */
+  function can(...permissions: string[]): boolean {
+    const have = user.value?.permissions ?? [];
+    return permissions.some((p) => have.includes(p));
+  }
+
+  /** Legacy role check — kept for the transition; prefer can(). ADMIN passes everything. */
   function hasRole(...roles: string[]): boolean {
     const role = user.value?.role;
     return role === 'ADMIN' || (role !== undefined && roles.includes(role));
@@ -52,5 +62,5 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null;
   }
 
-  return { user, isAuthenticated, hasRole, login, logout, restore };
+  return { user, isAuthenticated, can, hasRole, login, logout, restore };
 });

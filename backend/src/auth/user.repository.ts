@@ -15,15 +15,35 @@ export const USER_LIST_SELECT = {
   lastLoginAt: true,
 } as const;
 
+/**
+ * A user's assignments travel with the account: the session needs them on
+ * every request (authenticate runs per call), and one join is cheaper than
+ * a second round trip.
+ */
+export const WITH_ASSIGNMENTS = {
+  assignments: {
+    select: {
+      companyId: true,
+      orgUnitId: true,
+      role: { select: { code: true, active: true, permissions: { select: { permission: true } } } },
+    },
+  },
+} as const;
+
 export class UserRepository {
   constructor(private readonly db: Db) {}
 
   findById(id: string) {
-    return this.db.user.findUnique({ where: { id } });
+    return this.db.user.findUnique({ where: { id }, include: WITH_ASSIGNMENTS });
   }
 
   findByEmail(email: string) {
-    return this.db.user.findUnique({ where: { email } });
+    return this.db.user.findUnique({ where: { email }, include: WITH_ASSIGNMENTS });
+  }
+
+  /** The workspace the user is in — validated by the service before it is stored. */
+  setActiveCompany(id: string, companyId: string | null) {
+    return this.db.user.update({ where: { id }, data: { activeCompanyId: companyId }, include: WITH_ASSIGNMENTS });
   }
 
   /** Active staff of a role — notification fan-out targets. */

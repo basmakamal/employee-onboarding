@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../common/http.js';
-import { requireRole } from '../auth/require-auth.middleware.js';
+import { requirePermission } from '../auth/authz/authorize.js';
 import { NotFoundError } from '../workflow/errors.js';
 import type { UserRepository } from '../auth/user.repository.js';
 import type { NotificationService } from './notification.service.js';
@@ -33,7 +33,7 @@ export function emailTemplatesRouter(
   users: UserRepository,
 ): Router {
   const router = Router();
-  router.use(requireRole('ADMIN'));
+  router.use(requirePermission('settings.manage'));
 
   router.get(
     '/',
@@ -122,7 +122,7 @@ const triggerSchema = z.object({
 /** ADMIN — "when status X, send template Y" rules. */
 export function emailTriggersRouter(triggers: TriggerService): Router {
   const router = Router();
-  router.use(requireRole('ADMIN'));
+  router.use(requirePermission('settings.manage'));
 
   router.get(
     '/',

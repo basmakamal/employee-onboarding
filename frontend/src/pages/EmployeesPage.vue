@@ -347,7 +347,7 @@ onMounted(loadOptions);
   <v-container class="py-6 py-md-8" style="max-width: 1240px">
     <!-- ───── header ───── -->
     <PageHeader :title="$t('employees.title')" :subtitle="$t('employees.subtitle')">
-      <v-btn v-if="auth.hasRole('HR')" color="primary" prepend-icon="plus" @click="openCreate">
+      <v-btn v-if="auth.can('employees.write')" color="primary" prepend-icon="plus" @click="openCreate">
         {{ $t('employees.new') }}
       </v-btn>
     </PageHeader>
@@ -394,10 +394,10 @@ onMounted(loadOptions);
     <v-slide-y-transition>
       <div v-if="selected.length" class="bulk mb-3 px-4 py-2 d-flex align-center flex-wrap ga-2">
         <span class="text-body-2 font-weight-semibold">{{ $t('employees.selected', { n: selected.length }) }}</span>
-        <v-btn v-if="auth.hasRole('HR')" size="small" variant="tonal" prepend-icon="send" :loading="bulkBusy" @click="bulkSendForm">
+        <v-btn v-if="auth.can('onboarding.manage')" size="small" variant="tonal" prepend-icon="send" :loading="bulkBusy" @click="bulkSendForm">
           {{ $t('employees.bulkSendForm') }}
         </v-btn>
-        <v-btn v-if="auth.hasRole('HR')" size="small" variant="tonal" prepend-icon="mail-plus" :loading="bulkBusy" @click="bulkResendForm">
+        <v-btn v-if="auth.can('onboarding.manage')" size="small" variant="tonal" prepend-icon="mail-plus" :loading="bulkBusy" @click="bulkResendForm">
           {{ $t('employees.bulkResendForm') }}
         </v-btn>
         <v-btn size="small" variant="tonal" prepend-icon="download" @click="bulkExport">{{ $t('employees.bulkExport') }}</v-btn>
@@ -484,13 +484,13 @@ onMounted(loadOptions);
             <v-list density="compact" min-width="200">
               <v-list-item prepend-icon="external-link" :title="$t('employees.openProfile')" :to="`/employees/${item.id}`" />
               <v-list-item
-                v-if="auth.hasRole('HR') && item.status === 'AWAITING_FORM'"
+                v-if="auth.can('onboarding.manage') && item.status === 'AWAITING_FORM'"
                 prepend-icon="mail-plus"
                 :title="$t('actions.RESEND_FORM')"
                 @click="resendForm(item)"
               />
               <v-list-item
-                v-if="auth.user?.role === 'ADMIN'"
+                v-if="auth.can('employees.delete')"
                 prepend-icon="trash-2"
                 :title="$t('profile.delete')"
                 base-color="error"
@@ -508,7 +508,7 @@ onMounted(loadOptions);
             :title="hasFilters ? $t('employees.noMatchTitle') : $t('employees.emptyTitle')"
             :hint="hasFilters ? $t('employees.noMatchHint') : $t('employees.emptyHint')"
           >
-            <v-btn v-if="!hasFilters && auth.hasRole('HR')" color="primary" size="small" prepend-icon="plus" @click="openCreate">
+            <v-btn v-if="!hasFilters && auth.can('employees.write')" color="primary" size="small" prepend-icon="plus" @click="openCreate">
               {{ $t('employees.new') }}
             </v-btn>
             <v-btn v-else-if="hasFilters" variant="tonal" size="small" @click="clearFilters">{{ $t('employees.clearFilters') }}</v-btn>

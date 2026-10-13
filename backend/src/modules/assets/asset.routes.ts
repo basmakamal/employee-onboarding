@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
-import { requireRole } from '../../auth/require-auth.middleware.js';
+import { requirePermission } from '../../auth/authz/authorize.js';
 import type { AssetService } from './asset.service.js';
 import type { Actor } from '../../workflow/engine.js';
 
@@ -44,7 +44,7 @@ export function assetRouter(service: AssetService): Router {
   );
   router.post(
     '/assets',
-    requireRole('IT', 'ADMIN'),
+    requirePermission('assets.manage'),
     validate(assetSchema),
     asyncHandler(async (req, res) => {
       res.status(201).json(await service.createAsset(compact(req.body as z.infer<typeof assetSchema>)));
@@ -54,7 +54,7 @@ export function assetRouter(service: AssetService): Router {
   // Custody forms
   router.post(
     '/asset-forms',
-    requireRole('IT', 'ADMIN'),
+    requirePermission('assets.manage'),
     validate(createFormSchema),
     asyncHandler(async (req, res) => {
       const input = req.body as z.infer<typeof createFormSchema>;
@@ -69,7 +69,7 @@ export function assetRouter(service: AssetService): Router {
 
   router.put(
     '/asset-forms/:id/items',
-    requireRole('IT', 'ADMIN'),
+    requirePermission('assets.manage'),
     validate(itemsSchema),
     asyncHandler(async (req, res) => {
       const { items } = req.body as z.infer<typeof itemsSchema>;
