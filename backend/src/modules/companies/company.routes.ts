@@ -11,6 +11,7 @@ const createSchema = z.object({
   nameAr: z.string().trim().min(1).max(120),
   nameEn: z.string().trim().min(1).max(120),
   active: z.boolean().optional(),
+  managerId: z.string().min(1).nullable().optional(),
 });
 
 const updateSchema = createSchema.omit({ code: true }).partial();
@@ -44,6 +45,13 @@ export function companyRouter(service: CompanyService): Router {
     '/:id',
     asyncHandler(async (req, res) => {
       res.json(await service.get(req.params['id'] as string));
+    }),
+  );
+
+  router.get(
+    '/:id/units',
+    asyncHandler(async (req, res) => {
+      res.json(await service.listUnits(req.params['id'] as string));
     }),
   );
 

@@ -7,6 +7,8 @@ import { startSlaScheduler } from './workflow/sla-scheduler.js';
 import { requireAuth } from './auth/require-auth.middleware.js';
 import { COMPANY_SCOPED_PREFIXES, requireCompany, requirePermission } from './auth/authz/authorize.js';
 import { companyRouter } from './modules/companies/company.routes.js';
+import { orgRouter } from './modules/organisation/org.routes.js';
+import { assignmentsRouter, rolesRouter } from './auth/authz.routes.js';
 import { authRouter } from './auth/auth.routes.js';
 import { employeeRouter } from './modules/employees/employee.routes.js';
 import { assetRouter } from './modules/assets/asset.routes.js';
@@ -42,6 +44,8 @@ staffApi.use(requireAuth(container.authService));
 // Global administration — the one HR-adjacent surface that works before a
 // company is selected (it is how a super admin gets one).
 staffApi.use('/companies', companyRouter(container.companyService));
+staffApi.use('/roles', rolesRouter(container.assignmentService));
+staffApi.use('/users/:id/assignments', assignmentsRouter(container.assignmentService));
 // Company-owned data refuses to answer without a selected workspace; it
 // never widens to "all companies".
 staffApi.use([...COMPANY_SCOPED_PREFIXES], requireCompany());
@@ -54,6 +58,7 @@ staffApi.use('/employees/:id/documents', docRouters.nested);
 staffApi.use('/employee-documents', docRouters.flat);
 staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
+staffApi.use('/org', orgRouter(container.orgService));
 staffApi.use('/reports', reportsRouter(container.reportsService));
 staffApi.use(
   '/settings',

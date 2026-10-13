@@ -82,6 +82,7 @@ export const COMPANY_SCOPED_PREFIXES = [
   '/ai',
   '/assets',
   '/asset-forms',
+  '/org',
 ] as const;
 
 /** Route gate for company-owned data: no selected company → refused. */
