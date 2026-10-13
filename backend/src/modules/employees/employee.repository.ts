@@ -1,4 +1,6 @@
 import type { Db } from '../../common/prisma.js';
+import type { EmployeeScope } from '../../auth/authz/authorize.js';
+import { compact } from '../../common/http.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { EmployeeStatus, EmploymentType } from '../../generated/prisma/enums.js';
 
@@ -116,7 +118,15 @@ function employeeListWhere(query: EmployeeListQuery): Prisma.EmployeeWhereInput 
 }
 
 /** New-hire intake: opens the record in the onboarding pipeline. */
-export interface CreateOnboardingData {
+/** Where the person sits in the company — resolved and validated by the service. */
+export interface OrgPlacement {
+  companyId?: string | undefined;
+  orgUnitId?: string | null | undefined;
+  positionId?: string | null | undefined;
+  managerId?: string | null | undefined;
+}
+
+export interface CreateOnboardingData extends OrgPlacement {
   firstName: string;
   lastName: string;
   email: string;
@@ -132,7 +142,7 @@ export interface CreateOnboardingData {
 }
 
 /** Direct add of existing staff: born ACTIVE with a number and processes. */
-export interface CreateDirectData {
+export interface CreateDirectData extends OrgPlacement {
   employeeNo: string;
   firstName: string;
   lastName: string;
@@ -151,7 +161,7 @@ export interface CreateDirectData {
 }
 
 /** Profile fields HR may edit in place; null clears an optional column. */
-export interface UpdateEmployeeData {
+export interface UpdateEmployeeData extends Omit<OrgPlacement, 'companyId'> {
   firstName?: string;
   lastName?: string;
   email?: string;
@@ -172,7 +182,7 @@ export class EmployeeRepository {
 
   /** Pipeline intake — checklist rows open, no number, no process tracks. */
   createOnboarding(data: CreateOnboardingData) {
-    const { documentTypes, ...employee } = data;
+    const { documentTypes, ...employee } = compact(data);
     return this.db.employee.create({
       data: {
         ...employee,
@@ -186,7 +196,7 @@ export class EmployeeRepository {
   createDirect(data: CreateDirectData) {
     return this.db.employee.create({
       data: {
-        ...data,
+        ...compact(data),
         status: 'ACTIVE',
         gosi: { create: {} },
         medical: { create: {} },
@@ -229,12 +239,39 @@ export class EmployeeRepository {
     return `EMP-${String(seq.value).padStart(4, '0')}`;
   }
 
-  findById(id: string) {
-    return this.db.employee.findUnique({ where: { id } });
+  /** With a scope, a record outside it is simply not found. */
+  findById(id: string, scope?: EmployeeScope) {
+    return scope
+      ? this.db.employee.findFirst({ where: { id, ...scope } })
+      : this.db.employee.findUnique({ where: { id } });
+  }
+
+  /** A unit of the company, for placement validation (with its path for scope checks). */
+  findOrgUnit(companyId: string, id: string) {
+    return this.db.orgUnit.findFirst({
+      where: { id, companyId },
+      select: { id: true, path: true, active: true, nameAr: true, nameEn: true },
+    });
+  }
+
+  findPosition(companyId: string, id: string) {
+    return this.db.position.findFirst({
+      where: { id, companyId },
+      select: { id: true, active: true, titleAr: true, titleEn: true },
+    });
+  }
+
+  /** Another employee of the same company (the direct manager). */
+  findColleague(companyId: string, id: string) {
+    return this.db.employee.findFirst({
+      where: { id, companyId },
+      select: { id: true, firstName: true, lastName: true },
+    });
   }
 
   update(id: string, data: UpdateEmployeeData) {
-    return this.db.employee.update({ where: { id }, data });
+    // Explicit undefined keys are "not touched"; compact drops them (null still clears).
+    return this.db.employee.update({ where: { id }, data: compact(data) });
   }
 
   setPhoto(id: string, photoKey: string) {
@@ -279,10 +316,13 @@ export class EmployeeRepository {
   }
 
   /** The employee-file page: profile, checklist, contract, processes, timeline. */
-  findWithDetails(id: string) {
-    return this.db.employee.findUnique({
-      where: { id },
+  findWithDetails(id: string, scope?: EmployeeScope) {
+    return this.db.employee.findFirst({
+      where: { id, ...(scope ?? {}) },
       include: {
+        orgUnit: { select: { id: true, code: true, nameAr: true, nameEn: true, path: true } },
+        position: { select: { id: true, code: true, titleAr: true, titleEn: true } },
+        manager: { select: { id: true, firstName: true, lastName: true } },
         documents: true,
         contract: true,
         gosi: true,
@@ -303,8 +343,8 @@ export class EmployeeRepository {
    * Server-side page of the employee list. Search, filter, sort and slice
    * all happen in the database — the API never ships the whole table.
    */
-  async listPaged(query: EmployeeListQuery): Promise<{ items: EmployeeListItem[]; total: number }> {
-    const where = employeeListWhere(query);
+  async listPaged(query: EmployeeListQuery, scope?: EmployeeScope): Promise<{ items: EmployeeListItem[]; total: number }> {
+    const where = { ...employeeListWhere(query), ...(scope ?? {}) };
     const orderBy = { [query.sortBy]: query.sortDir } as Record<string, 'asc' | 'desc'>;
     const [items, total] = await Promise.all([
       this.db.employee.findMany({
@@ -325,6 +365,8 @@ export class EmployeeRepository {
           status: true,
           hireDate: true,
           createdAt: true,
+          orgUnit: { select: { id: true, nameAr: true, nameEn: true } },
+          position: { select: { id: true, titleAr: true, titleEn: true } },
         },
       }),
       this.db.employee.count({ where }),
@@ -333,7 +375,7 @@ export class EmployeeRepository {
   }
 
   /** Tab badges for the list page — one GROUP BY instead of four scans. */
-  async statusCounts(): Promise<{
+  async statusCounts(scope?: EmployeeScope): Promise<{
     all: number;
     onboarding: number;
     active: number;
@@ -342,6 +384,7 @@ export class EmployeeRepository {
     const groups = await this.db.employee.groupBy({
       by: ['status'],
       _count: { _all: true },
+      ...(scope ? { where: scope } : {}),
     });
     const byStatus = new Map(groups.map((g) => [g.status as string, g._count._all]));
     const sum = (statuses: readonly string[]) =>

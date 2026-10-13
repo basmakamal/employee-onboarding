@@ -13,6 +13,7 @@ import StatusChip from '../components/StatusChip.vue';
 import EntityCard from '../components/EntityCard.vue';
 import SkeletonBlock from '../components/SkeletonBlock.vue';
 import PageHeader from '../components/PageHeader.vue';
+import { useOrgOptions } from '../composables/useOrgOptions';
 import EmptyState from '../components/EmptyState.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
@@ -275,6 +276,7 @@ const dialog = ref(route.query['new'] === '1');
 const step = ref(1);
 const saving = ref(false);
 const error = ref('');
+const org = useOrgOptions();
 const form = ref({
   mode: 'onboarding' as 'onboarding' | 'direct',
   firstName: '',
@@ -282,9 +284,11 @@ const form = ref({
   email: '',
   phone: '',
   nationalId: '',
-  department: '' as string | null,
+  // Placement inside the selected company (ids; the server re-validates each one).
+  orgUnitId: null as string | null,
+  positionId: null as string | null,
+  managerId: null as string | null,
   project: '' as string | null,
-  jobTitle: '' as string | null,
   hireDate: '',
   preferredLanguage: 'AR' as 'AR' | 'EN',
 });
@@ -305,14 +309,23 @@ watch(dialog, (open) => {
   if (!open) {
     step.value = 1;
     error.value = '';
+    return;
   }
+  // However the dialog was opened (button or ?new=1), the placement options must be there.
+  void org.load();
 });
 
 async function createEmployee() {
   saving.value = true;
   error.value = '';
   try {
-    const body: Record<string, unknown> = { direct: form.value.mode === 'direct', preferredLanguage: form.value.preferredLanguage };
+    const body: Record<string, unknown> = {
+      direct: form.value.mode === 'direct',
+      preferredLanguage: form.value.preferredLanguage,
+      orgUnitId: form.value.orgUnitId,
+      positionId: form.value.positionId,
+      managerId: form.value.managerId,
+    };
     for (const [k, v] of Object.entries(form.value)) {
       // comboboxes emit null when cleared — only keep real text
       if (k !== 'mode' && k !== 'preferredLanguage' && typeof v === 'string' && v.trim()) body[k] = v.trim();
@@ -565,10 +578,22 @@ onMounted(loadOptions);
             <v-window-item :value="2">
               <v-row dense>
                 <v-col cols="12" sm="6">
-                  <v-combobox v-model="form.department" :items="lists.items('DEPARTMENT')" item-title="title" item-value="value" :return-object="false" :label="$t('fields.department')" :hint="$t('fields.comboHint')" persistent-hint clearable />
+                  <v-select v-model="form.orgUnitId" :items="org.unitItems.value" :label="$t('fields.orgUnit')" :hint="org.hasUnits.value ? '' : $t('fields.orgNone')" persistent-hint clearable />
                 </v-col>
                 <v-col cols="12" sm="6">
-                  <v-combobox v-model="form.jobTitle" :items="lists.items('JOB_TITLE')" item-title="title" item-value="value" :return-object="false" :label="$t('fields.jobTitle')" :hint="$t('fields.comboHint')" persistent-hint clearable />
+                  <v-select v-model="form.positionId" :items="org.titleItems.value" :label="$t('fields.position')" :hint="org.hasTitles.value ? '' : $t('fields.titlesNone')" persistent-hint clearable />
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <v-autocomplete
+                    v-model="form.managerId"
+                    :items="org.managerHits.value"
+                    :label="$t('fields.manager')"
+                    :hint="$t('fields.managerHint')"
+                    persistent-hint
+                    clearable
+                    no-filter
+                    @update:search="(q: string) => org.searchManagers(q)"
+                  />
                 </v-col>
                 <v-col cols="12">
                   <v-combobox v-model="form.project" :items="lists.items('PROJECT')" item-title="title" item-value="value" :return-object="false" :label="$t('employees.project')" :hint="$t('fields.comboHint')" persistent-hint clearable />
@@ -604,7 +629,7 @@ onMounted(loadOptions);
                 <div class="text-body-2 font-weight-semibold">{{ form.firstName }} {{ form.lastName }}</div>
                 <div class="text-caption text-medium-emphasis" dir="ltr">{{ form.email }}</div>
                 <div class="text-caption text-medium-emphasis mt-1">
-                  {{ [form.jobTitle, form.department, form.project].filter(Boolean).join(' · ') || '—' }}
+                  {{ [org.titleItems.value.find((t) => t.value === form.positionId)?.title, org.unitItems.value.find((u) => u.value === form.orgUnitId)?.title?.replace(/^(— )+/, ''), form.project].filter(Boolean).join(' · ') || '—' }}
                   · {{ $t(`languages.${form.preferredLanguage}`) }}
                 </div>
               </div>

@@ -4,6 +4,8 @@ import type { Actor, Workflow } from '../../workflow/engine.js';
 import type { UnitOfWork } from '../../common/prisma.js';
 import { compact } from '../../common/http.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
+import { actorScope } from '../../auth/authz/authorize.js';
+import { resolvePlacement, type PlacementInput } from './org-placement.js';
 import type { OpenWorkHalter } from '../../workflow/halt-open-work.js';
 import type { EmployeeRepository, CreateOnboardingData } from './employee.repository.js';
 import type { OnboardingDocumentRepository } from './onboarding-document.repository.js';
@@ -106,12 +108,16 @@ export class OnboardingService {
     private readonly lists?: { ensureValue(key: string, value: string | null | undefined): Promise<void> },
   ) {}
 
-  async create(input: CreateOnboardingData, actor: Actor) {
-    await this.lists?.ensureValue('DEPARTMENT', input.department);
-    await this.lists?.ensureValue('PROJECT', input.project);
-    await this.lists?.ensureValue('JOB_TITLE', input.jobTitle);
+  async create(input: CreateOnboardingData & PlacementInput, actor: Actor) {
+    // The company is the actor's validated workspace; unit / title / manager
+    // are checked against it (and the actor's own scope) before anything is written.
+    const placement = await resolvePlacement(this.repos.employees, actor, input);
+    const data = { ...input, ...placement };
+    await this.lists?.ensureValue('DEPARTMENT', data.department);
+    await this.lists?.ensureValue('PROJECT', data.project);
+    await this.lists?.ensureValue('JOB_TITLE', data.jobTitle);
     return this.transact(async (s) => {
-      const employee = await s.employees.createOnboarding(input);
+      const employee = await s.employees.createOnboarding(data);
       await s.audit.append({
         entity: 'EMPLOYEE',
         entityId: employee.id,
@@ -126,7 +132,7 @@ export class OnboardingService {
   }
 
   async sendForm(id: string, actor: Actor) {
-    const employee = await this.mustFind(id);
+    const employee = await this.mustFind(id, actor);
     await this.transact((s) => s.workflow.transition(employee, 'SEND_FORM', actor));
     return this.sendDataFormLink(employee, actor);
   }
@@ -138,7 +144,7 @@ export class OnboardingService {
    * instead of being reset by a resend.
    */
   async resendForm(id: string, actor: Actor) {
-    const employee = await this.mustFind(id);
+    const employee = await this.mustFind(id, actor);
     if (employee.status !== 'AWAITING_FORM') {
       throw new GuardFailedError(
         'WRONG_STATUS',
@@ -163,7 +169,7 @@ export class OnboardingService {
    * is told exactly what to complete (HR's note), and the team gets a copy.
    */
   async requestMissing(id: string, actor: Actor, notes?: string) {
-    const employee = await this.mustFind(id);
+    const employee = await this.mustFind(id, actor);
     const result = await this.transact((s) =>
       s.workflow.transition(employee, 'REQUEST_MISSING', actor, notes ? { notes } : undefined),
     );
@@ -184,7 +190,7 @@ export class OnboardingService {
 
   /** Documents accepted — the file is ready for the contract; the team is told. */
   async acceptDocuments(id: string, actor: Actor) {
-    const employee = await this.mustFind(id);
+    const employee = await this.mustFind(id, actor);
     const result = await this.transact((s) =>
       s.workflow.transition(employee, 'ACCEPT_DOCUMENTS', actor),
     );
@@ -199,7 +205,7 @@ export class OnboardingService {
     actor: Actor,
     externalRef?: string | null,
   ) {
-    const employee = await this.mustFind(id);
+    const employee = await this.mustFind(id, actor);
     if (employee.status !== 'CONTRACT_CREATION') {
       throw new GuardFailedError(
         'WRONG_STATUS',
@@ -222,7 +228,7 @@ export class OnboardingService {
    * previous file key so the caller can delete it from storage.
    */
   async setContractFile(id: string, storageKey: string, actor: Actor) {
-    const employee = await this.mustFind(id);
+    const employee = await this.mustFind(id, actor);
     if (employee.status !== 'CONTRACT_CREATION') {
       throw new GuardFailedError(
         'WRONG_STATUS',
@@ -267,7 +273,7 @@ export class OnboardingService {
     actor: Actor,
     opts: { reason?: string } = {},
   ) {
-    const employee = await this.mustFind(id);
+    const employee = await this.mustFind(id, actor);
     const contract = await this.repos.contracts.findByEmployee(id);
     if (!contract) {
       throw new GuardFailedError('CONTRACT_MISSING', 'enter the contract details first');
@@ -353,7 +359,7 @@ export class OnboardingService {
 
   /** BRD: reopen resumes from the last completed stage. */
   async reopen(id: string, actor: Actor) {
-    const employee = await this.mustFind(id);
+    const employee = await this.mustFind(id, actor);
     const result = await this.transact(async (s) => {
       const r = await s.workflow.transition(employee, 'REOPEN', actor);
       // Back to waiting on the platform — the contract card says so again.
@@ -378,7 +384,7 @@ export class OnboardingService {
    * withdrawal itself being in doubt.
    */
   async withdraw(id: string, actor: Actor, reason: string) {
-    const employee = await this.mustFind(id);
+    const employee = await this.mustFind(id, actor);
     const result = await this.transact((s) =>
       s.workflow.transition(employee, 'WITHDRAW', actor, { reason }),
     );
@@ -582,8 +588,9 @@ export class OnboardingService {
     );
   }
 
-  private async mustFind(id: string): Promise<Employee> {
-    const employee = await this.repos.employees.findById(id);
+  /** The employee, or 404 — a record outside the actor's scope counts as not found. */
+  private async mustFind(id: string, actor?: Actor): Promise<Employee> {
+    const employee = await this.repos.employees.findById(id, actorScope(actor));
     if (!employee) throw new NotFoundError('employee', id);
     return employee;
   }

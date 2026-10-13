@@ -863,6 +863,12 @@
     "view": "View terms"
   },
   "fields": {
+    "orgUnit": "Branch / department",
+    "orgNone": "No branches or departments yet — add them on the Organisation page.",
+    "position": "Job title",
+    "titlesNone": "No job titles yet — add them on the Organisation page.",
+    "manager": "Direct manager",
+    "managerHint": "Type to search the employees of this company.",
     "name": "Name",
     "firstName": "First name",
     "lastName": "Last name",

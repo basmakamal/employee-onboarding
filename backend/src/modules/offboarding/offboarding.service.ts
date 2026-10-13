@@ -2,6 +2,7 @@ import type { Actor, OwnershipLookup } from '../../workflow/engine.js';
 import { Workflow } from '../../workflow/engine.js';
 import { offboardingMachine } from '../../workflow/machines/offboarding.machine.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
+import { actorScope } from '../../auth/authz/authorize.js';
 import type { Offboarding, Prisma } from '../../generated/prisma/client.js';
 import type { OffboardingReason, OffboardingStatus } from '../../generated/prisma/enums.js';
 import type { UnitOfWork } from '../../common/prisma.js';
@@ -94,7 +95,7 @@ export class OffboardingService {
     actor: Actor,
     notes?: string,
   ) {
-    const employee = await this.repos.employees.findById(employeeId);
+    const employee = await this.repos.employees.findById(employeeId, actorScope(actor));
     if (!employee) throw new NotFoundError('employee', employeeId);
     if (employee.status !== 'ACTIVE') {
       throw new GuardFailedError('EMPLOYEE_INACTIVE', 'the employee is not active');
@@ -132,7 +133,7 @@ export class OffboardingService {
   }
 
   async get(id: string, actor: Actor) {
-    const offboarding = await this.mustFind(id);
+    const offboarding = await this.mustFind(id, actor);
     const employee = await this.repos.employees.findById(offboarding.employeeId);
     const forms = await this.repos.assetForms.listByEmployee(offboarding.employeeId);
     const approvedItems = forms
@@ -152,7 +153,7 @@ export class OffboardingService {
 
   /** START: procedures begin; resignations auto-receive the exit interview. */
   async start(id: string, actor: Actor) {
-    const offboarding = await this.mustFind(id);
+    const offboarding = await this.mustFind(id, actor);
     const result = await this.transact((s) =>
       this.workflowFor(s).transition(offboarding, 'START', actor),
     );
@@ -190,7 +191,7 @@ export class OffboardingService {
   }
 
   async toAssetReturn(id: string, actor: Actor) {
-    const offboarding = await this.mustFind(id);
+    const offboarding = await this.mustFind(id, actor);
     return this.transact((s) =>
       this.workflowFor(s).transition(offboarding, 'TO_ASSET_RETURN', actor),
     );
@@ -198,7 +199,7 @@ export class OffboardingService {
 
   /** HR records each custody item as physically returned. */
   async markItemReturned(offboardingId: string, itemId: string, actor: Actor) {
-    const offboarding = await this.mustFind(offboardingId);
+    const offboarding = await this.mustFind(offboardingId, actor);
     return this.transact(async (s) => {
       const item = await s.assetForms.markItemReturned(itemId, new Date());
       await s.audit.append({
@@ -216,7 +217,7 @@ export class OffboardingService {
 
   /** BRD hard gate + official notice in one confirmed step. */
   async confirmAssetsReturned(id: string, actor: Actor) {
-    const offboarding = await this.mustFind(id);
+    const offboarding = await this.mustFind(id, actor);
     const now = new Date();
     const result = await this.transact(async (s) => {
       const r = await this.workflowFor(s).transition(offboarding, 'CONFIRM_ASSETS_RETURNED', actor);
@@ -242,7 +243,7 @@ export class OffboardingService {
   }
 
   async toSettlement(id: string, actor: Actor) {
-    const offboarding = await this.mustFind(id);
+    const offboarding = await this.mustFind(id, actor);
     return this.transact((s) =>
       this.workflowFor(s).transition(offboarding, 'TO_SETTLEMENT', actor),
     );
@@ -260,7 +261,7 @@ export class OffboardingService {
     },
     actor: Actor,
   ) {
-    const offboarding = await this.mustFind(id);
+    const offboarding = await this.mustFind(id, actor);
     if (offboarding.status !== 'SETTLEMENT') {
       throw new GuardFailedError('WRONG_STATUS', 'the record is not in the settlement stage');
     }
@@ -292,7 +293,7 @@ export class OffboardingService {
    * still marked active.
    */
   async close(id: string, actor: Actor) {
-    const offboarding = await this.mustFind(id);
+    const offboarding = await this.mustFind(id, actor);
     const now = new Date();
     return this.transact(async (s) => {
       const result = await this.workflowFor(s).transition(offboarding, 'CLOSE', actor);
@@ -321,7 +322,7 @@ export class OffboardingService {
   }
 
   async cancel(id: string, actor: Actor) {
-    const offboarding = await this.mustFind(id);
+    const offboarding = await this.mustFind(id, actor);
     return this.transact((s) => this.workflowFor(s).transition(offboarding, 'CANCEL', actor));
   }
 
@@ -374,8 +375,8 @@ export class OffboardingService {
 
   // ------------------------------------------------------------------ private
 
-  private async mustFind(id: string) {
-    const offboarding = await this.repos.offboardings.findById(id);
+  private async mustFind(id: string, actor?: Actor) {
+    const offboarding = await this.repos.offboardings.findById(id, actorScope(actor));
     if (!offboarding) throw new NotFoundError('offboarding', id);
     return offboarding;
   }
