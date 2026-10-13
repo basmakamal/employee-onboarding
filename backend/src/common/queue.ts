@@ -1,6 +1,7 @@
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { config } from './config.js';
+import { logger } from './logger.js';
 import type { OutboundMessage } from '../notifications/notifier.js';
 
 /**
@@ -22,7 +23,16 @@ export interface MailJob {
 export function createRedis(): Redis {
   if (!config.REDIS_URL) throw new Error('REDIS_URL is not configured');
   // BullMQ requires maxRetriesPerRequest: null on its connections.
-  return new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
+  const redis = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
+  // A wrong password or a down Redis must never crash the process or spam
+  // a stack trace per retry: one line, and the callers degrade on their own.
+  let lastMessage = '';
+  redis.on('error', (err: Error) => {
+    if (err.message === lastMessage) return;
+    lastMessage = err.message;
+    logger.error({ err: err.message }, 'redis connection error');
+  });
+  return redis;
 }
 
 let sharedRedis: Redis | null = null;

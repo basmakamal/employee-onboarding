@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { asyncHandler, validate } from '../common/http.js';
-import { requireRole } from '../auth/require-auth.middleware.js';
+import { requirePermission } from '../auth/authz/authorize.js';
 import { GuardFailedError } from '../workflow/errors.js';
 import type { AiService } from './ai.service.js';
 
@@ -38,7 +38,7 @@ const documentScan = multer({
 /** AI features — HR/ADMIN only, all read-only against the database. */
 export function aiRouter(service: AiService): Router {
   const router = Router();
-  router.use(requireRole('HR', 'ADMIN'));
+  router.use(requirePermission('ai.use'));
 
   router.post(
     '/letters',

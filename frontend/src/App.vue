@@ -38,37 +38,37 @@ const isBare = computed(() =>
 );
 const isRail = computed(() => display.mdAndUp.value && rail.value);
 
-interface NavItem { to: string; icon: string; key: string; roles: string[] }
+interface NavItem { to: string; icon: string; key: string; permission?: string }
 interface NavGroup { key: string; items: NavItem[] }
 
-// hasRole() lets ADMIN through on any check; listing only ADMIN makes an
-// entry admin-only.
+// An entry without a permission is for everyone; otherwise the session's
+// permission list decides whether it shows (the server decides whether it works).
 const GROUPS: NavGroup[] = [
   {
     key: 'nav.groupWork',
     items: [
-      { to: '/', icon: 'fluent:home', key: 'nav.home', roles: [] },
-      { to: '/employees', icon: 'fluent:people', key: 'nav.employees', roles: [] },
+      { to: '/', icon: 'fluent:home', key: 'nav.home' },
+      { to: '/employees', icon: 'fluent:people', key: 'nav.employees' },
     ],
   },
   {
     key: 'nav.groupInsights',
     items: [
-      { to: '/emails', icon: 'fluent:mail', key: 'nav.emailLog', roles: ['HR'] },
-      { to: '/reports', icon: 'fluent:data-trending', key: 'nav.reports', roles: ['HR'] },
-      { to: '/assistant', icon: 'fluent:bot-sparkle', key: 'nav.assistant', roles: ['HR'] },
+      { to: '/emails', icon: 'fluent:mail', key: 'nav.emailLog', permission: 'emails.view' },
+      { to: '/reports', icon: 'fluent:data-trending', key: 'nav.reports', permission: 'reports.view' },
+      { to: '/assistant', icon: 'fluent:bot-sparkle', key: 'nav.assistant', permission: 'ai.use' },
     ],
   },
   {
     key: 'nav.groupAdmin',
     items: [
-      { to: '/users', icon: 'fluent:person-key', key: 'nav.users', roles: ['ADMIN'] },
-      { to: '/ownership', icon: 'fluent:people-team', key: 'nav.ownership', roles: ['ADMIN'] },
-      { to: '/lists', icon: 'fluent:text-bullet-list-square', key: 'nav.lists', roles: ['ADMIN'] },
-      { to: '/automation', icon: 'fluent:clock-alarm', key: 'nav.automation', roles: ['ADMIN'] },
-      { to: '/email-templates', icon: 'fluent:mail-multiple', key: 'nav.emailTemplates', roles: ['ADMIN'] },
-      { to: '/calendar', icon: 'fluent:calendar', key: 'nav.calendar', roles: ['ADMIN'] },
-      { to: '/settings', icon: 'fluent:settings', key: 'nav.settings', roles: ['ADMIN'] },
+      { to: '/users', icon: 'fluent:person-key', key: 'nav.users', permission: 'users.manage' },
+      { to: '/ownership', icon: 'fluent:people-team', key: 'nav.ownership', permission: 'settings.manage' },
+      { to: '/lists', icon: 'fluent:text-bullet-list-square', key: 'nav.lists', permission: 'lists.manage' },
+      { to: '/automation', icon: 'fluent:clock-alarm', key: 'nav.automation', permission: 'settings.manage' },
+      { to: '/email-templates', icon: 'fluent:mail-multiple', key: 'nav.emailTemplates', permission: 'settings.manage' },
+      { to: '/calendar', icon: 'fluent:calendar', key: 'nav.calendar', permission: 'settings.manage' },
+      { to: '/settings', icon: 'fluent:settings', key: 'nav.settings', permission: 'settings.manage' },
     ],
   },
 ];
@@ -76,7 +76,7 @@ const GROUPS: NavGroup[] = [
 const groups = computed(() =>
   GROUPS.map((g) => ({
     ...g,
-    items: g.items.filter((i) => i.roles.length === 0 || auth.hasRole(...i.roles)),
+    items: g.items.filter((i) => !i.permission || auth.can(i.permission)),
   })).filter((g) => g.items.length > 0),
 );
 
@@ -94,10 +94,10 @@ const currentKey = computed(() => {
 /** Phone bottom bar: the places HR goes most, plus the one big action. */
 const bottomItems = computed(() =>
   [
-    { to: '/', icon: 'fluent:home', key: 'nav.home', roles: [] as string[] },
-    { to: '/employees', icon: 'fluent:people', key: 'nav.people', roles: [] as string[] },
-    { to: '/emails', icon: 'fluent:mail', key: 'nav.inbox', roles: ['HR'] },
-  ].filter((i) => i.roles.length === 0 || auth.hasRole(...i.roles)),
+    { to: '/', icon: 'fluent:home', key: 'nav.home', permission: undefined as string | undefined },
+    { to: '/employees', icon: 'fluent:people', key: 'nav.people', permission: undefined as string | undefined },
+    { to: '/emails', icon: 'fluent:mail', key: 'nav.inbox', permission: 'emails.view' as string | undefined },
+  ].filter((i) => !i.permission || auth.can(i.permission)),
 );
 
 const initials = computed(() =>
@@ -303,7 +303,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
           <v-icon :icon="item.icon" size="20" />
           <span class="text-caption">{{ $t(item.key) }}</span>
         </v-btn>
-        <v-btn v-if="auth.hasRole('HR')" to="/employees?new=1" :aria-label="$t('nav.newEmployee')">
+        <v-btn v-if="auth.can('employees.write')" to="/employees?new=1" :aria-label="$t('nav.newEmployee')">
           <span class="shell-bottom__fab"><v-icon icon="plus" size="22" /></span>
           <span class="text-caption">{{ $t('common.new') }}</span>
         </v-btn>

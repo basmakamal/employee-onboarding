@@ -223,7 +223,7 @@ onMounted(load);
               </v-list-item-subtitle>
               <template #append>
                 <v-btn
-                  v-if="!item.returnedAt && record.status === 'ASSETS_PENDING' && auth.hasRole('HR')"
+                  v-if="!item.returnedAt && record.status === 'ASSETS_PENDING' && auth.can('offboarding.manage')"
                   size="small"
                   color="success"
                   variant="tonal"
@@ -299,7 +299,7 @@ onMounted(load);
                 </v-col>
               </v-row>
               <v-btn
-                v-if="record.status === 'SETTLEMENT' && auth.hasRole('HR', 'FINANCE')"
+                v-if="record.status === 'SETTLEMENT' && auth.can('settlement.approve', 'offboarding.manage')"
                 color="primary"
                 :loading="busy === 'settlement'"
                 :disabled="!settlement.workingDays || !settlement.entitlements"

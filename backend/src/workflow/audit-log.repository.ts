@@ -12,6 +12,8 @@ export interface AuditEntry {
   actorType: ActorType;
   actorId?: string;
   employeeId?: string;
+  /** Owning company (denormalised); null for global administration. */
+  companyId?: string | null;
   metadata?: Prisma.InputJsonValue;
 }
 

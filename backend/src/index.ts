@@ -5,6 +5,7 @@ import { createApp } from './app.js';
 import { buildContainer } from './container.js';
 import { startSlaScheduler } from './workflow/sla-scheduler.js';
 import { requireAuth } from './auth/require-auth.middleware.js';
+import { requirePermission } from './auth/authz/authorize.js';
 import { authRouter } from './auth/auth.routes.js';
 import { employeeRouter } from './modules/employees/employee.routes.js';
 import { assetRouter } from './modules/assets/asset.routes.js';
@@ -19,7 +20,6 @@ import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
 import { listsRouter, publicListsRouter } from './modules/lists/lists.routes.js';
 import { asyncHandler } from './common/http.js';
-import { requireRole } from './auth/require-auth.middleware.js';
 import { statfsSync } from 'node:fs';
 import { closeQueues, getMailQueue, getSharedRedis, redisEnabled } from './common/queue.js';
 import { uploadRoot } from './common/storage.js';
@@ -85,7 +85,7 @@ staffApi.get(
 /** Queue visibility for admins (feeds the phase-6 health dashboard). */
 staffApi.get(
   '/admin/queues',
-  requireRole('ADMIN'),
+  requirePermission('settings.manage'),
   asyncHandler(async (_req, res) => {
     if (!redisEnabled) {
       res.json({ enabled: false });
@@ -104,7 +104,7 @@ staffApi.get(
 /** One health snapshot for admins: DB, Redis, queues, disk, table growth. */
 staffApi.get(
   '/admin/health',
-  requireRole('ADMIN'),
+  requirePermission('settings.manage'),
   asyncHandler(async (_req, res) => {
     const t0 = Date.now();
     const db = await container.prisma

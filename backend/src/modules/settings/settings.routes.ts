@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
-import { requireRole } from '../../auth/require-auth.middleware.js';
+import { requirePermission } from '../../auth/authz/authorize.js';
 import { calendarSchema, mailSettingsSchema, type SettingsService } from './settings.service.js';
 import type { SlaRuleRepository, HolidayRepository } from '../../workflow/sla-rule.repository.js';
 import type { OwnershipService } from '../../workflow/ownership.service.js';
@@ -105,7 +105,7 @@ export function settingsRouter(
   groups?: NotificationGroupRepository,
 ): Router {
   const router = Router();
-  router.use(requireRole('ADMIN'));
+  router.use(requirePermission('settings.manage'));
 
   // ---- Responsible teams: named people per status (notifications) ----
   if (groups) {

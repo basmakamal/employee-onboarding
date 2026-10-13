@@ -23,6 +23,17 @@ auth.user = {
   name: 'Basma Kamal',
   email: 'basma.kamal@riyada-ksa.com',
   role: 'ADMIN',
+  roles: ['SUPER_ADMIN'],
+  // Every permission, so every gated control renders in the preview.
+  permissions: [
+    'companies.manage', 'users.manage', 'settings.manage', 'org.read', 'org.manage', 'lists.manage',
+    'employees.read', 'employees.write', 'employees.delete', 'onboarding.manage', 'contracts.write',
+    'documents.read', 'documents.write', 'requests.write', 'processes.gosi', 'processes.medical',
+    'processes.criminal', 'assets.manage', 'offboarding.manage', 'settlement.approve', 'reports.view',
+    'reports.export', 'emails.view', 'ai.use',
+  ],
+  companies: [{ id: 'c-riyada', code: 'RIYADA', nameAr: 'ريادة', nameEn: 'Riyada' }],
+  activeCompany: { id: 'c-riyada', code: 'RIYADA', nameAr: 'ريادة', nameEn: 'Riyada' },
   mustChangePassword: false,
   hasPhoto: false,
 };

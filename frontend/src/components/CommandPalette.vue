@@ -38,18 +38,18 @@ const hits = ref<Item[]>([]);
 const searching = ref(false);
 const inputEl = ref<HTMLInputElement | null>(null);
 
-const PAGES: Array<{ to: string; key: string; icon: string; roles: string[] }> = [
-  { to: '/', key: 'nav.home', icon: 'fluent:home', roles: [] },
-  { to: '/employees', key: 'nav.employees', icon: 'fluent:people', roles: [] },
-  { to: '/reports', key: 'nav.reports', icon: 'fluent:data-trending', roles: ['HR'] },
-  { to: '/emails', key: 'nav.emailLog', icon: 'fluent:mail', roles: ['HR'] },
-  { to: '/assistant', key: 'nav.assistant', icon: 'fluent:bot-sparkle', roles: ['HR'] },
-  { to: '/users', key: 'nav.users', icon: 'fluent:person-key', roles: ['ADMIN'] },
-  { to: '/ownership', key: 'nav.ownership', icon: 'fluent:people-team', roles: ['ADMIN'] },
-  { to: '/automation', key: 'nav.automation', icon: 'fluent:clock-alarm', roles: ['ADMIN'] },
-  { to: '/email-templates', key: 'nav.emailTemplates', icon: 'fluent:mail-multiple', roles: ['ADMIN'] },
-  { to: '/calendar', key: 'nav.calendar', icon: 'fluent:calendar', roles: ['ADMIN'] },
-  { to: '/settings', key: 'nav.settings', icon: 'fluent:settings', roles: ['ADMIN'] },
+const PAGES: Array<{ to: string; key: string; icon: string; permission?: string }> = [
+  { to: '/', key: 'nav.home', icon: 'fluent:home' },
+  { to: '/employees', key: 'nav.employees', icon: 'fluent:people' },
+  { to: '/reports', key: 'nav.reports', icon: 'fluent:data-trending', permission: 'reports.view' },
+  { to: '/emails', key: 'nav.emailLog', icon: 'fluent:mail', permission: 'emails.view' },
+  { to: '/assistant', key: 'nav.assistant', icon: 'fluent:bot-sparkle', permission: 'ai.use' },
+  { to: '/users', key: 'nav.users', icon: 'fluent:person-key', permission: 'users.manage' },
+  { to: '/ownership', key: 'nav.ownership', icon: 'fluent:people-team', permission: 'settings.manage' },
+  { to: '/automation', key: 'nav.automation', icon: 'fluent:clock-alarm', permission: 'settings.manage' },
+  { to: '/email-templates', key: 'nav.emailTemplates', icon: 'fluent:mail-multiple', permission: 'settings.manage' },
+  { to: '/calendar', key: 'nav.calendar', icon: 'fluent:calendar', permission: 'settings.manage' },
+  { to: '/settings', key: 'nav.settings', icon: 'fluent:settings', permission: 'settings.manage' },
 ];
 
 const RECENT_KEY = 'cmdk-recent';
@@ -72,13 +72,13 @@ function remember(item: Item) {
 const q = computed(() => query.value.trim().toLowerCase());
 
 const pageItems = computed<Item[]>(() =>
-  PAGES.filter((p) => p.roles.length === 0 || auth.hasRole(...p.roles))
+  PAGES.filter((p) => !p.permission || auth.can(p.permission))
     .map((p) => ({ id: p.to, group: 'pages' as const, title: t(p.key), icon: p.icon, to: p.to }))
     .filter((p) => !q.value || p.title.toLowerCase().includes(q.value)),
 );
 
 const actionItems = computed<Item[]>(() => {
-  if (!auth.hasRole('HR')) return [];
+  if (!auth.can('employees.write')) return [];
   const all: Item[] = [
     { id: 'new-employee', group: 'actions', title: t('nav.newEmployee'), icon: 'user-plus', to: '/employees?new=1' },
   ];

@@ -30,61 +30,61 @@ export const router = createRouter({
       path: '/reports',
       name: 'reports',
       component: () => import('../pages/ReportsPage.vue'),
-      meta: { roles: ['HR'] },
+      meta: { permission: 'reports.view' },
     },
     {
       path: '/assistant',
       name: 'assistant',
       component: () => import('../pages/AssistantPage.vue'),
-      meta: { roles: ['HR'] },
+      meta: { permission: 'ai.use' },
     },
     {
       path: '/emails',
       name: 'email-log',
       component: () => import('../pages/EmailLogPage.vue'),
-      meta: { roles: ['HR'] },
+      meta: { permission: 'emails.view' },
     },
     {
       path: '/email-templates',
       name: 'email-templates',
       component: () => import('../pages/EmailTemplatesPage.vue'),
-      meta: { roles: ['ADMIN'] },
+      meta: { permission: 'settings.manage' },
     },
     {
       path: '/settings',
       name: 'settings',
       component: () => import('../pages/SettingsPage.vue'),
-      meta: { roles: ['ADMIN'] },
+      meta: { permission: 'settings.manage' },
     },
     {
       path: '/automation',
       name: 'automation',
       component: () => import('../pages/AutomationPage.vue'),
-      meta: { roles: ['ADMIN'] },
+      meta: { permission: 'settings.manage' },
     },
     {
       path: '/calendar',
       name: 'calendar',
       component: () => import('../pages/CalendarPage.vue'),
-      meta: { roles: ['ADMIN'] },
+      meta: { permission: 'settings.manage' },
     },
     {
       path: '/ownership',
       name: 'ownership',
       component: () => import('../pages/OwnershipPage.vue'),
-      meta: { roles: ['ADMIN'] },
+      meta: { permission: 'settings.manage' },
     },
     {
       path: '/lists',
       name: 'lists',
       component: () => import('../pages/ListsPage.vue'),
-      meta: { roles: ['ADMIN'] },
+      meta: { permission: 'lists.manage' },
     },
     {
       path: '/users',
       name: 'users',
       component: () => import('../pages/UsersPage.vue'),
-      meta: { roles: ['ADMIN'] },
+      meta: { permission: 'users.manage' },
     },
     // Public signed-link pages (no staff chrome, token IS the auth).
     {
@@ -121,8 +121,9 @@ export const router = createRouter({
 /**
  * Staff routes require a session. On first navigation we try a silent
  * restore (httpOnly refresh cookie) so a page reload keeps you signed in.
- * Routes with meta.roles are additionally gated by role group (ADMIN
- * always passes) — deep links to admin pages bounce home.
+ * Routes with meta.permission are additionally gated by permission (what
+ * the session reports) — deep links to pages the user may not use bounce
+ * home. The server enforces the same rule on every API call.
  */
 router.beforeEach(async (to) => {
   if (to.meta['public']) return true;
@@ -139,7 +140,7 @@ router.beforeEach(async (to) => {
     return { name: 'change-password' };
   }
 
-  const roles = to.meta['roles'] as string[] | undefined;
-  if (roles && !auth.hasRole(...roles)) return { name: 'home' };
+  const permission = to.meta['permission'] as string | undefined;
+  if (permission && !auth.can(permission)) return { name: 'home' };
   return true;
 });
