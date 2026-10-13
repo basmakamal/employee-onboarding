@@ -1,4 +1,5 @@
-import type { PrismaClient } from '../../generated/prisma/client.js';
+import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
+import { auditScope, viaEmployee, withScope, type EmployeeScope } from '../../auth/authz/authorize.js';
 
 /** Six GROUP BYs per view is real work — reuse the answer briefly. */
 const CACHE_MS = 30_000;
@@ -31,12 +32,22 @@ const dayDiff = (a: Date, b: Date) => Math.floor((a.getTime() - b.getTime()) / 8
  * latest activity across the system.
  */
 export class DashboardService {
-  private cache: { value: unknown; at: number } | null = null;
+  /** Keyed by scope: company A's numbers must never be replayed to company B. */
+  private cache = new Map<string, { value: unknown; at: number }>();
 
   constructor(private readonly prisma: PrismaClient) {}
 
-  async summary(now: Date = new Date()) {
-    if (this.cache && Date.now() - this.cache.at < CACHE_MS) return this.cache.value;
+  /**
+   * Everything is limited to `scope` — the actor's company (and, for a
+   * branch / department manager, their subtree). No scope = the whole
+   * database, which only internal callers without a company ever get.
+   */
+  async summary(scope?: EmployeeScope, now: Date = new Date()) {
+    const key = JSON.stringify(scope ?? null);
+    const hit = this.cache.get(key);
+    if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
+    const emp = (where: Prisma.EmployeeWhereInput) => withScope(where, scope);
+    const child = viaEmployee(scope);
 
     const stallBefore = new Date(now.getTime() - STALL_DAYS * 86_400_000);
     const expiryUntil = new Date(now.getTime() + EXPIRY_WINDOW_DAYS * 86_400_000);
@@ -47,13 +58,14 @@ export class DashboardService {
       joiners,
     ] =
       await Promise.all([
-        this.prisma.employee.groupBy({ by: ['status'], _count: { _all: true } }),
-        this.prisma.gosiProcess.groupBy({ by: ['status'], _count: { _all: true } }),
-        this.prisma.medicalInsuranceProcess.groupBy({ by: ['status'], _count: { _all: true } }),
-        this.prisma.criminalRecordProcess.groupBy({ by: ['status'], _count: { _all: true } }),
-        this.prisma.assetForm.groupBy({ by: ['status'], _count: { _all: true } }),
-        this.prisma.offboarding.groupBy({ by: ['status'], _count: { _all: true } }),
+        this.prisma.employee.groupBy({ by: ['status'], where: emp({}), _count: { _all: true } }),
+        this.prisma.gosiProcess.groupBy({ by: ['status'], where: child, _count: { _all: true } }),
+        this.prisma.medicalInsuranceProcess.groupBy({ by: ['status'], where: child, _count: { _all: true } }),
+        this.prisma.criminalRecordProcess.groupBy({ by: ['status'], where: child, _count: { _all: true } }),
+        this.prisma.assetForm.groupBy({ by: ['status'], where: child, _count: { _all: true } }),
+        this.prisma.offboarding.groupBy({ by: ['status'], where: child, _count: { _all: true } }),
         this.prisma.auditLog.findMany({
+          where: auditScope(scope),
           orderBy: { at: 'desc' },
           take: 12,
           include: {
@@ -63,14 +75,14 @@ export class DashboardService {
         }),
         // Pipeline records that have not moved for STALL_DAYS.
         this.prisma.employee.findMany({
-          where: { status: { in: [...PIPELINE] }, statusChangedAt: { lt: stallBefore } },
+          where: emp({ status: { in: [...PIPELINE] }, statusChangedAt: { lt: stallBefore } }),
           orderBy: { statusChangedAt: 'asc' },
           take: 10,
           select: { id: true, firstName: true, lastName: true, status: true, statusChangedAt: true },
         }),
         // Documents expiring soon (or already expired) on active staff.
         this.prisma.employeeDocument.findMany({
-          where: { expiryDate: { lte: expiryUntil }, employee: { status: 'ACTIVE' } },
+          where: { expiryDate: { lte: expiryUntil }, employee: emp({ status: 'ACTIVE' }) },
           orderBy: { expiryDate: 'asc' },
           take: 10,
           select: {
@@ -81,22 +93,22 @@ export class DashboardService {
         }),
         // Custody forms the employee has not answered.
         this.prisma.assetForm.findMany({
-          where: { status: { in: ['SENT', 'PENDING_EMPLOYEE_APPROVAL'] }, sentAt: { lt: stallBefore } },
+          where: { status: { in: ['SENT', 'PENDING_EMPLOYEE_APPROVAL'] }, sentAt: { lt: stallBefore }, ...child },
           orderBy: { sentAt: 'asc' },
           take: 6,
           select: { status: true, sentAt: true, employee: { select: { id: true, firstName: true, lastName: true } } },
         }),
         this.prisma.employee.findMany({
-          where: { hireDate: { gte: trendStart } },
+          where: emp({ hireDate: { gte: trendStart } }),
           select: { hireDate: true },
         }),
         this.prisma.employee.findMany({
-          where: { createdAt: { gte: trendStart } },
+          where: emp({ createdAt: { gte: trendStart } }),
           select: { createdAt: true },
         }),
         // The newest colleagues — the human face of "how are we growing".
         this.prisma.employee.findMany({
-          where: { status: 'ACTIVE', hireDate: { not: null } },
+          where: emp({ status: 'ACTIVE', hireDate: { not: null } }),
           orderBy: { hireDate: 'desc' },
           take: 5,
           select: { id: true, firstName: true, lastName: true, jobTitle: true, department: true, hireDate: true },
@@ -205,7 +217,7 @@ export class DashboardService {
           : null,
       })),
     };
-    this.cache = { value, at: Date.now() };
+    this.cache.set(key, { value, at: Date.now() });
     return value;
   }
 }

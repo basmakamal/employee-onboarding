@@ -15,6 +15,7 @@
  */
 import type { RequestHandler } from 'express';
 import type { Actor } from '../../workflow/engine.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { CompanyRequiredError, ForbiddenError } from '../../workflow/errors.js';
 import { SYSTEM_ROLES, type Permission } from './permissions.js';
 import type { Scope } from './scope.js';
@@ -98,6 +99,31 @@ export function actorScope(actor: Actor | undefined): EmployeeScope | undefined 
     actor,
     scope: actor.scope ?? { companyId: actor.companyId, all: true, orgUnitPaths: [] },
   });
+}
+
+/**
+ * Compose a query's own filter with a scope WITHOUT clobbering either: both
+ * may carry an `OR` (a search vs. a manager's subtrees), so they are joined
+ * with AND rather than spread into one object. No scope → the filter as is.
+ */
+export function withScope(where: Prisma.EmployeeWhereInput, scope: EmployeeScope | undefined): Prisma.EmployeeWhereInput {
+  return scope ? { AND: [where, scope] } : where;
+}
+
+/** The same scope for a table that hangs off an employee (`employee` relation). */
+export function viaEmployee(scope: EmployeeScope | undefined): { employee?: Prisma.EmployeeWhereInput } {
+  return scope ? { employee: scope } : {};
+}
+
+/**
+ * Audit rows a scope may read: rows about its employees, plus — for a
+ * company-wide scope only — company-level rows with no employee (company /
+ * org / title changes). A branch manager never sees company-level history.
+ */
+export function auditScope(scope: EmployeeScope | undefined): Prisma.AuditLogWhereInput {
+  if (!scope) return {};
+  if (scope.OR) return { employee: scope };
+  return { OR: [{ employee: { companyId: scope.companyId } }, { companyId: scope.companyId, employeeId: null }] };
 }
 
 /** Route gate for company-owned data: no selected company → refused. */

@@ -1,6 +1,7 @@
 ﻿import type { Writable } from 'node:stream';
 import ExcelJS from 'exceljs';
-import type { PrismaClient } from '../../generated/prisma/client.js';
+import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
+import { auditScope, viaEmployee, withScope, type EmployeeScope } from '../../auth/authz/authorize.js';
 
 /** Summary answers change slowly; recomputing per page view is waste. */
 const SUMMARY_CACHE_MS = 30_000;
@@ -20,20 +21,24 @@ interface ColumnDef {
  * matter how many rows leave the building.
  */
 export class ReportsService {
-  private summaryCache: { value: unknown; at: number } | null = null;
+  /** Keyed by scope — one company's report is never served to another. */
+  private summaryCache = new Map<string, { value: unknown; at: number }>();
 
   constructor(private readonly prisma: PrismaClient) {}
 
   // ----------------------------------------------------------- summary
 
-  async summary(now: Date = new Date()) {
-    if (this.summaryCache && Date.now() - this.summaryCache.at < SUMMARY_CACHE_MS) {
-      return this.summaryCache.value;
-    }
+  /** On-screen report for `scope` (the actor's company / subtree). */
+  async summary(scope?: EmployeeScope, now: Date = new Date()) {
+    const key = JSON.stringify(scope ?? null);
+    const hit = this.summaryCache.get(key);
+    if (hit && Date.now() - hit.at < SUMMARY_CACHE_MS) return hit.value;
+    const emp = (where: Prisma.EmployeeWhereInput) => withScope(where, scope);
+    const child = viaEmployee(scope);
 
     const day = 86_400_000;
     const at = (days: number) => new Date(now.getTime() + days * day);
-    const activeDoc = { employee: { status: 'ACTIVE' as const } };
+    const activeDoc = { employee: emp({ status: 'ACTIVE' as const }) };
 
     const [
       headcount,
@@ -52,18 +57,18 @@ export class ReportsService {
       // Employment headcount per department — one GROUP BY, not a row load.
       this.prisma.employee.groupBy({
         by: ['department', 'status'],
-        where: { status: { in: ['ACTIVE', 'INACTIVE'] } },
+        where: emp({ status: { in: ['ACTIVE', 'INACTIVE'] } }),
         _count: { _all: true },
       }),
-      this.prisma.employee.groupBy({ by: ['status'], _count: { _all: true } }),
-      this.prisma.gosiProcess.groupBy({ by: ['status'], _count: { _all: true } }),
-      this.prisma.medicalInsuranceProcess.groupBy({ by: ['status'], _count: { _all: true } }),
-      this.prisma.criminalRecordProcess.groupBy({ by: ['status'], _count: { _all: true } }),
-      this.prisma.assetForm.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.prisma.employee.groupBy({ by: ['status'], where: emp({}), _count: { _all: true } }),
+      this.prisma.gosiProcess.groupBy({ by: ['status'], where: child, _count: { _all: true } }),
+      this.prisma.medicalInsuranceProcess.groupBy({ by: ['status'], where: child, _count: { _all: true } }),
+      this.prisma.criminalRecordProcess.groupBy({ by: ['status'], where: child, _count: { _all: true } }),
+      this.prisma.assetForm.groupBy({ by: ['status'], where: child, _count: { _all: true } }),
       this.prisma.assetFormItem.count({
-        where: { form: { status: 'APPROVED' }, returnedAt: null },
+        where: { form: { status: 'APPROVED', ...child }, returnedAt: null },
       }),
-      this.prisma.offboarding.groupBy({ by: ['reason'], _count: { _all: true } }),
+      this.prisma.offboarding.groupBy({ by: ['reason'], where: child, _count: { _all: true } }),
       // Expiry buckets as four indexed range COUNTs (expiryDate is indexed).
       this.prisma.employeeDocument.count({
         where: { ...activeDoc, expiryDate: { lt: now } },
@@ -106,7 +111,7 @@ export class ReportsService {
       offboardingByReason: toMap(offboardings as never),
       expiringDocuments: { expired, in30, in60, in90 },
     };
-    this.summaryCache = { value, at: Date.now() };
+    this.summaryCache.set(key, { value, at: Date.now() });
     return value;
   }
 
@@ -118,7 +123,7 @@ export class ReportsService {
   // stream. The whole table never sits in memory, at any row count.
 
   /** Activated staff only — the pipeline has its own export. */
-  async streamEmployees(out: Writable): Promise<void> {
+  async streamEmployees(out: Writable, scope?: EmployeeScope): Promise<void> {
     await streamWorkbook(
       out,
       'Employees',
@@ -139,7 +144,7 @@ export class ReportsService {
       ],
       (cursor) =>
         this.prisma.employee.findMany({
-          where: { status: { in: ['ACTIVE', 'INACTIVE'] } },
+          where: withScope({ status: { in: ['ACTIVE', 'INACTIVE'] } }, scope),
           include: { gosi: true, medical: true, criminalRecord: true },
           orderBy: { id: 'asc' },
           take: EXPORT_BATCH,
@@ -154,7 +159,7 @@ export class ReportsService {
   }
 
   /** Employees still in the onboarding pipeline (pre-activation). */
-  async streamOnboarding(out: Writable): Promise<void> {
+  async streamOnboarding(out: Writable, scope?: EmployeeScope): Promise<void> {
     await streamWorkbook(
       out,
       'Onboarding',
@@ -174,7 +179,7 @@ export class ReportsService {
       ],
       (cursor) =>
         this.prisma.employee.findMany({
-          where: { status: { notIn: ['ACTIVE', 'INACTIVE'] } },
+          where: withScope({ status: { notIn: ['ACTIVE', 'INACTIVE'] } }, scope),
           include: { documents: true, contract: true },
           orderBy: { id: 'asc' },
           take: EXPORT_BATCH,
@@ -192,7 +197,7 @@ export class ReportsService {
     );
   }
 
-  async streamExpiringDocuments(out: Writable, now: Date = new Date()): Promise<void> {
+  async streamExpiringDocuments(out: Writable, scope?: EmployeeScope, now: Date = new Date()): Promise<void> {
     await streamWorkbook(
       out,
       'Expiring documents',
@@ -207,7 +212,7 @@ export class ReportsService {
       ],
       (cursor) =>
         this.prisma.employeeDocument.findMany({
-          where: { employee: { status: 'ACTIVE' } },
+          where: { employee: withScope({ status: 'ACTIVE' }, scope) },
           include: {
             employee: {
               select: { employeeNo: true, firstName: true, lastName: true, department: true },
@@ -229,7 +234,7 @@ export class ReportsService {
     );
   }
 
-  async streamAudit(out: Writable, days: number): Promise<void> {
+  async streamAudit(out: Writable, days: number, scope?: EmployeeScope): Promise<void> {
     const since = new Date(Date.now() - days * 86_400_000);
     await streamWorkbook(
       out,
@@ -246,7 +251,7 @@ export class ReportsService {
       ],
       (cursor) =>
         this.prisma.auditLog.findMany({
-          where: { at: { gte: since } },
+          where: { AND: [{ at: { gte: since } }, auditScope(scope)] },
           include: {
             actor: { select: { name: true } },
             employee: { select: { employeeNo: true, firstName: true, lastName: true } },
