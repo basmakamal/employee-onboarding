@@ -49,6 +49,10 @@ const createEmployeeSchema = z.object({
   employmentType: z.enum(EMPLOYMENT_TYPES).optional(),
   hireDate: z.coerce.date().optional(),
   preferredLanguage: z.enum(['AR', 'EN']).optional(),
+  /** Placement inside the active company — every id is re-validated server-side. */
+  orgUnitId: z.string().min(1).nullable().optional(),
+  positionId: z.string().min(1).nullable().optional(),
+  managerId: z.string().min(1).nullable().optional(),
   direct: z.boolean().default(false),
   /** Onboarding mode: e-mail the signed data-form link right after creation. */
   sendForm: z.boolean().default(true),
@@ -112,6 +116,9 @@ const updateEmployeeSchema = z.object({
   employmentType: z.enum(EMPLOYMENT_TYPES).optional(),
   hireDate: z.coerce.date().optional(),
   preferredLanguage: z.enum(['AR', 'EN']).optional(),
+  orgUnitId: z.string().min(1).nullable().optional(),
+  positionId: z.string().min(1).nullable().optional(),
+  managerId: z.string().min(1).nullable().optional(),
 });
 
 const createRequestSchema = z.object({
@@ -171,7 +178,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     '/',
     validateQuery(listQuerySchema),
     asyncHandler(async (req, res) => {
-      res.json(await service.list(pagedQuery<EmployeeListQuery>(req)));
+      res.json(await service.list(pagedQuery<EmployeeListQuery>(req), actor(req)));
     }),
   );
 
@@ -405,7 +412,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   router.get(
     '/:id/photo',
     asyncHandler(async (req, res) => {
-      const key = await service.getPhotoKey(req.params['id'] as string);
+      const key = await service.getPhotoKey(req.params['id'] as string, actor(req));
       res.sendFile(storagePath(key));
     }),
   );
@@ -551,7 +558,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
         res.status(404).json({ error: { code: 'NOT_FOUND', message: `unknown process ${kind}` } });
         return;
       }
-      const key = await service.getProcessCertificateKey(req.params['id'] as string, kind);
+      const key = await service.getProcessCertificateKey(req.params['id'] as string, kind, actor(req));
       res.sendFile(storagePath(key));
     }),
   );

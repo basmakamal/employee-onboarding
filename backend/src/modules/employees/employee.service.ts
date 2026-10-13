@@ -5,6 +5,8 @@ import {
   criminalRecordMachine,
 } from '../../workflow/machines/employee-process.machine.js';
 import { NotFoundError } from '../../workflow/errors.js';
+import { actorScope } from '../../auth/authz/authorize.js';
+import { resolvePlacement, type PlacementInput } from './org-placement.js';
 import type { Employee } from '../../generated/prisma/client.js';
 import type { UnitOfWork } from '../../common/prisma.js';
 import type {
@@ -91,10 +93,12 @@ export class EmployeeService {
   }
 
   /** One server-side page plus the tab badge counts, in parallel. */
-  async list(query: EmployeeListQuery) {
+  /** The list, counts included, limited to what this actor may reach. */
+  async list(query: EmployeeListQuery, actor?: Actor) {
+    const scope = actorScope(actor);
     const [{ items, total }, counts] = await Promise.all([
-      this.repos.employees.listPaged(query),
-      this.repos.employees.statusCounts(),
+      this.repos.employees.listPaged(query, scope),
+      this.repos.employees.statusCounts(scope),
     ]);
     return { items, total, counts };
   }
@@ -133,14 +137,17 @@ export class EmployeeService {
       jobTitle?: string;
       directManager?: string;
       hireDate?: Date;
-    },
+    } & PlacementInput,
     actor: Actor,
   ) {
-    await this.remember(input);
+    // Company and placement come from the validated context, never the body.
+    const placement = await resolvePlacement(this.repos.employees, actor, input);
+    await this.remember({ ...input, ...placement });
     return this.transact(async (s) => {
       const employeeNo = await s.employees.allocateEmployeeNo();
       const employee = await s.employees.createDirect({
         ...input,
+        ...placement,
         employeeNo,
         hireDate: input.hireDate ?? new Date(),
         ...(actor.id ? { createdById: actor.id } : {}),
@@ -163,13 +170,15 @@ export class EmployeeService {
    * HR edits the profile in place. Audited with the list of touched fields
    * so the timeline shows WHAT changed, not just that something did.
    */
-  async update(id: string, input: UpdateEmployeeData, actor: Actor) {
-    const existing = await this.repos.employees.findById(id);
-    if (!existing) throw new NotFoundError('employee', id);
-    await this.remember(input);
+  async update(id: string, input: UpdateEmployeeData & PlacementInput, actor: Actor) {
+    await this.mustFind(id, actor);
+    const { companyId: _ignored, ...placement } = await resolvePlacement(this.repos.employees, actor, input, { selfId: id });
+    void _ignored; // the company never changes through an edit
+    const data = { ...input, ...placement };
+    await this.remember(data);
 
     return this.transact(async (s) => {
-      const updated = await s.employees.update(id, input);
+      const updated = await s.employees.update(id, data);
       await s.audit.append({
         entity: 'EMPLOYEE',
         entityId: id,
@@ -190,8 +199,7 @@ export class EmployeeService {
    * caller can remove them from disk AFTER the commit.
    */
   async remove(id: string, actor: Actor): Promise<string[]> {
-    const existing = await this.repos.employees.findById(id);
-    if (!existing) throw new NotFoundError('employee', id);
+    const existing = await this.mustFind(id, actor);
 
     const storageKeys = await this.repos.employees.collectStorageKeys(id);
     await this.transact(async (s) => {
@@ -214,8 +222,7 @@ export class EmployeeService {
 
   /** Returns the replaced photo's key so the caller can delete the file. */
   async setPhoto(id: string, photoKey: string, actor: Actor) {
-    const existing = await this.repos.employees.findById(id);
-    if (!existing) throw new NotFoundError('employee', id);
+    const existing = await this.mustFind(id, actor);
 
     await this.transact(async (s) => {
       await s.employees.setPhoto(id, photoKey);
@@ -231,8 +238,8 @@ export class EmployeeService {
     return { photoKey, previousKey: existing.photoKey };
   }
 
-  async getPhotoKey(id: string): Promise<string> {
-    const employee = await this.repos.employees.findById(id);
+  async getPhotoKey(id: string, actor?: Actor): Promise<string> {
+    const employee = await this.repos.employees.findById(id, actorScope(actor));
     if (!employee?.photoKey) throw new NotFoundError('photo', id);
     return employee.photoKey;
   }
@@ -248,8 +255,7 @@ export class EmployeeService {
     notes?: string,
     document?: RequestDocument,
   ) {
-    const existing = await this.repos.employees.findById(employeeId);
-    if (!existing) throw new NotFoundError('employee', employeeId);
+    const existing = await this.mustFind(employeeId, actor);
 
     return this.transact(async (s) => {
       const request = await s.requests.create({
@@ -310,6 +316,13 @@ export class EmployeeService {
   }
 
   /** A request is only reachable through its own employee's file. */
+  /** The employee, or 404 — outside the actor's scope counts as not found. */
+  private async mustFind(id: string, actor?: Actor) {
+    const employee = await this.repos.employees.findById(id, actorScope(actor));
+    if (!employee) throw new NotFoundError('employee', id);
+    return employee;
+  }
+
   private async mustFindRequest(employeeId: string, requestId: string) {
     const request = await this.repos.requests.findById(requestId);
     if (!request || request.employeeId !== employeeId) throw new NotFoundError('request', requestId);
@@ -317,7 +330,7 @@ export class EmployeeService {
   }
 
   async getDetails(id: string, actor: Actor) {
-    const employee = await this.repos.employees.findWithDetails(id);
+    const employee = await this.repos.employees.findWithDetails(id, actorScope(actor));
     if (!employee) throw new NotFoundError('employee', id);
     // Newest page of the timeline; the rest is paged in from /audit.
     const timeline = await this.repos.employees.timelinePage(id, 1, 20);
@@ -374,7 +387,8 @@ export class EmployeeService {
   }
 
   /** Storage key of a process's completion document, for viewing. */
-  async getProcessCertificateKey(employeeId: string, kind: ProcessKind): Promise<string> {
+  async getProcessCertificateKey(employeeId: string, kind: ProcessKind, actor?: Actor): Promise<string> {
+    await this.mustFind(employeeId, actor);
     const repo =
       kind === 'gosi' ? this.repos.gosi : kind === 'medical' ? this.repos.medical : this.repos.criminal;
     const row = await repo.findByEmployee(employeeId);
@@ -390,6 +404,7 @@ export class EmployeeService {
     actor: Actor,
     input: ProcessActionInput = {},
   ) {
+    await this.mustFind(employeeId, actor);
     if (kind === 'criminal') return this.actOnCriminal(employeeId, action, actor, input);
     return this.actOnHoldable(employeeId, kind, action, actor, input);
   }

@@ -1,4 +1,5 @@
 import type { Db } from '../../common/prisma.js';
+import type { EmployeeScope } from '../../auth/authz/authorize.js';
 import type { AssetFormStatus, AssetCondition } from '../../generated/prisma/enums.js';
 
 export interface AssetFormItemInput {
@@ -27,9 +28,10 @@ export class AssetFormRepository {
     });
   }
 
-  findWithItems(id: string) {
-    return this.db.assetForm.findUnique({
-      where: { id },
+  /** With a scope, a form whose employee sits outside it is simply not found. */
+  findWithItems(id: string, scope?: EmployeeScope) {
+    return this.db.assetForm.findFirst({
+      where: { id, ...(scope ? { employee: scope } : {}) },
       include: { items: true, employee: true },
     });
   }

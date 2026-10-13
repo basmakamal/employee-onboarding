@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { api, ApiError, getAccessToken } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
+import { useOrgOptions } from '../composables/useOrgOptions';
 import ProcessCard from '../components/ProcessCard.vue';
 import StatusChip from '../components/StatusChip.vue';
 import { useAuthStore } from '../stores/auth';
@@ -112,6 +113,10 @@ interface RequestRow {
 interface EmployeeDetail {
   id: string;
   employeeNo: string | null;
+  /** Placement inside the company (null until set). */
+  orgUnit?: { id: string; code: string; nameAr: string; nameEn: string } | null;
+  position?: { id: string; code: string; titleAr: string; titleEn: string } | null;
+  manager?: { id: string; firstName: string; lastName: string } | null;
   firstName: string;
   lastName: string;
   email: string;
@@ -345,6 +350,7 @@ const fieldOptions = ref<{ departments: string[]; jobTitles: string[]; projects:
   jobTitles: [],
   projects: [],
 });
+const org = useOrgOptions();
 const editForm = ref({
   firstName: '',
   lastName: '',
@@ -352,10 +358,10 @@ const editForm = ref({
   phone: '',
   nationalId: '',
   birthDate: '',
-  department: '',
+  orgUnitId: null as string | null,
+  positionId: null as string | null,
+  managerId: null as string | null,
   project: '',
-  jobTitle: '',
-  directManager: '',
   employmentType: 'FULL_TIME',
   preferredLanguage: 'AR' as 'AR' | 'EN',
   hireDate: '',
@@ -373,14 +379,16 @@ function openEdit() {
     phone: e.phone ?? '',
     nationalId: e.nationalId ?? '',
     birthDate: e.birthDate?.slice(0, 10) ?? '',
-    department: e.department ?? '',
+    orgUnitId: e.orgUnit?.id ?? null,
+    positionId: e.position?.id ?? null,
+    managerId: e.manager?.id ?? null,
     project: e.project ?? '',
-    jobTitle: e.jobTitle ?? '',
-    directManager: e.directManager ?? '',
     employmentType: e.employmentType,
     preferredLanguage: e.preferredLanguage ?? 'AR',
     hireDate: e.hireDate?.slice(0, 10) ?? '',
   };
+  void org.load();
+  org.presetManager(e.manager);
   editDialog.value = true;
 }
 
@@ -396,10 +404,10 @@ async function saveEdit() {
       phone: f.phone.trim() || null,
       nationalId: f.nationalId.trim() || null,
       birthDate: f.birthDate || null,
-      department: (f.department ?? '').trim() || null,
+      orgUnitId: f.orgUnitId,
+      positionId: f.positionId,
+      managerId: f.managerId,
       project: f.project.trim() || null,
-      jobTitle: (f.jobTitle ?? '').trim() || null,
-      directManager: f.directManager.trim() || null,
       employmentType: f.employmentType,
       preferredLanguage: f.preferredLanguage,
       ...(f.hireDate ? { hireDate: f.hireDate } : {}),
@@ -2689,16 +2697,7 @@ onMounted(load);
               <v-text-field v-model="editForm.birthDate" :label="$t('fields.birthDate')" type="date" />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-combobox
-                v-model="editForm.department"
-                :items="lists.items('DEPARTMENT')"
-                item-title="title"
-                item-value="value"
-                :return-object="false"
-                :label="$t('fields.department')"
-                :hint="$t('fields.comboHint')"
-                persistent-hint
-              />
+              <v-select v-model="editForm.orgUnitId" :items="org.unitItems.value" :label="$t('fields.orgUnit')" :hint="org.hasUnits.value ? '' : $t('fields.orgNone')" persistent-hint clearable />
             </v-col>
             <v-col cols="12" sm="6">
               <v-combobox
@@ -2714,19 +2713,19 @@ onMounted(load);
               />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-combobox
-                v-model="editForm.jobTitle"
-                :items="lists.items('JOB_TITLE')"
-                item-title="title"
-                item-value="value"
-                :return-object="false"
-                :label="$t('fields.jobTitle')"
-                :hint="$t('fields.comboHint')"
-                persistent-hint
-              />
+              <v-select v-model="editForm.positionId" :items="org.titleItems.value" :label="$t('fields.position')" :hint="org.hasTitles.value ? '' : $t('fields.titlesNone')" persistent-hint clearable />
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="editForm.directManager" :label="$t('profile.directManager')" />
+              <v-autocomplete
+                v-model="editForm.managerId"
+                :items="org.managerHits.value"
+                :label="$t('fields.manager')"
+                :hint="$t('fields.managerHint')"
+                persistent-hint
+                clearable
+                no-filter
+                @update:search="(q: string) => org.searchManagers(q, id)"
+              />
             </v-col>
             <v-col cols="12" sm="6">
               <v-select

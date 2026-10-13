@@ -1,4 +1,5 @@
 import type { Db } from '../../common/prisma.js';
+import type { EmployeeScope } from '../../auth/authz/authorize.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { OffboardingReason, OffboardingStatus } from '../../generated/prisma/enums.js';
 
@@ -14,8 +15,11 @@ export class OffboardingRepository {
     return this.db.offboarding.create({ data });
   }
 
-  findById(id: string) {
-    return this.db.offboarding.findUnique({ where: { id } });
+  /** With a scope, an offboarding whose employee sits outside it is simply not found. */
+  findById(id: string, scope?: EmployeeScope) {
+    return scope
+      ? this.db.offboarding.findFirst({ where: { id, employee: scope } })
+      : this.db.offboarding.findUnique({ where: { id } });
   }
 
   /** An employee may have at most one offboarding that is not closed/cancelled. */

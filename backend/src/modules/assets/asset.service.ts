@@ -2,6 +2,7 @@ import type { Actor, OwnershipLookup } from '../../workflow/engine.js';
 import { Workflow } from '../../workflow/engine.js';
 import { assetFormMachine } from '../../workflow/machines/asset-form.machine.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
+import { actorScope } from '../../auth/authz/authorize.js';
 import type { AssetForm } from '../../generated/prisma/client.js';
 import type { AssetFormStatus } from '../../generated/prisma/enums.js';
 import type { UnitOfWork } from '../../common/prisma.js';
@@ -100,7 +101,7 @@ export class AssetService {
     },
     actor: Actor,
   ) {
-    const employee = await this.repos.employees.findById(input.employeeId);
+    const employee = await this.repos.employees.findById(input.employeeId, actorScope(actor));
     if (!employee) throw new NotFoundError('employee', input.employeeId);
     // Custody can start at the trainee stage — but not for someone who left.
     if (employee.status === 'WITHDRAWN' || employee.status === 'INACTIVE') {
@@ -122,8 +123,8 @@ export class AssetService {
     });
   }
 
-  async replaceItems(formId: string, items: AssetFormItemInput[], _actor: Actor) {
-    const form = await this.mustFind(formId);
+  async replaceItems(formId: string, items: AssetFormItemInput[], actor: Actor) {
+    const form = await this.mustFind(formId, actor);
     if (form.status !== 'DRAFT') {
       throw new GuardFailedError('NOT_DRAFT', 'items can only be edited while the form is a draft');
     }
@@ -133,7 +134,7 @@ export class AssetService {
 
   /** SEND: machine guards non-empty; then link + email to the employee. */
   async send(formId: string, actor: Actor) {
-    const form = await this.mustFind(formId);
+    const form = await this.mustFind(formId, actor);
     await this.transact(async (s) => {
       await this.workflowFor(s).transition(form, 'SEND', actor);
       await s.forms.moveStatus(formId, 'SENT', 'SENT', { sentAt: new Date() });
@@ -164,12 +165,12 @@ export class AssetService {
   }
 
   async cancel(formId: string, actor: Actor) {
-    const form = await this.mustFind(formId);
+    const form = await this.mustFind(formId, actor);
     return this.transact((s) => this.workflowFor(s).transition(form, 'CANCEL', actor));
   }
 
   async revise(formId: string, actor: Actor) {
-    const form = await this.mustFind(formId);
+    const form = await this.mustFind(formId, actor);
     return this.transact((s) => this.workflowFor(s).transition(form, 'REVISE', actor));
   }
 
@@ -266,8 +267,8 @@ export class AssetService {
 
   // ------------------------------------------------------------------ private
 
-  private async mustFind(id: string) {
-    const form = await this.repos.forms.findWithItems(id);
+  private async mustFind(id: string, actor?: Actor) {
+    const form = await this.repos.forms.findWithItems(id, actorScope(actor));
     if (!form) throw new NotFoundError('asset form', id);
     return form;
   }

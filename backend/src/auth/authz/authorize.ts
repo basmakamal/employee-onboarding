@@ -85,6 +85,21 @@ export const COMPANY_SCOPED_PREFIXES = [
   '/org',
 ] as const;
 
+/**
+ * The scope a service applies for this actor. Staff requests always carry a
+ * company (requireCompany is mounted on every company-owned prefix); link,
+ * system and legacy test actors carry none and are not filtered — their
+ * access is bound to the record they arrived with.
+ */
+export function actorScope(actor: Actor | undefined): EmployeeScope | undefined {
+  if (!actor?.companyId) return undefined;
+  return scopeWhere({
+    companyId: actor.companyId,
+    actor,
+    scope: actor.scope ?? { companyId: actor.companyId, all: true, orgUnitPaths: [] },
+  });
+}
+
 /** Route gate for company-owned data: no selected company → refused. */
 export function requireCompany(): RequestHandler {
   return (req, _res, next) => {
@@ -96,15 +111,18 @@ export function requireCompany(): RequestHandler {
   };
 }
 
+/** The `where` fragment shape every scoped repository accepts. */
+export type EmployeeScope = {
+  companyId: string;
+  OR?: Array<{ orgUnit: { path: { startsWith: string } } }>;
+};
+
 /**
  * Prisma `where` fragment for a company-owned table that carries
  * `companyId` and `orgUnitId` (employees, positions, org units…). For a
  * child table use `{ employee: scopeWhere(ctx) }`.
  */
-export function scopeWhere(ctx: CompanyContext): {
-  companyId: string;
-  OR?: Array<{ orgUnit: { path: { startsWith: string } } }>;
-} {
+export function scopeWhere(ctx: CompanyContext): EmployeeScope {
   if (ctx.scope.all) return { companyId: ctx.companyId };
   if (ctx.scope.orgUnitPaths.length === 0) {
     // A unit manager whose unit is unknown sees nothing — never everything.
