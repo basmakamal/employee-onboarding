@@ -12,6 +12,8 @@ import { AuditLogRepository } from './workflow/audit-log.repository.js';
 import { SlaRuleRepository, HolidayRepository } from './workflow/sla-rule.repository.js';
 import { NotificationRepository } from './notifications/notification.repository.js';
 import { NotificationService } from './notifications/notification.service.js';
+import { EmploymentEventRepository } from './modules/employees/employment-event.repository.js';
+import { EmploymentHistoryService } from './modules/employees/employment-history.service.js';
 import { CompanyResolver } from './modules/companies/company-resolver.js';
 import { CompanyDefaults } from './modules/companies/company-defaults.js';
 import { SettingsService, DynamicNotifier } from './modules/settings/settings.service.js';
@@ -169,6 +171,7 @@ export function buildContainer() {
     medical: new MedicalInsuranceRepository(db),
     criminal: new CriminalRecordRepository(db),
     audit: new AuditLogRepository(db),
+    history: new EmploymentEventRepository(db),
   });
 
   const assetScope = (db: Db): AssetTxScope => ({
@@ -198,6 +201,10 @@ export function buildContainer() {
   // Named primary owners per process — steer reminders, never permissions.
   const responsibilityService = new ResponsibilityService(prisma, companyResolver);
 
+  // Employment history: dated transfers / promotions / status changes.
+  const employmentHistory = new EmploymentHistoryService(prisma, new EmploymentEventRepository(prisma), employees, audit);
+  onTransition((event) => employmentHistory.recordStatus(event));
+
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
   const slaFirings = new SlaFiringRepository(prisma);
   const assets = new AssetRepository(prisma);
@@ -212,6 +219,8 @@ export function buildContainer() {
       calendar: settingsService,
       responsibility: responsibilityService,
       companies: companyResolver,
+      // A transfer dated 1 November takes effect on that local day.
+      jobs: [{ name: 'employment-changes', run: (now) => employmentHistory.applyDue(now) }],
     },
     [
       onboardingWatcher(employees, onboardingWorkflow, contracts, linkTokenService),
@@ -263,6 +272,7 @@ export function buildContainer() {
     ownershipService,
     onboardingWorkflow,
     listService,
+    employmentHistory,
   );
 
   const assetService = new AssetService(
@@ -314,6 +324,7 @@ export function buildContainer() {
     linkTokenService,
     onboardingService,
     employeeService,
+    employmentHistory,
     assetService,
     offboardingService,
     authService,

@@ -26,6 +26,8 @@ import type {
   CriminalRecordStatus,
   EmployeeRequestType,
 } from '../../generated/prisma/enums.js';
+import type { EmploymentEventRepository } from './employment-event.repository.js';
+import type { EmploymentHistoryService } from './employment-history.service.js';
 
 export type ProcessKind = 'gosi' | 'medical' | 'criminal';
 
@@ -44,6 +46,8 @@ interface ProcessRow {
 /** One employee-file unit of work — all repositories share one transaction. */
 export interface EmployeeTxScope {
   employees: EmployeeRepository;
+  /** Employment history rows written with the edit that caused them. */
+  history?: Pick<EmploymentEventRepository, 'createMany'>;
   requests: EmployeeRequestRepository;
   gosi: GosiRepository;
   medical: MedicalInsuranceRepository;
@@ -78,6 +82,8 @@ export class EmployeeService {
     /** The onboarding pipeline machine — drives the profile's action buttons. */
     private readonly onboarding?: Workflow<Employee>,
     private readonly lists?: ListsLike,
+    /** Turns a profile edit into dated history rows (unit, title, manager…). */
+    private readonly history?: Pick<EmploymentHistoryService, 'draftsForEdit'>,
   ) {}
 
   /** A department, project or title typed by staff becomes a choice in that company's lists. */
@@ -174,14 +180,17 @@ export class EmployeeService {
    * so the timeline shows WHAT changed, not just that something did.
    */
   async update(id: string, input: UpdateEmployeeData & PlacementInput, actor: Actor) {
-    await this.mustFind(id, actor);
+    const before = await this.mustFind(id, actor);
     const { companyId: _ignored, ...placement } = await resolvePlacement(this.repos.employees, actor, input, { selfId: id });
     void _ignored; // the company never changes through an edit
     const data = { ...input, ...placement };
     await this.remember(actor.companyId, data);
+    // What changed in the employment (unit, title, manager, type, hire date) becomes history, effective today.
+    const drafts = this.history ? await this.history.draftsForEdit(before, data, actor) : [];
 
     return this.transact(async (s) => {
       const updated = await s.employees.update(id, data);
+      if (drafts.length > 0) await s.history?.createMany(drafts);
       await s.audit.append({
         entity: 'EMPLOYEE',
         entityId: id,

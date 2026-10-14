@@ -22,6 +22,7 @@ export const router = createRouter({
     { path: '/trainees', redirect: '/employees' },
     { path: '/trainees/:id', redirect: (to) => `/employees/${to.params['id'] as string}` },
     { path: '/employees', name: 'employees', component: () => import('../pages/EmployeesPage.vue') },
+    { path: '/employee-changes', name: 'employee-changes', component: () => import('../pages/EmployeeChangesPage.vue') },
     {
       path: '/employees/:id',
       name: 'employee-detail',

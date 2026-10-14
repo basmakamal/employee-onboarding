@@ -21,6 +21,7 @@ import { notificationRouter } from './notifications/notification.routes.js';
 import { emailTemplatesRouter, emailTriggersRouter } from './notifications/email-admin.routes.js';
 import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
+import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
 import { listsRouter } from './modules/lists/lists.routes.js';
 import { asyncHandler } from './common/http.js';
 import { statfsSync } from 'node:fs';
@@ -36,6 +37,11 @@ const container = buildContainer();
 void container.listService
   .ensureDefaults()
   .catch((err: unknown) => logger.error({ err }, 'list values could not be seeded'));
+
+// Employment history starts with an opening entry per employee (written once).
+void container.employmentHistory
+  .ensureOpenings()
+  .catch((err: unknown) => logger.error({ err }, 'employment history could not be opened'));
 
 // Every company runs its own automation: one without rules gets the defaults.
 void container.prisma.company
@@ -62,6 +68,8 @@ const docRouters = employeeDocumentRouter({
 });
 staffApi.use('/employees/:id/documents', docRouters.nested);
 staffApi.use('/employee-documents', docRouters.flat);
+// Employment history first: `/employees/changes` must not be read as an employee id.
+staffApi.use('/employees', employmentHistoryRouter(container.employmentHistory));
 staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
 staffApi.use('/org', orgRouter(container.orgService));
