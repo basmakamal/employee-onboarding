@@ -224,6 +224,9 @@ model Company {
   emailTriggers EmailTrigger[]
   settings      Setting[]
   employmentEvents EmploymentEvent[]
+  shifts        ShiftDefinition[]
+  shiftPatterns ShiftPattern[]
+  shiftAssignments ShiftAssignment[]
   auditLogs     AuditLog[]
   notifications Notification[]
   assignments   UserAssignment[]
@@ -463,6 +466,8 @@ model Employee {
   employmentEvents EmploymentEvent[]
   /// The employee's own sign-in (self-service), when HR has created one.
   account         User?                    @relation("EmployeeAccount")
+  /// Work schedules over time (effective-dated; temporary ones override).
+  shiftAssignments ShiftAssignment[]
   auditLogs       AuditLog[]               @relation("EmployeeAudit")
 
   /// (status, statusChangedAt) serves both the status filters and the SLA
@@ -767,8 +772,10 @@ model Holiday {
   companyId String
   date      DateTime @db.Date
   name      String
+  /// Optional: the holiday applies only to this branch / unit and the units under it.
+  orgUnitId String?
 
-  @@unique([companyId, date])
+  @@unique([companyId, date, orgUnitId])
   @@map("holidays")
 }
 
@@ -1100,3 +1107,87 @@ model EmploymentEvent {
   @@index([batchId])
   @@map("employment_events")
 }
+
+/// A reusable shift: when work starts and ends (company local time), the
+/// unpaid break and the lateness grace. An end at or before the start means
+/// the shift runs past midnight (e.g. 22:00 → 06:00). FLEXIBLE shifts give a
+/// window inside which `requiredMinutes` must be worked.
+model ShiftDefinition {
+  id              String   @id @default(cuid())
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId       String
+  code            String
+  nameAr          String
+  nameEn          String
+  /// FIXED | FLEXIBLE
+  kind            String   @default("FIXED")
+  /// "HH:MM", company local time.
+  startTime       String
+  endTime         String
+  /// Unpaid break inside the shift.
+  breakMinutes    Int      @default(0)
+  /// Arriving within this many minutes after the start is not "late".
+  graceMinutes    Int      @default(0)
+  /// FLEXIBLE only: minutes to work inside the window.
+  requiredMinutes Int?
+  /// For the schedule grids (e.g. #5b3fd1).
+  color           String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@map("shift_definitions")
+}
+
+/// Which shift(s) on which day. WEEKLY patterns have 7 days, Sunday first
+/// (the day of the week picks the entry). ROTATION patterns repeat every
+/// `cycleDays` days counted from the assignment's start date. Each day holds
+/// zero shifts (rest day), one, or several that do not overlap (split shift).
+model ShiftPattern {
+  id          String   @id @default(cuid())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String
+  code        String
+  nameAr      String
+  nameEn      String
+  /// WEEKLY | ROTATION
+  kind        String   @default("WEEKLY")
+  cycleDays   Int      @default(7)
+  /// string[][] — shift-definition ids per day of the cycle.
+  days        Json
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments ShiftAssignment[]
+
+  @@unique([companyId, code])
+  @@map("shift_patterns")
+}
+
+/// "From this date, this person works this pattern." Regular assignments never
+/// overlap each other (a new one closes the previous); a TEMPORARY one (a
+/// covering week, Ramadan hours…) overrides the regular one for its dates.
+/// Attendance reads the assignment in force on each date — never "the current shift".
+model ShiftAssignment {
+  id          String       @id @default(cuid())
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String
+  employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId  String
+  pattern     ShiftPattern @relation(fields: [patternId], references: [id])
+  patternId   String
+  startDate   DateTime     @db.Date
+  /// Inclusive; NULL = until further notice.
+  endDate     DateTime?    @db.Date
+  temporary   Boolean      @default(false)
+  reason      String?      @db.Text
+  createdById String?
+  createdAt   DateTime     @default(now())
+
+  @@index([companyId, employeeId, startDate])
+  @@index([employeeId, temporary, startDate])
+  @@map("shift_assignments")
+}
+

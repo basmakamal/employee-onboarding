@@ -94,6 +94,7 @@ export const COMPANY_SCOPED_PREFIXES = [
   // Company-wide registers: contracts, documents, offboardings.
   '/registers',
   '/audit',
+  '/workforce',
 ] as const;
 
 /**

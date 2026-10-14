@@ -12,6 +12,7 @@ import { AuditLogRepository } from './workflow/audit-log.repository.js';
 import { SlaRuleRepository, HolidayRepository } from './workflow/sla-rule.repository.js';
 import { NotificationRepository } from './notifications/notification.repository.js';
 import { NotificationService } from './notifications/notification.service.js';
+import { ScheduleService } from './modules/workforce/schedule.service.js';
 import { EmployeeAccountService } from './modules/employees/employee-account.service.js';
 import { EmploymentEventRepository } from './modules/employees/employment-event.repository.js';
 import { EmploymentHistoryService } from './modules/employees/employment-history.service.js';
@@ -204,6 +205,8 @@ export function buildContainer() {
 
   // Employment history: dated transfers / promotions / status changes.
   const employmentHistory = new EmploymentHistoryService(prisma, new EmploymentEventRepository(prisma), employees, audit);
+  // Work schedules: shifts, patterns, effective-dated assignments.
+  const scheduleService = new ScheduleService(prisma, audit);
   // An employee's own self-service sign-in, created by HR.
   const employeeAccounts = new EmployeeAccountService(prisma, employees, notifications, config.APP_URL, audit);
   onTransition((event) => employmentHistory.recordStatus(event));
@@ -329,6 +332,7 @@ export function buildContainer() {
     employeeService,
     employmentHistory,
     employeeAccounts,
+    scheduleService,
     assetService,
     offboardingService,
     authService,

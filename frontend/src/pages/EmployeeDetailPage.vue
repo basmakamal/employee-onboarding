@@ -14,6 +14,7 @@ import StatusChip from '../components/StatusChip.vue';
 import EmploymentHistory from '../components/EmploymentHistory.vue';
 import EmployeeAccountCard from '../components/EmployeeAccountCard.vue';
 import ReadinessCard from '../components/ReadinessCard.vue';
+import EmployeeSchedule from '../components/EmployeeSchedule.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 
@@ -1606,6 +1607,9 @@ onMounted(load);
       <v-tab value="employment" prepend-icon="arrow-left-right">
         {{ $t('history.tab') }}
       </v-tab>
+      <v-tab v-if="auth.can('schedule.read', 'schedule.manage')" value="schedule" prepend-icon="calendar">
+        {{ $t('schedule.tab') }}
+      </v-tab>
     </v-tabs>
 
     <v-window v-model="tab" :touch="false">
@@ -2216,6 +2220,11 @@ onMounted(load);
         </v-card>
       </v-col>
     </v-row>
+      </v-window-item>
+
+      <!-- Work schedule: who works which shifts, day by day -->
+      <v-window-item value="schedule">
+        <EmployeeSchedule v-if="tab === 'schedule'" :employee-id="id" :can-edit="auth.can('schedule.manage')" @changed="readinessKey += 1" />
       </v-window-item>
 
       <!-- Employment history: dated transfers, promotions, manager and status changes -->

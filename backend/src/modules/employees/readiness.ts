@@ -40,6 +40,8 @@ export interface ReadinessInput {
   iban: string | null;
   contract: { status: string } | null;
   account: { active: boolean } | null;
+  /** A work schedule in force today (Phase C). Undefined = not checked. */
+  hasSchedule?: boolean;
 }
 
 export function readinessOf(e: ReadinessInput): { ready: boolean; items: ReadinessItem[] } {
@@ -53,7 +55,9 @@ export function readinessOf(e: ReadinessInput): { ready: boolean; items: Readine
     { key: 'IBAN', ok: !!e.iban?.trim(), required: true },
     { key: 'MANAGER', ok: !!e.managerId, required: false },
     { key: 'LOGIN', ok: !!e.account?.active, required: false },
-    { key: 'SCHEDULE', ok: false, required: true, soon: true },
+    e.hasSchedule === undefined
+      ? { key: 'SCHEDULE', ok: false, required: true, soon: true }
+      : { key: 'SCHEDULE', ok: e.hasSchedule, required: true },
     { key: 'SALARY', ok: false, required: true, soon: true },
   ];
   const ready = items.every((i) => i.ok || !i.required || i.soon);
