@@ -997,9 +997,9 @@ model AuditLog {
 /// (only labels and order change); free lists grow as staff type new values.
 model ListValue {
   id        String   @id @default(cuid())
-  /// NULL = global default shared by every company; a company row overrides.
-  company   Company? @relation(fields: [companyId], references: [id])
-  companyId String?
+  /// Every company owns its own copy of every list (seeded from the catalogue).
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
   list      String
   code      String
   labelAr   String
@@ -1011,8 +1011,7 @@ model ListValue {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([list, code])
-  @@index([list, active, sortOrder])
+  @@unique([companyId, list, code])
   @@index([companyId, list, active, sortOrder])
   @@map("list_values")
 }

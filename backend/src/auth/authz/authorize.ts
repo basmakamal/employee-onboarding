@@ -84,6 +84,7 @@ export const COMPANY_SCOPED_PREFIXES = [
   '/assets',
   '/asset-forms',
   '/org',
+  '/lists',
 ] as const;
 
 /**

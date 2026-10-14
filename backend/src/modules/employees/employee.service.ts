@@ -59,8 +59,8 @@ export interface EmployeeTxScope {
  */
 /** The dropdown lists: options to offer, and a way to remember a value staff typed. */
 interface ListsLike {
-  codes(key: string): Promise<string[]>;
-  ensureValue(key: string, value: string | null | undefined): Promise<void>;
+  codes(companyId: string, key: string): Promise<string[]>;
+  ensureValue(companyId: string | null | undefined, key: string, value: string | null | undefined): Promise<void>;
 }
 
 export class EmployeeService {
@@ -80,16 +80,19 @@ export class EmployeeService {
     private readonly lists?: ListsLike,
   ) {}
 
-  /** A department, project or title typed by staff becomes a choice for everyone. */
-  private async remember(input: {
-    department?: string | null;
-    project?: string | null;
-    jobTitle?: string | null;
-  }): Promise<void> {
-    if (!this.lists) return;
-    await this.lists.ensureValue('DEPARTMENT', input.department);
-    await this.lists.ensureValue('PROJECT', input.project);
-    await this.lists.ensureValue('JOB_TITLE', input.jobTitle);
+  /** A department, project or title typed by staff becomes a choice in that company's lists. */
+  private async remember(
+    companyId: string | null | undefined,
+    input: {
+      department?: string | null;
+      project?: string | null;
+      jobTitle?: string | null;
+    },
+  ): Promise<void> {
+    if (!this.lists || !companyId) return;
+    await this.lists.ensureValue(companyId, 'DEPARTMENT', input.department);
+    await this.lists.ensureValue(companyId, 'PROJECT', input.project);
+    await this.lists.ensureValue(companyId, 'JOB_TITLE', input.jobTitle);
   }
 
   /** One server-side page plus the tab badge counts, in parallel. */
@@ -107,13 +110,13 @@ export class EmployeeService {
     return this.repos.employees.timelinePage(employeeId, page, limit);
   }
 
-  /** Dropdown choices for the employee forms — the admin-managed lists when present. */
-  async fieldOptions() {
-    if (!this.lists) return this.repos.employees.fieldOptions();
+  /** Dropdown choices for the employee forms — the selected company's lists when present. */
+  async fieldOptions(companyId?: string) {
+    if (!this.lists || !companyId) return this.repos.employees.fieldOptions();
     const [departments, jobTitles, projects] = await Promise.all([
-      this.lists.codes('DEPARTMENT'),
-      this.lists.codes('JOB_TITLE'),
-      this.lists.codes('PROJECT'),
+      this.lists.codes(companyId, 'DEPARTMENT'),
+      this.lists.codes(companyId, 'JOB_TITLE'),
+      this.lists.codes(companyId, 'PROJECT'),
     ]);
     return { departments, jobTitles, projects };
   }
@@ -142,7 +145,7 @@ export class EmployeeService {
   ) {
     // Company and placement come from the validated context, never the body.
     const placement = await resolvePlacement(this.repos.employees, actor, input);
-    await this.remember({ ...input, ...placement });
+    await this.remember(actor.companyId, { ...input, ...placement });
     return this.transact(async (s) => {
       const employeeNo = await s.employees.allocateEmployeeNo();
       const employee = await s.employees.createDirect({
@@ -175,7 +178,7 @@ export class EmployeeService {
     const { companyId: _ignored, ...placement } = await resolvePlacement(this.repos.employees, actor, input, { selfId: id });
     void _ignored; // the company never changes through an edit
     const data = { ...input, ...placement };
-    await this.remember(data);
+    await this.remember(actor.companyId, data);
 
     return this.transact(async (s) => {
       const updated = await s.employees.update(id, data);

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { api } from '../api/client';
 import { useAuthStore } from './auth';
 import { usePreferencesStore } from './preferences';
@@ -30,9 +30,10 @@ export interface SelectItem {
 }
 
 /**
- * The dropdown lists, fetched once per session and read everywhere a form
- * needs choices or a chip needs a label. Signed-in pages load every list;
- * the public data form loads only its own subset without a token.
+ * The dropdown lists of the selected company (each company has its own),
+ * fetched once and read everywhere a form needs choices or a chip needs a
+ * label. Switching company drops them so the next read fetches the new
+ * company's lists. The public data form loads its subset through its link.
  */
 export const useListsStore = defineStore('lists', () => {
   const lists = ref<ListDto[]>([]);
@@ -62,10 +63,20 @@ export const useListsStore = defineStore('lists', () => {
     return fetch('/api/lists');
   }
 
-  /** The data form's lists — no sign-in involved. */
-  function loadPublic(): Promise<void> {
-    return fetch('/api/public/lists');
+  /** The data form's lists — the new hire's company, found through their signed link. */
+  function loadPublic(token: string): Promise<void> {
+    return fetch(`/api/link/${encodeURIComponent(token)}/lists`);
   }
+
+  // Another company was selected (or the user signed out): its lists are different.
+  watch(
+    () => auth.user?.activeCompany?.id ?? null,
+    (now, before) => {
+      if (now === before) return;
+      lists.value = [];
+      loaded.value = false;
+    },
+  );
 
   /** First read from a signed-in page pulls the lists in; public pages load explicitly. */
   function ensureLoaded() {
