@@ -85,12 +85,13 @@ export class AssetService {
 
   // ------------------------------------------------------------ registry
 
-  listAssets() {
-    return this.repos.assets.list();
+  /** Each company keeps its own asset registry. */
+  listAssets(companyId: string) {
+    return this.repos.assets.list(companyId);
   }
 
-  createAsset(data: { type: string; name: string; serialNumber?: string; notes?: string }) {
-    return this.repos.assets.create(data);
+  createAsset(companyId: string, data: { type: string; name: string; serialNumber?: string; notes?: string }) {
+    return this.repos.assets.create({ ...data, companyId });
   }
 
   // ------------------------------------------------------------ HR side

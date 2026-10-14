@@ -91,6 +91,8 @@ export const COMPANY_SCOPED_PREFIXES = [
   '/settings',
   '/email-templates',
   '/email-triggers',
+  // Company-wide registers: contracts, documents, offboardings.
+  '/registers',
 ] as const;
 
 /**

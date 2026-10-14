@@ -29,7 +29,13 @@
     "lists": "القوائم",
     "employeeChanges": "النقل والترقيات",
     "mySpace": "مساحتي",
-    "groupMine": "مساحتي"
+    "groupMine": "مساحتي",
+    "groupDashboard": "لوحة المتابعة",
+    "groupEmployees": "الموظفون",
+    "groupOrganisation": "الهيكل التنظيمي",
+    "contracts": "العقود",
+    "documents": "المستندات والصلاحية",
+    "offboardings": "إنهاء الخدمة"
   },
   "users": {
     "assignments": "الإسنادات",
@@ -1527,5 +1533,27 @@
     "daysLeft": "متبقٍ {n} يوم",
     "download": "تنزيل",
     "downloadFailed": "تعذّر تنزيل الملف. حاول مرة أخرى."
+  },
+  "registers": {
+    "contractsTitle": "العقود",
+    "contractsSubtitle": "جميع العقود في {company} — الحالة والمدة ومرجع المنصة. الرواتب تبقى في ملف الموظف.",
+    "contractStatus": "حالة العقد",
+    "endDate": "تاريخ الانتهاء",
+    "endsIn": "بعد {n} يوم",
+    "ended": "منتهٍ",
+    "noContracts": "لا توجد عقود مطابقة.",
+    "documentsTitle": "المستندات والصلاحية",
+    "documentsSubtitle": "الإقامات والجوازات والتصاريح وغيرها في {company} — المنتهية والقريبة من الانتهاء.",
+    "expired": "منتهية",
+    "within": "خلال {n} يومًا",
+    "all": "الكل",
+    "expiredAgo": "انتهت قبل {n} يوم",
+    "noDocuments": "لا توجد مستندات في هذه الفترة.",
+    "offboardingsTitle": "إنهاء الخدمة",
+    "offboardingsSubtitle": "المغادرون من {company} والخطوة التي وصلت إليها كل حالة.",
+    "openCases": "الحالات المفتوحة",
+    "opened": "تاريخ الفتح",
+    "noOffboardings": "لا توجد حالات إنهاء خدمة هنا.",
+    "docType": "نوع المستند"
   }
 }

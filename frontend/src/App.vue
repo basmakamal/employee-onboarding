@@ -38,20 +38,32 @@ const isBare = computed(() =>
 );
 const isRail = computed(() => display.mdAndUp.value && rail.value);
 
-interface NavItem { to: string; icon: string; key: string; permission?: string }
+/** `permission`: one code, or a list of which any one shows the entry. */
+interface NavItem { to: string; icon: string; key: string; permission?: string | string[] }
 interface NavGroup { key: string; items: NavItem[] }
 
 // An entry without a permission is for everyone; otherwise the session's
 // permission list decides whether it shows (the server decides whether it works).
+// Grouped by business function (HR Platform Blueprint). Modules still being
+// built (workforce, leave, payroll, approvals) are added only once they work.
 const GROUPS: NavGroup[] = [
   {
-    key: 'nav.groupWork',
+    key: 'nav.groupDashboard',
+    items: [{ to: '/', icon: 'fluent:home', key: 'nav.home' }],
+  },
+  {
+    key: 'nav.groupEmployees',
     items: [
-      { to: '/', icon: 'fluent:home', key: 'nav.home' },
       { to: '/employees', icon: 'fluent:people', key: 'nav.employees' },
       { to: '/employee-changes', icon: 'fluent:history', key: 'nav.employeeChanges' },
-      { to: '/organisation', icon: 'fluent:people-community', key: 'nav.organisation', permission: 'org.read' },
+      { to: '/contracts', icon: 'fluent:document-text', key: 'nav.contracts', permission: ['contracts.write', 'employees.read'] },
+      { to: '/documents', icon: 'fluent:document-folder', key: 'nav.documents', permission: 'documents.read' },
+      { to: '/offboardings', icon: 'fluent:clipboard-task', key: 'nav.offboardings', permission: ['offboarding.manage', 'settlement.approve'] },
     ],
+  },
+  {
+    key: 'nav.groupOrganisation',
+    items: [{ to: '/organisation', icon: 'fluent:people-community', key: 'nav.organisation', permission: 'org.read' }],
   },
   {
     key: 'nav.groupInsights',
@@ -84,9 +96,35 @@ const SELF_GROUPS: NavGroup[] = [{ key: 'nav.groupMine', items: [{ to: '/me', ic
 const groups = computed(() =>
   (isSelfService.value ? SELF_GROUPS : GROUPS).map((g) => ({
     ...g,
-    items: g.items.filter((i) => !i.permission || auth.can(i.permission)),
+    items: g.items.filter((i) => !i.permission || auth.can(...(Array.isArray(i.permission) ? i.permission : [i.permission]))),
   })).filter((g) => g.items.length > 0),
 );
+
+// ------------------------------------------------------------ collapsible groups
+// Remembered per browser; the group holding the current page always stays open.
+const COLLAPSE_KEY = 'nav.collapsed';
+const collapsed = ref<Set<string>>(
+  (() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '[]') as string[]);
+    } catch {
+      return new Set<string>();
+    }
+  })(),
+);
+function toggleGroup(key: string) {
+  const next = new Set(collapsed.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  collapsed.value = next;
+  try {
+    localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
+  } catch {
+    /* storage blocked — the choice simply is not remembered */
+  }
+}
+const holdsCurrent = (g: NavGroup) => g.items.some((i) => (i.to === '/' ? route.path === '/' : route.path === i.to || route.path.startsWith(`${i.to}/`)));
+const isOpen = (g: NavGroup) => !collapsed.value.has(g.key) || holdsCurrent(g);
 
 /** Breadcrumb title: the nav entry whose path is the longest prefix of the route. */
 const currentKey = computed(() => {
@@ -95,7 +133,7 @@ const currentKey = computed(() => {
     .filter((i) => route.path === i.to || route.path.startsWith(i.to + '/'))
     .sort((a, b) => b.to.length - a.to.length)[0];
   if (match) return match.key;
-  if (route.path.startsWith('/offboardings')) return 'nav.employees';
+  if (route.path.startsWith('/offboardings/')) return 'nav.offboardings';
   if (route.path === '/me') return 'nav.mySpace';
   return null;
 });
@@ -221,10 +259,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 
         <v-list nav density="comfortable" class="shell-nav">
           <template v-for="group in groups" :key="group.key">
-            <div v-if="!isRail" class="shell-nav__group label-caps">{{ $t(group.key) }}</div>
+            <button
+              v-if="!isRail"
+              type="button"
+              class="shell-nav__group label-caps"
+              :aria-expanded="isOpen(group)"
+              @click="toggleGroup(group.key)"
+            >
+              <span class="flex-grow-1 text-start">{{ $t(group.key) }}</span>
+              <v-icon :icon="isOpen(group) ? 'chevron-up' : 'chevron-down'" size="14" />
+            </button>
             <v-divider v-else class="my-2 mx-3" />
             <v-tooltip
-              v-for="item in group.items"
+              v-for="item in isRail || isOpen(group) ? group.items : []"
               :key="item.to"
               :disabled="!isRail"
               location="end"
@@ -492,6 +539,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 }
 .shell-nav { padding-inline: 10px; }
 .shell-nav__group { padding: 18px 10px 6px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; color: rgba(var(--v-theme-primary), 0.75); }
+/* Group headers fold their entries away (remembered per browser). */
+button.shell-nav__group { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: transparent; cursor: pointer; font-family: inherit; text-align: start; border-radius: 6px; }
+button.shell-nav__group:hover { color: rgb(var(--v-theme-primary)); }
+button.shell-nav__group:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .shell-nav .v-list-item { margin-bottom: 2px; }
 .shell-nav__item { min-height: 38px; padding-inline: 10px !important; font-size: 13.5px; position: relative; }
 .shell-nav__item .v-list-item-title { font-size: 13.5px; font-weight: 500; letter-spacing: 0; }

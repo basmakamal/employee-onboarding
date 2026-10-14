@@ -23,6 +23,8 @@ import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
 import { employeeAccountRouter } from './modules/employees/employee-account.routes.js';
 import { meRouter } from './modules/self-service/me.routes.js';
+import { registersRouter } from './modules/registers/registers.routes.js';
+import { employeeScopeGuard } from './modules/employees/employee-scope.guard.js';
 import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
 import { listsRouter } from './modules/lists/lists.routes.js';
 import { asyncHandler } from './common/http.js';
@@ -69,12 +71,17 @@ const docRouters = employeeDocumentRouter({
   documents: container.repos.employeeDocuments,
   firings: container.repos.slaFirings,
   audit: container.repos.audit,
+  employees: container.repos.employees,
 });
 staffApi.use('/employees/:id/documents', docRouters.nested);
 staffApi.use('/employee-documents', docRouters.flat);
+// Every /employees/:id/... route: the employee must be in the selected company and the actor's scope.
+staffApi.use('/employees/:id', employeeScopeGuard(container.repos.employees));
 // Employment history first: `/employees/changes` must not be read as an employee id.
 staffApi.use('/employees', employmentHistoryRouter(container.employmentHistory));
 staffApi.use('/employees', employeeAccountRouter(container.employeeAccounts));
+// Contracts / documents / offboardings across the company (scoped, paged).
+staffApi.use('/registers', registersRouter(container.prisma));
 // An employee's own data, for their self-service sign-in.
 staffApi.use('/me', meRouter(container.prisma));
 staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
