@@ -99,25 +99,32 @@ function slugify(name: string): string {
  * per key by an admin-edited row, plus admin-created templates (`custom.*`)
  * that exist only in the database. Rendering always goes through here so the
  * override is honoured everywhere a template key is used.
+ *
+ * Every company words its own e-mails: an override or a custom template
+ * belongs to one company, and a message is rendered with the wording of the
+ * company it is about. A company that has not edited a key gets the
+ * built-in text.
  */
 export class TemplateService {
-  private cache: { rows: Map<string, EmailTemplate>; at: number } | null = null;
+  private cache = new Map<string, { rows: Map<string, EmailTemplate>; at: number }>();
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly appUrl: string,
   ) {}
 
-  private async rows(): Promise<Map<string, EmailTemplate>> {
-    if (this.cache && Date.now() - this.cache.at < CACHE_MS) return this.cache.rows;
-    const all = await this.prisma.emailTemplate.findMany();
+  private async rows(companyId: string | null): Promise<Map<string, EmailTemplate>> {
+    if (!companyId) return new Map();
+    const hit = this.cache.get(companyId);
+    if (hit && Date.now() - hit.at < CACHE_MS) return hit.rows;
+    const all = await this.prisma.emailTemplate.findMany({ where: { companyId } });
     const rows = new Map(all.map((r) => [r.key, r]));
-    this.cache = { rows, at: Date.now() };
+    this.cache.set(companyId, { rows, at: Date.now() });
     return rows;
   }
 
-  private invalidate(): void {
-    this.cache = null;
+  private invalidate(companyId: string): void {
+    this.cache.delete(companyId);
   }
 
   /** A DB-only template — never in the catalogue. */
@@ -141,8 +148,8 @@ export class TemplateService {
    * trigger asks before issuing, because issuing one link invalidates the
    * previous link of that purpose.
    */
-  async usesFormLink(key: string): Promise<boolean> {
-    const row = (await this.rows()).get(key);
+  async usesFormLink(companyId: string | null, key: string): Promise<boolean> {
+    const row = (await this.rows(companyId)).get(key);
     return !!row && this.isCustom(key, row) && mentions(row, 'formLink');
   }
 
@@ -150,23 +157,23 @@ export class TemplateService {
    * Built-ins declare the link in the catalogue; admin-created ones ask for it
    * by writing the token, so both paths are checked.
    */
-  async usesContractLink(key: string): Promise<boolean> {
+  async usesContractLink(companyId: string | null, key: string): Promise<boolean> {
     if (TEMPLATE_CATALOG[key]?.placeholders.includes('contractLink')) return true;
-    const row = (await this.rows()).get(key);
+    const row = (await this.rows(companyId)).get(key);
     return !!row && this.isCustom(key, row) && mentions(row, 'contractLink');
   }
 
   /** Catalogue meta or, for an admin-created template, meta derived from its row. */
-  async metaOf(key: string): Promise<TemplateMeta | null> {
+  async metaOf(companyId: string | null, key: string): Promise<TemplateMeta | null> {
     const fromCatalog = TEMPLATE_CATALOG[key];
     if (fromCatalog) return fromCatalog;
-    const row = (await this.rows()).get(key);
+    const row = (await this.rows(companyId)).get(key);
     return this.isCustom(key, row) ? this.customMeta(row) : null;
   }
 
   /** Does this key resolve to something that can be sent? (trigger / rule validation) */
-  async exists(key: string): Promise<boolean> {
-    return (await this.metaOf(key)) !== null;
+  async exists(companyId: string | null, key: string): Promise<boolean> {
+    return (await this.metaOf(companyId, key)) !== null;
   }
 
   /** Realistic values for previews and test sends. */
@@ -201,8 +208,8 @@ export class TemplateService {
   }
 
   /** The catalogue with each key's override state, then the admin-created ones — the list view. */
-  async list() {
-    const rows = await this.rows();
+  async list(companyId: string) {
+    const rows = await this.rows(companyId);
     const builtIn = Object.entries(TEMPLATE_CATALOG).map(([key, meta]) => {
       const row = rows.get(key);
       return {
@@ -240,10 +247,10 @@ export class TemplateService {
   }
 
   /** One template for the editor: override row (if any) + code defaults + placeholders. */
-  async get(key: string) {
-    const meta = await this.metaOf(key);
+  async get(companyId: string, key: string) {
+    const meta = await this.metaOf(companyId, key);
     if (!meta) throw new NotFoundError('template', key);
-    const row = (await this.rows()).get(key) ?? null;
+    const row = (await this.rows(companyId)).get(key) ?? null;
     return {
       key,
       custom: this.isCustom(key, row ?? undefined),
@@ -332,40 +339,41 @@ export class TemplateService {
    * kept unique; it can then be picked by triggers and automation rules.
    */
   async create(
+    companyId: string,
     draft: TemplateDraft & { audience: 'employee' | 'staff' },
     userId?: string,
   ): Promise<EmailTemplate> {
     this.assertComplete(draft);
-    const rows = await this.rows();
+    const rows = await this.rows(companyId);
     const base = `${CUSTOM_PREFIX}${slugify(draft.name)}`;
     let key = base;
     for (let n = 2; rows.has(key) || TEMPLATE_CATALOG[key]; n += 1) key = `${base}-${n}`;
     const row = await this.prisma.emailTemplate.create({
-      data: { key, audience: draft.audience, ...this.rowData(draft, draft.name.trim(), userId) },
+      data: { companyId, key, audience: draft.audience, ...this.rowData(draft, draft.name.trim(), userId) },
     });
-    this.invalidate();
+    this.invalidate(companyId);
     return row;
   }
 
-  async upsert(key: string, draft: TemplateDraft, userId?: string): Promise<EmailTemplate> {
-    const meta = await this.metaOf(key);
+  async upsert(companyId: string, key: string, draft: TemplateDraft, userId?: string): Promise<EmailTemplate> {
+    const meta = await this.metaOf(companyId, key);
     if (!meta) throw new NotFoundError('template', key);
     this.assertComplete(draft);
     const data = this.rowData(draft, meta.nameEn, userId);
     const row = await this.prisma.emailTemplate.upsert({
-      where: { key },
-      create: { key, ...data },
+      where: { companyId_key: { companyId, key } },
+      create: { companyId, key, ...data },
       update: { ...data, version: { increment: 1 } },
     });
-    this.invalidate();
+    this.invalidate(companyId);
     return row;
   }
 
   /** Where a key is referenced — deleting a template in use would break those senders. */
-  async usage(key: string): Promise<TemplateUsage> {
+  async usage(companyId: string, key: string): Promise<TemplateUsage> {
     const [triggers, rules] = await Promise.all([
-      this.prisma.emailTrigger.count({ where: { templateKey: key } }),
-      this.prisma.slaRule.count({ where: { OR: [{ subjectTemplateKey: key }, { staffTemplateKey: key }] } }),
+      this.prisma.emailTrigger.count({ where: { companyId, templateKey: key } }),
+      this.prisma.slaRule.count({ where: { companyId, OR: [{ subjectTemplateKey: key }, { staffTemplateKey: key }] } }),
     ]);
     return { triggers, rules };
   }
@@ -374,10 +382,10 @@ export class TemplateService {
    * Built-in key: back to the code default. Admin-created key: the template
    * is removed — refused while a trigger or rule still points at it.
    */
-  async revert(key: string): Promise<void> {
-    const row = (await this.rows()).get(key);
+  async revert(companyId: string, key: string): Promise<void> {
+    const row = (await this.rows(companyId)).get(key);
     if (this.isCustom(key, row)) {
-      const used = await this.usage(key);
+      const used = await this.usage(companyId, key);
       if (used.triggers + used.rules > 0) {
         throw new GuardFailedError(
           'TEMPLATE_IN_USE',
@@ -385,13 +393,18 @@ export class TemplateService {
         );
       }
     }
-    await this.prisma.emailTemplate.deleteMany({ where: { key } });
-    this.invalidate();
+    await this.prisma.emailTemplate.deleteMany({ where: { companyId, key } });
+    this.invalidate(companyId);
   }
 
-  /** Production path: DB override when present and active, else code. */
-  async render(key: string, locale: Locale, params: TemplateParams): Promise<RenderedWithMeta> {
-    const row = (await this.rows()).get(key);
+  /** Production path: the company's override when present and active, else code. */
+  async render(
+    key: string,
+    locale: Locale,
+    params: TemplateParams,
+    companyId: string | null = null,
+  ): Promise<RenderedWithMeta> {
+    const row = (await this.rows(companyId)).get(key);
     if (row?.active) {
       return { ...this.renderDraft(row, locale, params), templateKey: key, templateVersion: row.version };
     }
@@ -403,12 +416,17 @@ export class TemplateService {
   }
 
   /** Preview: the saved/default version, or an unsaved draft from the editor. */
-  async preview(key: string, locale: Locale, draft?: Partial<TemplateDraft>): Promise<RenderedMessage> {
+  async preview(
+    companyId: string,
+    key: string,
+    locale: Locale,
+    draft?: Partial<TemplateDraft>,
+  ): Promise<RenderedMessage> {
     const params = this.sampleParams(locale);
-    const base = (await this.rows()).get(key);
+    const base = (await this.rows(companyId)).get(key);
     if (!draft) {
       if (base) return this.renderDraft(base, locale, params);
-      return this.render(key, locale, params);
+      return this.render(key, locale, params, companyId);
     }
     const merged: TemplateDraft = {
       name: draft.name ?? base?.name ?? key,

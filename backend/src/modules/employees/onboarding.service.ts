@@ -103,7 +103,9 @@ export class OnboardingService {
     /** Stops links / custody forms / process cards when a trainee withdraws. */
     private readonly halter?: OpenWorkHalter,
     /** Named primary owners of the onboarding pipeline — they get every team notice in addition to HR. */
-    private readonly responsibility?: { get(processKey: string): Promise<string[]> },
+    private readonly responsibility?: {
+      get(processKey: string, scope?: { companyId?: string | null; ref?: { entity: string; entityId: string } }): Promise<string[]>;
+    },
     /** Remembers a department / project / title typed on a new record as a list value. */
     private readonly lists?: {
       ensureValue(companyId: string | null | undefined, key: string, value: string | null | undefined): Promise<void>;
@@ -581,7 +583,7 @@ export class OnboardingService {
     status: string,
   ) {
     const ref = { entity: 'EMPLOYEE', entityId: employeeId };
-    const ownerIds = (await this.responsibility?.get('EMPLOYEE')) ?? [];
+    const ownerIds = (await this.responsibility?.get('EMPLOYEE', { ref })) ?? [];
     await this.notifications.notifyTeam(
       { processKey: 'EMPLOYEE', status, role: 'HR', ownerIds },
       templateKey,

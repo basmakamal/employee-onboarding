@@ -1,3 +1,4 @@
+import { logger } from '../../common/logger.js';
 import type { Db } from '../../common/prisma.js';
 import type { Actor } from '../../workflow/engine.js';
 import type { AuditLogRepository } from '../../workflow/audit-log.repository.js';
@@ -38,6 +39,8 @@ export class CompanyService {
     private readonly audit: AuditLogRepository,
     /** Keeps the manager seat and its assignment together; absent in older tests. */
     private readonly assignments?: Pick<AssignmentService, 'syncManager'>,
+    /** Gives a new company its default automation rules and holiday calendar. */
+    private readonly defaults?: { onCreated(companyId: string): Promise<void> },
   ) {}
 
   list() {
@@ -87,6 +90,8 @@ export class CompanyService {
       companyId: row.id,
       metadata: { code },
     });
+    // A company runs its own automation from day one; a failure here must not undo the company.
+    await this.defaults?.onCreated(row.id).catch((err: unknown) => logger.error({ err, companyId: row.id }, 'company defaults failed'));
     return row;
   }
 

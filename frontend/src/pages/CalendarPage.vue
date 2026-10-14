@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { api } from '../api/client';
 import YearCalendar from '../components/YearCalendar.vue';
 import PageHeader from '../components/PageHeader.vue';
+import { useActiveCompanyName } from '../composables/useActiveCompany';
 import FormErrorAlert from '../components/FormErrorAlert.vue';
 import { useForm } from '../composables/useForm';
 import { rules } from '../validation/rules';
@@ -19,6 +20,8 @@ interface HolidayRow {
 const DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 const { t } = useI18n();
+/** Each company has its own settings here — the header says whose. */
+const companyName = useActiveCompanyName();
 const loaded = ref(false);
 const snackbar = ref({ show: false, text: '', color: 'success' });
 
@@ -108,7 +111,7 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 1100px">
-    <PageHeader :title="$t('calendar.title')" :subtitle="$t('calendar.subtitle')" />
+    <PageHeader :title="$t('calendar.title')" :subtitle="$t('calendar.subtitleCompany', { company: companyName })" />
 
     <v-card v-if="loaded">
       <v-card-text>

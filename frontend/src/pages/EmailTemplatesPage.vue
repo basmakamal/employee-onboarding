@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n';
 import { api } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
 import PageHeader from '../components/PageHeader.vue';
+import { useActiveCompanyName } from '../composables/useActiveCompany';
 import FormErrorAlert from '../components/FormErrorAlert.vue';
 import { useForm } from '../composables/useForm';
 import { rules } from '../validation/rules';
@@ -89,6 +90,8 @@ interface TriggerOptions {
 }
 
 const { t, locale } = useI18n();
+/** Each company has its own settings here — the header says whose. */
+const companyName = useActiveCompanyName();
 const confirm = useConfirm();
 const lang = computed<Lang>(() => (locale.value === 'ar' ? 'ar' : 'en'));
 
@@ -431,7 +434,7 @@ async function removeTrigger(trigger: Trigger) {
 
 <template>
   <v-container class="py-8" style="max-width: 1200px">
-    <PageHeader :title="$t('emailTemplates.title')" :subtitle="$t('emailTemplates.subtitle')">
+    <PageHeader :title="$t('emailTemplates.title')" :subtitle="$t('emailTemplates.subtitleCompany', { company: companyName })">
       <!-- The frequent actions live up here, not under the templates list. -->
       <v-btn variant="tonal" prepend-icon="file-plus" @click="newTplForm.reset(); newDialog = true">
         {{ $t('emailTemplates.newTemplate') }}

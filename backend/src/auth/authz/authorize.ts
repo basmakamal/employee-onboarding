@@ -85,6 +85,10 @@ export const COMPANY_SCOPED_PREFIXES = [
   '/asset-forms',
   '/org',
   '/lists',
+  // Each company has its own automation, e-mail wording, calendar and mail server.
+  '/settings',
+  '/email-templates',
+  '/email-triggers',
 ] as const;
 
 /**

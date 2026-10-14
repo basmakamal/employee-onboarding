@@ -11,6 +11,7 @@ import { GuardFailedError } from '../src/workflow/errors.js';
 
 function overrideRow(over: Record<string, unknown> = {}) {
   return {
+    companyId: 'co-a',
     key: 'staff.record_stalled',
     name: 'Stalled record',
     subjectAr: 'متابعة {{name}}',
@@ -42,7 +43,7 @@ describe('TemplateService.render', () => {
   const params = { name: 'Sara Ali', status: 'CREATED', daysWaiting: 2 };
 
   it('falls back to the built-in template when nothing is overridden', async () => {
-    const out = await templates([]).render('staff.record_stalled', 'en', params);
+    const out = await templates([]).render('staff.record_stalled', 'en', params, 'co-a');
     const code = renderTemplate('staff.record_stalled', 'en', params);
     expect(out.subject).toBe(code.subject);
     expect(out.text).toBe(code.text);
@@ -51,7 +52,7 @@ describe('TemplateService.render', () => {
   });
 
   it('uses an active override, fills placeholders, drops unknown ones, stamps the version', async () => {
-    const out = await templates([overrideRow()]).render('staff.record_stalled', 'en', params);
+    const out = await templates([overrideRow()]).render('staff.record_stalled', 'en', params, 'co-a');
     expect(out.subject).toBe('Follow-up on Sara Ali (CREATED)');
     expect(out.text).toContain('Hello Sara Ali,');
     expect(out.text).toContain('waited 2 days');
@@ -65,16 +66,19 @@ describe('TemplateService.render', () => {
       'staff.record_stalled',
       'en',
       params,
+      'co-a',
     );
     expect(out.templateVersion).toBeNull();
     expect(out.subject).toBe(renderTemplate('staff.record_stalled', 'en', params).subject);
   });
 
   it('escapes HTML coming from data so a name cannot inject markup', async () => {
-    const out = await templates([overrideRow()]).render('staff.record_stalled', 'en', {
-      ...params,
-      name: '<script>alert(1)</script>',
-    });
+    const out = await templates([overrideRow()]).render(
+      'staff.record_stalled',
+      'en',
+      { ...params, name: '<script>alert(1)</script>' },
+      'co-a',
+    );
     expect(out.html).toContain('&lt;script&gt;');
     expect(out.html).not.toContain('<script>');
   });
@@ -84,13 +88,14 @@ describe('TemplateService.render', () => {
       'staff.record_stalled',
       'en',
       { ...params, linkUrl: 'https://hr.example/form/abc' },
+      'co-a',
     );
     expect(out.text).toContain('Open form: https://hr.example/form/abc');
     expect(out.html).toContain('href="https://hr.example/form/abc"');
   });
 
   it('previews an unsaved draft with sample data', async () => {
-    const out = await templates([]).preview('custom.status_change', 'en', {
+    const out = await templates([]).preview('co-a', 'custom.status_change', 'en', {
       subjectEn: 'Update for {{name}}',
       bodyEn: 'Now {{status}}.',
     });
@@ -101,7 +106,7 @@ describe('TemplateService.render', () => {
 
   it('refuses a draft missing a subject or body in either language', async () => {
     await expect(
-      templates([]).upsert('staff.record_stalled', {
+      templates([]).upsert('co-a', 'staff.record_stalled', {
         name: 'x',
         subjectAr: 'a',
         subjectEn: 'b',
@@ -116,6 +121,7 @@ describe('TemplateService.render', () => {
 
 function triggerSetup(triggers: Array<Record<string, unknown>>) {
   const employee = {
+    companyId: 'co-a',
     firstName: 'Sara',
     lastName: 'Ali',
     email: 'sara@example.com',
@@ -137,6 +143,7 @@ function triggerSetup(triggers: Array<Record<string, unknown>>) {
 
 const baseTrigger = {
   id: 't1',
+  companyId: 'co-a',
   processKey: 'EMPLOYEE',
   status: 'CREATED',
   templateKey: 'custom.status_change',
@@ -172,9 +179,19 @@ describe('TriggerService.handle', () => {
         employeeNo: 'EMP-7',
         department: 'Finance',
       }),
-      { entity: 'EMPLOYEE', entityId: 'e1' },
+      { entity: 'EMPLOYEE', entityId: 'e1', companyId: 'co-a' },
       'ar',
     );
+    expect(notifications.notifyRole).not.toHaveBeenCalled();
+  });
+
+  it("fires only the triggers of the record's own company", async () => {
+    const { service, notifications } = triggerSetup([
+      { ...baseTrigger, id: 'other', companyId: 'co-b', recipient: 'ROLE', role: 'IT' },
+      baseTrigger,
+    ]);
+    await service.handle(event());
+    expect(notifications.notifyExternal).toHaveBeenCalledTimes(1);
     expect(notifications.notifyRole).not.toHaveBeenCalled();
   });
 

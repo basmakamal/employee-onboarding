@@ -14,6 +14,7 @@ import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
 import { api } from '../api/client';
 import PageHeader from '../components/PageHeader.vue';
+import { useActiveCompanyName } from '../composables/useActiveCompany';
 import { useConfirm } from '../composables/useConfirm';
 import FormErrorAlert from '../components/FormErrorAlert.vue';
 import { useForm } from '../composables/useForm';
@@ -78,6 +79,8 @@ const RESPONSIBILITY_KEYS = [
 ] as const;
 
 const { t, locale } = useI18n();
+/** Each company has its own settings here — the header says whose. */
+const companyName = useActiveCompanyName();
 const confirm = useConfirm();
 const rows = ref<OwnershipRow[]>([]);
 const teams = ref<Team[]>([]);
@@ -394,7 +397,7 @@ onMounted(load);
             <v-icon icon="fluent:person-starburst" class="me-2" />
             {{ $t('responsibility.title') }}
           </v-card-title>
-          <v-card-subtitle class="text-wrap">{{ $t('responsibility.subtitle') }}</v-card-subtitle>
+          <v-card-subtitle class="text-wrap">{{ $t('responsibility.subtitleCompany', { company: companyName }) }}</v-card-subtitle>
         </v-card-item>
         <v-table density="comfortable">
           <thead>

@@ -7,7 +7,8 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client.js';
-import { Role, SlaUnit, SlaAction } from '../src/generated/prisma/enums.js';
+import { Role } from '../src/generated/prisma/enums.js';
+import { DEFAULT_SLA_RULES } from '../src/workflow/sla-defaults.js';
 import { SYSTEM_ROLES } from '../src/auth/authz/permissions.js';
 
 const prisma = new PrismaClient({
@@ -23,176 +24,6 @@ const STAFF: Array<{ email: string; name: string; role: Role }> = [
   { email: 'it@example.com', name: 'IT Officer', role: Role.IT },
   { email: 'finance@example.com', name: 'Finance Officer', role: Role.FINANCE },
   { email: 'admin@example.com', name: 'System Admin', role: Role.ADMIN },
-];
-
-/** The BRD automation table (README §1) + wider-coverage & escalation rules. */
-const SLA_RULES: Array<{
-  key: string;
-  processKey?: string;
-  status: string;
-  afterValue: number;
-  afterUnit: SlaUnit;
-  action: SlaAction;
-  notifySubject: boolean;
-  notifyHr: boolean;
-  notifyRole?: string;
-  escalateToRole?: string;
-}> = [
-  {
-    key: 'form-24h-reminder',
-    status: 'AWAITING_FORM',
-    afterValue: 24,
-    afterUnit: SlaUnit.HOURS,
-    action: SlaAction.REMIND,
-    notifySubject: true,
-    notifyHr: true,
-  },
-  {
-    key: 'form-10d-expire',
-    status: 'AWAITING_FORM',
-    afterValue: 10,
-    afterUnit: SlaUnit.CALENDAR_DAYS,
-    action: SlaAction.EXPIRE,
-    notifySubject: false,
-    notifyHr: true,
-  },
-  {
-    key: 'contract-2wd-reminder',
-    status: 'CONTRACT_CREATION',
-    afterValue: 2,
-    afterUnit: SlaUnit.WORKING_DAYS,
-    action: SlaAction.REMIND,
-    notifySubject: false,
-    notifyHr: true,
-  },
-  {
-    key: 'approval-5wd-daily',
-    status: 'AWAITING_CONTRACT_APPROVAL',
-    afterValue: 5,
-    afterUnit: SlaUnit.WORKING_DAYS,
-    action: SlaAction.REMIND_DAILY,
-    // Memo row 9: the trainee is reminded too, with a fresh contract link.
-    notifySubject: true,
-    notifyHr: true,
-  },
-  {
-    key: 'approval-10d-expire',
-    status: 'AWAITING_CONTRACT_APPROVAL',
-    afterValue: 10,
-    afterUnit: SlaUnit.CALENDAR_DAYS,
-    action: SlaAction.EXPIRE,
-    notifySubject: false,
-    notifyHr: true,
-  },
-  // Memo row 15: a custody form undecided for 24h — the employee and IT are reminded.
-  {
-    key: 'custody-24h-reminder-sent',
-    processKey: 'ASSET_FORM',
-    status: 'SENT',
-    afterValue: 24,
-    afterUnit: SlaUnit.HOURS,
-    action: SlaAction.REMIND,
-    notifySubject: true,
-    notifyHr: true,
-    notifyRole: 'IT',
-  },
-  {
-    key: 'custody-24h-reminder-opened',
-    processKey: 'ASSET_FORM',
-    status: 'PENDING_EMPLOYEE_APPROVAL',
-    afterValue: 24,
-    afterUnit: SlaUnit.HOURS,
-    action: SlaAction.REMIND,
-    notifySubject: true,
-    notifyHr: true,
-    notifyRole: 'IT',
-  },
-  // Escalation: form still incomplete after 5 days despite reminders → ADMIN.
-  {
-    key: 'form-5d-escalate',
-    status: 'AWAITING_FORM',
-    afterValue: 5,
-    afterUnit: SlaUnit.CALENDAR_DAYS,
-    action: SlaAction.ESCALATE,
-    notifySubject: false,
-    notifyHr: false,
-    escalateToRole: 'ADMIN',
-  },
-  // Wider coverage: stalled offboardings and long-held process cards.
-  {
-    key: 'offboarding-assets-5wd',
-    processKey: 'OFFBOARDING',
-    status: 'ASSETS_PENDING',
-    afterValue: 5,
-    afterUnit: SlaUnit.WORKING_DAYS,
-    action: SlaAction.REMIND,
-    notifySubject: false,
-    notifyHr: true,
-  },
-  {
-    key: 'offboarding-settlement-5wd',
-    processKey: 'OFFBOARDING',
-    status: 'SETTLEMENT',
-    afterValue: 5,
-    afterUnit: SlaUnit.WORKING_DAYS,
-    action: SlaAction.REMIND,
-    notifySubject: false,
-    notifyHr: true,
-    notifyRole: 'FINANCE',
-  },
-  {
-    key: 'gosi-hold-14d',
-    processKey: 'GOSI',
-    status: 'ON_HOLD',
-    afterValue: 14,
-    afterUnit: SlaUnit.CALENDAR_DAYS,
-    action: SlaAction.REMIND,
-    notifySubject: false,
-    notifyHr: true,
-    notifyRole: 'INSURANCE',
-  },
-  {
-    key: 'medical-hold-14d',
-    processKey: 'MEDICAL_INSURANCE',
-    status: 'ON_HOLD',
-    afterValue: 14,
-    afterUnit: SlaUnit.CALENDAR_DAYS,
-    action: SlaAction.REMIND,
-    notifySubject: false,
-    notifyHr: true,
-    notifyRole: 'INSURANCE',
-  },
-  // Document expiry — DEADLINE semantics: afterValue = days BEFORE expiry.
-  {
-    key: 'docs-any-30d-before',
-    processKey: 'DOCUMENT_EXPIRY',
-    status: 'ANY',
-    afterValue: 30,
-    afterUnit: SlaUnit.CALENDAR_DAYS,
-    action: SlaAction.REMIND,
-    notifySubject: false,
-    notifyHr: true,
-  },
-  {
-    key: 'docs-any-7d-daily',
-    processKey: 'DOCUMENT_EXPIRY',
-    status: 'ANY',
-    afterValue: 7,
-    afterUnit: SlaUnit.CALENDAR_DAYS,
-    action: SlaAction.REMIND_DAILY,
-    notifySubject: false,
-    notifyHr: true,
-  },
-  {
-    key: 'contract-60d-before',
-    processKey: 'DOCUMENT_EXPIRY',
-    status: 'CONTRACT',
-    afterValue: 60,
-    afterUnit: SlaUnit.CALENDAR_DAYS,
-    action: SlaAction.REMIND,
-    notifySubject: false,
-    notifyHr: true,
-  },
 ];
 
 /**
@@ -220,23 +51,28 @@ async function main() {
     console.log(`seeded user  ${user.role.padEnd(5)} ${user.email} (password: ${DEFAULT_PASSWORD})`);
   }
 
-  for (const rule of SLA_RULES) {
-    const { key: _key, ...data } = rule;
-    const processKey = data.processKey ?? 'EMPLOYEE';
-    const existing = await prisma.slaRule.findFirst({
-      where: { processKey, status: data.status, action: data.action },
-    });
-    if (existing && RULES_ONLY) {
-      if (data.notifySubject && !existing.notifySubject) {
-        await prisma.slaRule.update({ where: { id: existing.id }, data: { notifySubject: true } });
-        console.log(`switched on the subject reminder for ${rule.key}`);
+  // Every company runs its own automation, so every company gets the rules.
+  const companies = await prisma.company.findMany({ select: { id: true, code: true } });
+  if (companies.length === 0) console.log('no company yet — automation rules are created with the first company');
+  for (const company of companies) {
+    for (const rule of DEFAULT_SLA_RULES) {
+      const { key: _key, ...data } = rule;
+      const processKey = data.processKey ?? 'EMPLOYEE';
+      const existing = await prisma.slaRule.findFirst({
+        where: { companyId: company.id, processKey, status: data.status, action: data.action },
+      });
+      if (existing && RULES_ONLY) {
+        if (data.notifySubject && !existing.notifySubject) {
+          await prisma.slaRule.update({ where: { id: existing.id }, data: { notifySubject: true } });
+          console.log(`switched on the subject reminder for ${rule.key} (${company.code})`);
+        }
+      } else if (existing) {
+        await prisma.slaRule.update({ where: { id: existing.id }, data: { ...data, processKey } });
+      } else {
+        await prisma.slaRule.create({ data: { ...data, processKey, companyId: company.id } });
       }
-    } else if (existing) {
-      await prisma.slaRule.update({ where: { id: existing.id }, data: { ...data, processKey } });
-    } else {
-      await prisma.slaRule.create({ data: { ...data, processKey } });
+      console.log(`seeded rule  ${rule.key} (${company.code})`);
     }
-    console.log(`seeded rule  ${rule.key}`);
   }
 }
 

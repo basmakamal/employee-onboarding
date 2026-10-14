@@ -146,6 +146,9 @@
   "settings": {
     "title": "Settings",
     "subtitle": "System configuration (administrators only)",
+    "subtitleCompany": "Settings of {company} (administrators only) — each company has its own mail server",
+    "mailInherited": "{company} has no mail server of its own yet, so its e-mails are sent through the main company's settings shown below. Saving here gives {company} its own.",
+    "mailEnvironment": "No mail server is saved for {company} or the main company yet; the server defaults are used. Saving here gives {company} its own.",
     "mail": "Outgoing email",
     "provider": "Provider",
     "providers": {
@@ -811,6 +814,7 @@
   "calendar": {
     "title": "Work calendar",
     "subtitle": "Defines what a \"working day\" means for the automation deadlines",
+    "subtitleCompany": "Weekend days and holidays of {company} — they define a \"working day\" for its automation deadlines",
     "weekend": "Weekend days",
     "weekendHint": "Selected days are excluded when counting working days. Changes apply on the next scheduler check.",
     "holidays": "Public holidays",
@@ -837,6 +841,7 @@
   "sla": {
     "title": "Automation rules",
     "subtitle": "Reminders, escalations and deadlines — evaluated every few minutes",
+    "subtitleCompany": "Reminders, escalations and deadlines of {company} — each company runs its own rules, evaluated every few minutes",
     "watch": "Watches",
     "action": "Action",
     "after": "After",
@@ -1186,6 +1191,7 @@
   "emailTemplates": {
     "title": "Email templates",
     "subtitle": "Edit what the system says. Placeholders fill in automatically for each recipient.",
+    "subtitleCompany": "What {company} says in its e-mails. Each company has its own wording and triggers; placeholders fill in automatically.",
     "audience": {
       "employee": "To employees",
       "staff": "To staff"
@@ -1296,6 +1302,7 @@
   "responsibility": {
     "title": "Primary follow-up owners",
     "subtitle": "People who receive the reminders for each process, in addition to the role group of the current status. This never limits who may act.",
+    "subtitleCompany": "People in {company} who receive the reminders for each process, in addition to the role group of the current status. This never limits who may act.",
     "process": "Process",
     "owners": "Responsible people",
     "none": "Role group only (default)",

@@ -37,6 +37,12 @@ void container.listService
   .ensureDefaults()
   .catch((err: unknown) => logger.error({ err }, 'list values could not be seeded'));
 
+// Every company runs its own automation: one without rules gets the defaults.
+void container.prisma.company
+  .findMany({ select: { id: true } })
+  .then((rows) => container.companyDefaults.ensureAll(rows.map((r) => r.id)))
+  .catch((err: unknown) => logger.error({ err }, 'default automation rules could not be created'));
+
 // Any active staff member may enter; ownership per status is enforced by
 // the state machines (roles on transitions) and per-route gates below.
 const staffApi = Router();

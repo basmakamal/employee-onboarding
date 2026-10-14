@@ -11,6 +11,7 @@ const NOW = new Date('2026-08-02T12:00:00Z');
 function rule(overrides: Partial<SlaRule>): SlaRule {
   return {
     id: 'rule1',
+    companyId: 'co-a',
     processKey: 'EMPLOYEE',
     status: 'AWAITING_FORM',
     afterValue: 24,
@@ -76,7 +77,7 @@ describe('SlaScheduler (generalized)', () => {
       'sara@example.com',
       'employee.form_reminder',
       expect.objectContaining({ name: 'Sara Ahmed' }),
-      { entity: 'EMPLOYEE', entityId: 'e1' },
+      { entity: 'EMPLOYEE', entityId: 'e1', companyId: 'co-a' },
       'ar',
     );
     expect(deps.notifications.notifyTeam).toHaveBeenCalledWith(
@@ -223,14 +224,59 @@ describe('SlaScheduler (generalized)', () => {
       expect.objectContaining({ afterValue: 30, status: 'ANY' }),
       NOW,
       expect.any(Number), // the per-tick batch cap
+      { companyId: 'co-a', includeUnassigned: false }, // only this rule's company
     );
     // … the override template is used, and meta params flow through.
     expect(deps.notifications.notifyTeam).toHaveBeenCalledWith(
       expect.objectContaining({ processKey: 'DOCUMENT_EXPIRY', role: 'HR' }),
       'staff.document_expiring',
       expect.objectContaining({ docType: 'IQAMA', daysLeft: 18, expiryDate: '2026-08-20' }),
-      { entity: 'DOCUMENT_EXPIRY', entityId: 'doc1' },
+      { entity: 'DOCUMENT_EXPIRY', entityId: 'doc1', companyId: 'co-a' },
     );
     expect(deps.firings.record).toHaveBeenCalledWith('rule1', 'doc1', NOW);
+  });
+
+  it('each rule watches its own company, with its own weekend and holidays', async () => {
+    const ruleA = rule({ id: 'ra', companyId: 'co-main', afterValue: 2, afterUnit: 'WORKING_DAYS', notifySubject: false });
+    const ruleB = rule({ id: 'rb', companyId: 'co-b', afterValue: 2, afterUnit: 'WORKING_DAYS', notifySubject: false });
+    const calendar = {
+      getCalendar: vi.fn(async (companyId: string) => ({ weekendDays: companyId === 'co-b' ? [0, 6] : [5, 6] })),
+    };
+    const deps = {
+      rules: { listAllActive: vi.fn().mockResolvedValue([ruleA, ruleB]) },
+      holidays: { listBetween: vi.fn().mockResolvedValue([]) },
+      firings: { lastFirings: vi.fn().mockResolvedValue(new Map()), record: vi.fn().mockResolvedValue({}) },
+      audit: { append: vi.fn().mockResolvedValue({}) },
+      notifications: { notifyExternal: vi.fn(), notifyTeam: vi.fn().mockResolvedValue(undefined) },
+      calendar,
+      companies: { mainCompanyId: vi.fn().mockResolvedValue('co-main') },
+    };
+    // Anchored Thursday 2026-07-30: by Sunday NOW, Fri+Sat weekend → 1 working day (Sun);
+    // a Sat+Sun weekend → 1 working day (Fri). Neither reaches 2, so use an older anchor.
+    const old = record({ anchorAt: new Date('2026-07-26T10:00:00Z') });
+    const watcher: SlaWatcher = { processKey: 'EMPLOYEE', listInStatusSince: vi.fn().mockResolvedValue([old]) };
+
+    await new SlaScheduler(deps as never, [watcher]).tick(NOW);
+
+    // The main company also watches records that were never placed in a company.
+    expect(watcher.listInStatusSince).toHaveBeenCalledWith('AWAITING_FORM', expect.any(Date), expect.any(Number), {
+      companyId: 'co-main',
+      includeUnassigned: true,
+    });
+    expect(watcher.listInStatusSince).toHaveBeenCalledWith('AWAITING_FORM', expect.any(Date), expect.any(Number), {
+      companyId: 'co-b',
+      includeUnassigned: false,
+    });
+    expect(calendar.getCalendar).toHaveBeenCalledWith('co-main');
+    expect(calendar.getCalendar).toHaveBeenCalledWith('co-b');
+    expect(deps.holidays.listBetween).toHaveBeenCalledWith('co-b', expect.any(Date), NOW);
+    // Messages carry the rule's company, so they use its wording and mail server.
+    const refs = deps.notifications.notifyTeam.mock.calls.map((c) => c[3]);
+    expect(refs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ companyId: 'co-main' }),
+        expect.objectContaining({ companyId: 'co-b' }),
+      ]),
+    );
   });
 });

@@ -214,6 +214,11 @@ model Company {
   positions     Position[]
   assets        Asset[]
   listValues    ListValue[]
+  slaRules      SlaRule[]
+  holidays      Holiday[]
+  emailTemplates EmailTemplate[]
+  emailTriggers EmailTrigger[]
+  settings      Setting[]
   auditLogs     AuditLog[]
   notifications Notification[]
   assignments   UserAssignment[]
@@ -698,6 +703,9 @@ model Offboarding {
 /// than `afterValue afterUnit` (measured from statusChangedAt).
 model SlaRule {
   id            String    @id @default(cuid())
+  /// Every company runs its own automation: its rules watch only its records.
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String
   processKey    String    @default("EMPLOYEE") // which state machine this targets
   status        String // the status the record must be in
   afterValue    Int
@@ -719,6 +727,7 @@ model SlaRule {
 
   firings SlaFiring[]
 
+  @@index([companyId, processKey, status, active])
   @@index([processKey, status, active])
   @@map("sla_rules")
 }
@@ -739,10 +748,14 @@ model SlaFiring {
 
 /// Public holidays — excluded (with Fri/Sat weekends) from working-day math.
 model Holiday {
-  id   String   @id @default(cuid())
-  date DateTime @unique @db.Date
-  name String
+  id        String   @id @default(cuid())
+  /// Each company keeps its own calendar.
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  date      DateTime @db.Date
+  name      String
 
+  @@unique([companyId, date])
   @@map("holidays")
 }
 
@@ -751,7 +764,11 @@ model Holiday {
 /// keeps the edit on file but falls back to the default. `version` climbs on
 /// every save and is stamped onto each notification sent from it.
 model EmailTemplate {
-  key         String   @id
+  id          String   @id @default(cuid())
+  /// Each company words its own e-mails; the key is unique within a company.
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String
+  key         String
   name        String
   subjectAr   String
   subjectEn   String
@@ -766,6 +783,7 @@ model EmailTemplate {
   updatedAt   DateTime @updatedAt
   updatedById String?
 
+  @@unique([companyId, key])
   @@map("email_templates")
 }
 
@@ -779,6 +797,9 @@ enum TriggerRecipient {
 /// after the transition's transaction commits.
 model EmailTrigger {
   id          String           @id @default(cuid())
+  /// A trigger fires only for records of its own company.
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String
   processKey  String
   status      String
   templateKey String
@@ -792,7 +813,7 @@ model EmailTrigger {
   /// Extra recipients (comma-separated) — e.g. an admin checking the wording. Each gets its own copy.
   ccEmails    String?
 
-  @@index([processKey, status, active])
+  @@index([companyId, processKey, status, active])
   @@map("email_triggers")
 }
 
@@ -809,10 +830,15 @@ model Sequence {
 
 /// Admin-editable system settings (JSON values keyed by area, e.g. "mail").
 model Setting {
-  key       String   @id
+  id        String   @id @default(cuid())
+  /// Mail server, weekend days… are kept per company.
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  key       String
   value     String   @db.Text
   updatedAt DateTime @updatedAt
 
+  @@unique([companyId, key])
   @@map("settings")
 }
 

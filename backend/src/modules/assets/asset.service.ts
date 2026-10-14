@@ -52,7 +52,9 @@ export class AssetService {
     private readonly transact: UnitOfWork<AssetTxScope>,
     private readonly ownership?: OwnershipLookup,
     /** Named primary owners of custody — they get every team notice in addition to IT. */
-    private readonly responsibility?: { get(processKey: string): Promise<string[]> },
+    private readonly responsibility?: {
+      get(processKey: string, scope?: { companyId?: string | null; ref?: { entity: string; entityId: string } }): Promise<string[]>;
+    },
   ) {
     // Guards read through the root client — they run before the guarded
     // move, exactly as a pre-check, so they don't need the transaction.
@@ -255,7 +257,7 @@ export class AssetService {
     };
     const ref = { entity: 'ASSET_FORM', entityId: form.id };
     const template = decision === 'APPROVE' ? 'hr.asset_approved' : 'hr.asset_rejected';
-    const ownerIds = (await this.responsibility?.get('ASSET_FORM')) ?? [];
+    const ownerIds = (await this.responsibility?.get('ASSET_FORM', { companyId: form.employee.companyId })) ?? [];
     await this.notifications.notifyTeam(
       { processKey: 'ASSET_FORM', status: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED', role: 'IT', ownerIds },
       template,

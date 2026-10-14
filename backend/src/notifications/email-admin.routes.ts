@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../common/http.js';
-import { requirePermission } from '../auth/authz/authorize.js';
+import { contextOf, requirePermission } from '../auth/authz/authorize.js';
 import { NotFoundError } from '../workflow/errors.js';
 import type { UserRepository } from '../auth/user.repository.js';
 import type { NotificationService } from './notification.service.js';
@@ -26,7 +26,7 @@ const previewSchema = z.object({
   draft: draftSchema.partial().optional(),
 });
 
-/** ADMIN — the email template editor. */
+/** ADMIN — the email template editor, for the SELECTED company (each company words its own e-mails). */
 export function emailTemplatesRouter(
   templates: TemplateService,
   notifications: NotificationService,
@@ -37,8 +37,8 @@ export function emailTemplatesRouter(
 
   router.get(
     '/',
-    asyncHandler(async (_req, res) => {
-      res.json(await templates.list());
+    asyncHandler(async (req, res) => {
+      res.json(await templates.list(contextOf(req).companyId));
     }),
   );
 
@@ -48,14 +48,14 @@ export function emailTemplatesRouter(
     validate(draftSchema.extend({ audience: z.enum(['employee', 'staff']) })),
     asyncHandler(async (req, res) => {
       const body = req.body as z.infer<typeof draftSchema> & { audience: 'employee' | 'staff' };
-      res.status(201).json(await templates.create(compact(body), req.actor?.id));
+      res.status(201).json(await templates.create(contextOf(req).companyId, compact(body), req.actor?.id));
     }),
   );
 
   router.get(
     '/:key',
     asyncHandler(async (req, res) => {
-      res.json(await templates.get(req.params['key'] as string));
+      res.json(await templates.get(contextOf(req).companyId, req.params['key'] as string));
     }),
   );
 
@@ -64,14 +64,14 @@ export function emailTemplatesRouter(
     validate(draftSchema),
     asyncHandler(async (req, res) => {
       const draft = req.body as z.infer<typeof draftSchema>;
-      res.json(await templates.upsert(req.params['key'] as string, compact(draft), req.actor?.id));
+      res.json(await templates.upsert(contextOf(req).companyId, req.params['key'] as string, compact(draft), req.actor?.id));
     }),
   );
 
   router.delete(
     '/:key',
     asyncHandler(async (req, res) => {
-      await templates.revert(req.params['key'] as string);
+      await templates.revert(contextOf(req).companyId, req.params['key'] as string);
       res.status(204).end();
     }),
   );
@@ -81,7 +81,9 @@ export function emailTemplatesRouter(
     validate(previewSchema),
     asyncHandler(async (req, res) => {
       const { locale, draft } = req.body as z.infer<typeof previewSchema>;
-      res.json(await templates.preview(req.params['key'] as string, locale, draft ? compact(draft) : undefined));
+      res.json(
+        await templates.preview(contextOf(req).companyId, req.params['key'] as string, locale, draft ? compact(draft) : undefined),
+      );
     }),
   );
 
@@ -98,7 +100,8 @@ export function emailTemplatesRouter(
         me.email,
         key,
         templates.sampleParams(locale),
-        { entity: 'TEMPLATE_TEST', entityId: key },
+        // This company's wording and mail server.
+        { entity: 'TEMPLATE_TEST', entityId: key, companyId: contextOf(req).companyId },
         locale,
       );
       res.json({ sentTo: me.email });
@@ -119,22 +122,22 @@ const triggerSchema = z.object({
   active: z.boolean().optional(),
 });
 
-/** ADMIN — "when status X, send template Y" rules. */
+/** ADMIN — "when status X, send template Y" rules of the SELECTED company. */
 export function emailTriggersRouter(triggers: TriggerService): Router {
   const router = Router();
   router.use(requirePermission('settings.manage'));
 
   router.get(
     '/',
-    asyncHandler(async (_req, res) => {
-      res.json(await triggers.list());
+    asyncHandler(async (req, res) => {
+      res.json(await triggers.list(contextOf(req).companyId));
     }),
   );
 
   router.get(
     '/options',
-    asyncHandler(async (_req, res) => {
-      res.json(await triggers.options());
+    asyncHandler(async (req, res) => {
+      res.json(await triggers.options(contextOf(req).companyId));
     }),
   );
 
@@ -143,7 +146,7 @@ export function emailTriggersRouter(triggers: TriggerService): Router {
     validate(triggerSchema),
     asyncHandler(async (req, res) => {
       const body = req.body as z.infer<typeof triggerSchema>;
-      res.status(201).json(await triggers.create(compact(body), req.actor?.id));
+      res.status(201).json(await triggers.create(contextOf(req).companyId, compact(body), req.actor?.id));
     }),
   );
 
@@ -153,14 +156,14 @@ export function emailTriggersRouter(triggers: TriggerService): Router {
     asyncHandler(async (req, res) => {
       // compact() drops undefined keys (partial update) but keeps explicit nulls.
       const body = compact(req.body as Partial<z.infer<typeof triggerSchema>>);
-      res.json(await triggers.update(req.params['id'] as string, body));
+      res.json(await triggers.update(contextOf(req).companyId, req.params['id'] as string, body));
     }),
   );
 
   router.delete(
     '/:id',
     asyncHandler(async (req, res) => {
-      await triggers.remove(req.params['id'] as string);
+      await triggers.remove(contextOf(req).companyId, req.params['id'] as string);
       res.status(204).end();
     }),
   );

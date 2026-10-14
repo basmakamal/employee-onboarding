@@ -47,6 +47,9 @@ function joinCc(list: string[] | null | undefined): string | null {
  * Admin-defined "when X enters status Y, email Z" rules. `handle` is wired to
  * the state-machine engine and runs after the transition's transaction
  * commits, so a rolled-back move never produces an email.
+ *
+ * Triggers belong to a company: a status change fires only the triggers of
+ * the company the record belongs to, with that company's template wording.
  */
 export class TriggerService {
   private cache: { rows: EmailTrigger[]; at: number } | null = null;
@@ -56,10 +59,10 @@ export class TriggerService {
     private readonly notifications: NotificationService,
     /** Knows every sendable key: built-ins plus admin-created templates. Absent = catalogue only. */
     private readonly templates?: {
-      exists(key: string): Promise<boolean>;
-      list(): Promise<TemplateOption[]>;
-      usesFormLink?(key: string): Promise<boolean>;
-      usesContractLink?(key: string): Promise<boolean>;
+      exists(companyId: string | null, key: string): Promise<boolean>;
+      list(companyId: string): Promise<TemplateOption[]>;
+      usesFormLink?(companyId: string | null, key: string): Promise<boolean>;
+      usesContractLink?(companyId: string | null, key: string): Promise<boolean>;
     },
     /** Issues a signed link when a template asks for {{formLink}} / {{contractLink}}. */
     private readonly links?: {
@@ -74,18 +77,24 @@ export class TriggerService {
       findById(id: string): Promise<unknown | null>;
       membersOf(groupId: string): Promise<GroupMember[]>;
     },
+    /** The company of a record whose employee could not be read; null = the main company. */
+    private readonly companies?: {
+      ofRef(ref: { entity: string; entityId: string }): Promise<string | null>;
+      orMain(companyId: string | null | undefined): Promise<string | null>;
+    },
   ) {}
 
-  list() {
+  list(companyId: string) {
     return this.prisma.emailTrigger.findMany({
+      where: { companyId },
       orderBy: [{ processKey: 'asc' }, { status: 'asc' }, { createdAt: 'asc' }],
     });
   }
 
-  /** What the UI's selects can offer. */
-  async options() {
+  /** What the UI's selects can offer — the templates of this company. */
+  async options(companyId: string) {
     const templates = this.templates
-      ? (await this.templates.list()).map((m) => ({
+      ? (await this.templates.list(companyId)).map((m) => ({
           key: m.key,
           nameAr: m.nameAr,
           nameEn: m.nameEn,
@@ -103,14 +112,14 @@ export class TriggerService {
     return { processes: MACHINE_STATUSES, roles: STAFF_ROLES, templates, groups };
   }
 
-  private async validate(input: TriggerInput): Promise<void> {
+  private async validate(companyId: string, input: TriggerInput): Promise<void> {
     const statuses = MACHINE_STATUSES[input.processKey];
     if (!statuses) throw new GuardFailedError('BAD_PROCESS', `unknown process ${input.processKey}`);
     if (!statuses.includes(input.status)) {
       throw new GuardFailedError('BAD_STATUS', `${input.status} is not a status of ${input.processKey}`);
     }
     const known = this.templates
-      ? await this.templates.exists(input.templateKey)
+      ? await this.templates.exists(companyId, input.templateKey)
       : !!TEMPLATE_CATALOG[input.templateKey];
     if (!known) {
       throw new GuardFailedError('BAD_TEMPLATE', `unknown template ${input.templateKey}`);
@@ -124,10 +133,11 @@ export class TriggerService {
     }
   }
 
-  async create(input: TriggerInput, userId?: string): Promise<EmailTrigger> {
-    await this.validate(input);
+  async create(companyId: string, input: TriggerInput, userId?: string): Promise<EmailTrigger> {
+    await this.validate(companyId, input);
     const row = await this.prisma.emailTrigger.create({
       data: {
+        companyId,
         processKey: input.processKey,
         status: input.status,
         templateKey: input.templateKey,
@@ -143,8 +153,8 @@ export class TriggerService {
     return row;
   }
 
-  async update(id: string, changes: Partial<TriggerInput>): Promise<EmailTrigger> {
-    const existing = await this.prisma.emailTrigger.findUnique({ where: { id } });
+  async update(companyId: string, id: string, changes: Partial<TriggerInput>): Promise<EmailTrigger> {
+    const existing = await this.prisma.emailTrigger.findFirst({ where: { id, companyId } });
     if (!existing) throw new NotFoundError('trigger', id);
     const merged: TriggerInput = {
       processKey: changes.processKey ?? existing.processKey,
@@ -156,7 +166,7 @@ export class TriggerService {
       ccEmails: changes.ccEmails !== undefined ? changes.ccEmails : splitCc(existing.ccEmails),
       active: changes.active ?? existing.active,
     };
-    await this.validate(merged);
+    await this.validate(companyId, merged);
     const row = await this.prisma.emailTrigger.update({
       where: { id },
       data: {
@@ -174,8 +184,8 @@ export class TriggerService {
     return row;
   }
 
-  async remove(id: string): Promise<void> {
-    await this.prisma.emailTrigger.deleteMany({ where: { id } });
+  async remove(companyId: string, id: string): Promise<void> {
+    await this.prisma.emailTrigger.deleteMany({ where: { id, companyId } });
     this.cache = null;
   }
 
@@ -188,16 +198,17 @@ export class TriggerService {
 
   /** Engine hook — see `onTransition` in workflow/engine.ts. */
   async handle(event: TransitionEvent): Promise<void> {
-    const matching = (await this.active()).filter(
+    const forStatus = (await this.active()).filter(
       (t) => t.processKey === event.entity && t.status === event.to,
     );
-    if (matching.length === 0) return;
+    if (forStatus.length === 0) return;
 
     const employeeId = event.entity === 'EMPLOYEE' ? event.entityId : event.employeeId;
     const employee = employeeId
       ? await this.prisma.employee.findUnique({
           where: { id: employeeId },
           select: {
+            companyId: true,
             firstName: true, lastName: true, email: true,
             employeeNo: true, department: true, jobTitle: true, preferredLanguage: true,
             // The contract terms travel as placeholders, so a status email can quote them.
@@ -206,11 +217,17 @@ export class TriggerService {
         })
       : null;
 
+    // Only this company's triggers fire; a record with no company belongs to the main one.
+    const known = employee ? employee.companyId : await this.companies?.ofRef({ entity: event.entity, entityId: event.entityId });
+    const companyId = this.companies ? await this.companies.orMain(known ?? null) : (known ?? null);
+    const matching = companyId ? forStatus.filter((t) => t.companyId === companyId) : forStatus;
+    if (matching.length === 0) return;
+
     // {{formLink}} / {{contractLink}}: one fresh link per event, shared by every
     // recipient of it — it is the employee's link either way, and copies must
     // match what they got.
-    const formLink = await this.linkFor(matching, employeeId, 'DATA_FORM');
-    const contractLink = await this.linkFor(matching, employeeId, 'CONTRACT_APPROVAL');
+    const formLink = await this.linkFor(companyId, matching, employeeId, 'DATA_FORM');
+    const contractLink = await this.linkFor(companyId, matching, employeeId, 'CONTRACT_APPROVAL');
     const params = {
       name: employee ? `${employee.firstName} ${employee.lastName}`.trim() : '—',
       ...(employee?.employeeNo ? { employeeNo: employee.employeeNo } : {}),
@@ -221,7 +238,7 @@ export class TriggerService {
       ...(formLink ? { formLink, linkUrl: formLink } : {}),
       ...(contractLink ? { contractLink, ...(formLink ? {} : { linkUrl: contractLink }) } : {}),
     };
-    const ref = { entity: event.entity, entityId: event.entityId };
+    const ref = { entity: event.entity, entityId: event.entityId, companyId };
     // The team (and copy addresses) get the employee's file; the employee's own
     // message never carries that internal link.
     const employeeLink = employeeId ? this.notifications.employeeLink?.(employeeId) : undefined;
@@ -271,6 +288,7 @@ export class TriggerService {
   }
   /** A signed URL, issued only when a matching trigger's template asks for it. */
   private async linkFor(
+    companyId: string | null,
     triggers: EmailTrigger[],
     employeeId: string | undefined,
     purpose: 'DATA_FORM' | 'CONTRACT_APPROVAL',
@@ -279,7 +297,7 @@ export class TriggerService {
       purpose === 'DATA_FORM' ? this.templates?.usesFormLink : this.templates?.usesContractLink;
     if (!employeeId || !this.links || !asks) return undefined;
     for (const trigger of triggers) {
-      if (!(await asks.call(this.templates, trigger.templateKey))) continue;
+      if (!(await asks.call(this.templates, companyId, trigger.templateKey))) continue;
       try {
         return (await this.links.issue(purpose, { employeeId })).url;
       } catch (err) {

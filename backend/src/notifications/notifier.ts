@@ -12,6 +12,8 @@ export interface OutboundMessage {
   /** Optional branded HTML alternative. Clients that support it show this;
    *  everything else falls back to `text`. */
   html?: string;
+  /** The company the message belongs to — it leaves through that company's mail server. */
+  companyId?: string | null;
 }
 
 export interface Notifier {

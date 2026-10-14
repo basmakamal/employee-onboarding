@@ -2,6 +2,7 @@ import type { Db } from '../../common/prisma.js';
 import type { EmployeeScope } from '../../auth/authz/authorize.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { OffboardingReason, OffboardingStatus } from '../../generated/prisma/enums.js';
+import { viaEmployeeCompanyWhere, type CompanyFilter } from '../../workflow/company-filter.js';
 
 export class OffboardingRepository {
   constructor(private readonly db: Db) {}
@@ -30,9 +31,9 @@ export class OffboardingRepository {
   }
 
   /** SLA scan input: records sitting in `status` since before `threshold`. */
-  listInStatusSince(status: string, threshold: Date, limit = 500) {
+  listInStatusSince(status: string, threshold: Date, limit = 500, company?: CompanyFilter) {
     return this.db.offboarding.findMany({
-      where: { status: status as OffboardingStatus, updatedAt: { lt: threshold } },
+      where: { status: status as OffboardingStatus, updatedAt: { lt: threshold }, ...viaEmployeeCompanyWhere(company) },
       include: { employee: { select: { firstName: true, lastName: true } } },
       orderBy: { updatedAt: 'asc' },
       take: limit,

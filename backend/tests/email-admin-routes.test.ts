@@ -15,7 +15,7 @@ function deps() {
     get: vi.fn().mockResolvedValue({ key: 'staff.record_stalled', row: null }),
     upsert: vi
       .fn()
-      .mockImplementation((key: string, draft: object) => Promise.resolve({ key, ...draft, version: 2 })),
+      .mockImplementation((_companyId: string, key: string, draft: object) => Promise.resolve({ key, ...draft, version: 2 })),
     revert: vi.fn().mockResolvedValue(undefined),
     preview: vi.fn().mockResolvedValue({ subject: 'Hi Sara', text: 'body', html: '<p>body</p>' }),
     sampleParams: vi.fn().mockReturnValue({ name: 'Sara' }),
@@ -28,8 +28,8 @@ function deps() {
   const triggers = {
     list: vi.fn().mockResolvedValue([]),
     options: vi.fn().mockReturnValue({ processes: { EMPLOYEE: ['CREATED'] }, roles: ['HR'], templates: [] }),
-    create: vi.fn().mockImplementation((input: object) => Promise.resolve({ id: 't1', ...input })),
-    update: vi.fn().mockImplementation((id: string, patch: object) => Promise.resolve({ id, ...patch })),
+    create: vi.fn().mockImplementation((_companyId: string, input: object) => Promise.resolve({ id: 't1', ...input })),
+    update: vi.fn().mockImplementation((_companyId: string, id: string, patch: object) => Promise.resolve({ id, ...patch })),
     remove: vi.fn().mockResolvedValue(undefined),
   };
   const repo = {
@@ -45,7 +45,8 @@ function appFor(role: 'ADMIN' | 'HR', d = deps()) {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    req.actor = { type: 'USER', id: 'u1', role } as typeof req.actor;
+    // Templates and triggers belong to the selected company.
+    req.actor = { type: 'USER', id: 'u1', role, companyId: 'co-a' } as typeof req.actor;
     next();
   });
   app.use('/email-templates', emailTemplatesRouter(d.templates as never, d.notifications as never, d.users as never));
@@ -82,7 +83,8 @@ describe('email templates API', () => {
     const res = await request(app).put('/email-templates/staff.record_stalled').send(validDraft);
     expect(res.status).toBe(200);
     expect(res.body.version).toBe(2);
-    const [key, draft, userId] = d.templates.upsert.mock.calls[0] as [string, object, string];
+    const [companyId, key, draft, userId] = d.templates.upsert.mock.calls[0] as [string, string, object, string];
+    expect(companyId).toBe('co-a');
     expect(key).toBe('staff.record_stalled');
     expect(userId).toBe('u1');
     expect(Object.values(draft)).not.toContain(undefined);
@@ -105,7 +107,7 @@ describe('email templates API', () => {
       .send({ locale: 'en', draft: { subjectEn: 'Hi {{name}}' } });
     expect(res.status).toBe(200);
     expect(res.body.subject).toBe('Hi Sara');
-    expect(d.templates.preview).toHaveBeenCalledWith('custom.status_change', 'en', { subjectEn: 'Hi {{name}}' });
+    expect(d.templates.preview).toHaveBeenCalledWith('co-a', 'custom.status_change', 'en', { subjectEn: 'Hi {{name}}' });
   });
 
   it('sends a test to the signed-in admin only', async () => {
@@ -117,7 +119,7 @@ describe('email templates API', () => {
       'admin@example.com',
       'staff.record_stalled',
       { name: 'Sara' },
-      { entity: 'TEMPLATE_TEST', entityId: 'staff.record_stalled' },
+      { entity: 'TEMPLATE_TEST', entityId: 'staff.record_stalled', companyId: 'co-a' },
       'en',
     );
   });
@@ -125,7 +127,7 @@ describe('email templates API', () => {
   it('reverts to the built-in text', async () => {
     const { app, d } = appFor('ADMIN');
     expect((await request(app).delete('/email-templates/staff.record_stalled')).status).toBe(204);
-    expect(d.templates.revert).toHaveBeenCalledWith('staff.record_stalled');
+    expect(d.templates.revert).toHaveBeenCalledWith('co-a', 'staff.record_stalled');
   });
 });
 
@@ -138,7 +140,7 @@ describe('email triggers API', () => {
     const res = await request(app).post('/email-triggers').send(body);
     expect(res.status).toBe(201);
     expect(res.body.id).toBe('t1');
-    expect(d.triggers.create).toHaveBeenCalledWith(body, 'u1');
+    expect(d.triggers.create).toHaveBeenCalledWith('co-a', body, 'u1');
   });
 
   it('rejects an unknown recipient kind', async () => {
@@ -153,7 +155,7 @@ describe('email triggers API', () => {
     const { app, d } = appFor('ADMIN');
     const res = await request(app).put('/email-triggers/t1').send({ active: false });
     expect(res.status).toBe(200);
-    expect(d.triggers.update).toHaveBeenCalledWith('t1', { active: false });
+    expect(d.triggers.update).toHaveBeenCalledWith('co-a', 't1', { active: false });
   });
 
   it('exposes the option lists for the form', async () => {

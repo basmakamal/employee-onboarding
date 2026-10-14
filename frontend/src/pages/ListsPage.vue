@@ -15,19 +15,12 @@ import { api } from '../api/client';
 import { useListsStore, type ListDto, type ListValueDto } from '../stores/lists';
 import { useConfirm } from '../composables/useConfirm';
 import PageHeader from '../components/PageHeader.vue';
-import { useAuthStore } from '../stores/auth';
-import { usePreferencesStore } from '../stores/preferences';
+import { useActiveCompanyName } from '../composables/useActiveCompany';
 
 const { t } = useI18n();
 const lists = useListsStore();
-const auth = useAuthStore();
-const prefs = usePreferencesStore();
 /** Each company has its own lists — the header says whose these are. */
-const companyName = computed(() => {
-  const c = auth.user?.activeCompany;
-  if (!c) return '';
-  return prefs.locale === 'ar' ? c.nameAr : c.nameEn;
-});
+const companyName = useActiveCompanyName();
 const confirm = useConfirm();
 
 const selectedKey = ref('');
