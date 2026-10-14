@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '../api/client';
 import PageHeader from '../components/PageHeader.vue';
+import { useActiveCompanyName } from '../composables/useActiveCompany';
 import FormErrorAlert from '../components/FormErrorAlert.vue';
 import { useForm } from '../composables/useForm';
 import { rules } from '../validation/rules';
@@ -14,6 +15,8 @@ interface MailSettings {
   user?: string;
   from?: string;
   hasPassword: boolean;
+  /** company = its own settings; main = borrowing the main company's; environment = server defaults. */
+  source?: 'company' | 'main' | 'environment';
 }
 
 const PRESETS: Record<string, { host: string; port: number }> = {
@@ -22,6 +25,8 @@ const PRESETS: Record<string, { host: string; port: number }> = {
 };
 
 const { t } = useI18n();
+/** Each company has its own settings here — the header says whose. */
+const companyName = useActiveCompanyName();
 const loaded = ref(false);
 const saving = ref(false);
 const testing = ref(false);
@@ -36,6 +41,7 @@ const form = ref({
   hasPassword: false,
 });
 const testTo = ref('');
+const source = ref<MailSettings['source']>('company');
 const mailForm = useForm();
 const testForm = useForm();
 
@@ -62,6 +68,7 @@ async function load() {
     from: data.from ?? '',
     hasPassword: data.hasPassword,
   };
+  source.value = data.source ?? 'company';
   loaded.value = true;
 }
 
@@ -93,12 +100,15 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 760px">
-    <PageHeader :title="$t('settings.title')" :subtitle="$t('settings.subtitle')" />
+    <PageHeader :title="$t('settings.title')" :subtitle="$t('settings.subtitleCompany', { company: companyName })" />
 
     <v-card v-if="loaded" :title="$t('settings.mail')">
       <v-card-text>
         <FormErrorAlert :form="mailForm" />
         <FormErrorAlert :form="testForm" />
+        <v-alert v-if="source !== 'company'" type="info" variant="tonal" density="compact" class="mb-4">
+          {{ source === 'main' ? $t('settings.mailInherited', { company: companyName }) : $t('settings.mailEnvironment', { company: companyName }) }}
+        </v-alert>
         <v-form :ref="mailForm.bind" @submit.prevent="save">
         <v-select
           v-model="form.provider"

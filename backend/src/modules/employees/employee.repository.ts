@@ -3,6 +3,7 @@ import type { EmployeeScope } from '../../auth/authz/authorize.js';
 import { compact } from '../../common/http.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { EmployeeStatus, EmploymentType } from '../../generated/prisma/enums.js';
+import { employeeCompanyWhere, type CompanyFilter } from '../../workflow/company-filter.js';
 
 /** The onboarding pipeline statuses (everything before ACTIVE/INACTIVE). */
 export const PIPELINE_STATUSES = [
@@ -494,9 +495,9 @@ export class EmployeeRepository {
   }
 
   /** SLA scan input — statusChangedAt is the elapsed-time anchor. */
-  listInStatusSince(status: EmployeeStatus, threshold: Date, limit = 500) {
+  listInStatusSince(status: EmployeeStatus, threshold: Date, limit = 500, company?: CompanyFilter) {
     return this.db.employee.findMany({
-      where: { status, statusChangedAt: { lt: threshold } },
+      where: { status, statusChangedAt: { lt: threshold }, ...employeeCompanyWhere(company) },
       // Oldest first so a backlog larger than one batch drains fairly.
       orderBy: { statusChangedAt: 'asc' },
       take: limit,

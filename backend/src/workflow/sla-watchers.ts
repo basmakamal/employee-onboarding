@@ -62,8 +62,8 @@ export function onboardingWatcher(
 ): SlaWatcher {
   return {
     processKey: 'EMPLOYEE',
-    async listInStatusSince(status, threshold, limit): Promise<WatchedRecord[]> {
-      const rows = await employees.listInStatusSince(status as EmployeeStatus, threshold, limit);
+    async listInStatusSince(status, threshold, limit, company): Promise<WatchedRecord[]> {
+      const rows = await employees.listInStatusSince(status as EmployeeStatus, threshold, limit, company);
       return rows.map((e) => ({
         id: e.id,
         name: `${e.firstName} ${e.lastName}`,
@@ -119,8 +119,8 @@ export function onboardingWatcher(
 export function assetFormWatcher(forms: AssetFormRepository, links?: SignedLinks): SlaWatcher {
   return {
     processKey: 'ASSET_FORM',
-    async listInStatusSince(status, threshold, limit): Promise<WatchedRecord[]> {
-      const rows = await forms.listInStatusSince(status as AssetFormStatus, threshold, limit);
+    async listInStatusSince(status, threshold, limit, company): Promise<WatchedRecord[]> {
+      const rows = await forms.listInStatusSince(status as AssetFormStatus, threshold, limit, company);
       return rows.map((f) => ({
         id: f.id,
         name: `${f.employee.firstName} ${f.employee.lastName}`,
@@ -148,8 +148,8 @@ export function assetFormWatcher(forms: AssetFormRepository, links?: SignedLinks
 export function offboardingWatcher(offboardings: OffboardingRepository): SlaWatcher {
   return {
     processKey: 'OFFBOARDING',
-    async listInStatusSince(status, threshold, limit): Promise<WatchedRecord[]> {
-      const rows = await offboardings.listInStatusSince(status, threshold, limit);
+    async listInStatusSince(status, threshold, limit, company): Promise<WatchedRecord[]> {
+      const rows = await offboardings.listInStatusSince(status, threshold, limit, company);
       return rows.map((o) => ({
         id: o.id,
         name: o.employee ? `${o.employee.firstName} ${o.employee.lastName}` : o.id,
@@ -170,8 +170,8 @@ export function documentExpiryWatcher(documents: EmployeeDocumentRepository): Sl
     processKey: 'DOCUMENT_EXPIRY',
     // Unused for deadline watchers, but part of the contract.
     listInStatusSince: () => Promise.resolve([]),
-    async listDue(rule, now, limit): Promise<WatchedRecord[]> {
-      const rows = await documents.listExpiring(rule.afterValue, rule.status, now, limit);
+    async listDue(rule, now, limit, company): Promise<WatchedRecord[]> {
+      const rows = await documents.listExpiring(rule.afterValue, rule.status, now, limit, company);
       return rows.map((doc) => {
         const daysLeft = Math.ceil((doc.expiryDate.getTime() - now.getTime()) / 86_400_000);
         return {
@@ -202,8 +202,8 @@ export function processWatcher(
 ): SlaWatcher {
   return {
     processKey,
-    async listInStatusSince(status, threshold, limit): Promise<WatchedRecord[]> {
-      const rows = await repo.listInStatusSince(status, threshold, limit);
+    async listInStatusSince(status, threshold, limit, company): Promise<WatchedRecord[]> {
+      const rows = await repo.listInStatusSince(status, threshold, limit, company);
       return rows.map((p) => ({
         id: p.id,
         name: p.employee ? `${p.employee.firstName} ${p.employee.lastName}` : p.id,

@@ -129,7 +129,7 @@ describe('TriggerService — GROUP recipients', () => {
       },
       employee: {
         findUnique: vi.fn().mockResolvedValue({
-          firstName: 'Nora', lastName: 'Khalid', email: 'nora@example.com',
+          companyId: 'co-a', firstName: 'Nora', lastName: 'Khalid', email: 'nora@example.com',
           employeeNo: null, department: null, jobTitle: null, preferredLanguage: 'AR', contract: null,
         }),
       },
@@ -151,7 +151,7 @@ describe('TriggerService — GROUP recipients', () => {
 
   it('sends the template to the team members, not to a role', async () => {
     const { service, notifications, groups } = makeTriggers({
-      id: 't1', processKey: 'EMPLOYEE', status: 'AWAITING_CONTRACT_APPROVAL',
+      id: 't1', companyId: 'co-a', processKey: 'EMPLOYEE', status: 'AWAITING_CONTRACT_APPROVAL',
       templateKey: 'staff.contract_approval_pending', recipient: 'GROUP', role: null, groupId: 'g1',
       ccEmails: null, active: true,
     });
@@ -166,7 +166,7 @@ describe('TriggerService — GROUP recipients', () => {
       [AYMAN_LINKED],
       'staff.contract_approval_pending',
       expect.objectContaining({ name: 'Nora Khalid', employeeLink: 'https://hr.example/employees/e1' }),
-      { entity: 'EMPLOYEE', entityId: 'e1' },
+      { entity: 'EMPLOYEE', entityId: 'e1', companyId: 'co-a' },
     );
     expect(notifications.notifyRole).not.toHaveBeenCalled();
   });
@@ -174,7 +174,7 @@ describe('TriggerService — GROUP recipients', () => {
   it('refuses a GROUP trigger that points at no known team', async () => {
     const { service } = makeTriggers({});
     await expect(
-      service.create({
+      service.create('co-a', {
         processKey: 'EMPLOYEE', status: 'ACTIVE', templateKey: 'hr.employee_activated',
         recipient: 'GROUP', groupId: 'nope',
       }),
@@ -183,7 +183,7 @@ describe('TriggerService — GROUP recipients', () => {
 
   it('lists the teams for the trigger form', async () => {
     const { service } = makeTriggers({});
-    const options = await service.options();
+    const options = await service.options('co-a');
     expect(options.groups).toEqual([{ id: 'g1', nameAr: 'عقد العمل', nameEn: 'Employment Contract' }]);
   });
 });

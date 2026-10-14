@@ -12,6 +12,8 @@ import { AuditLogRepository } from './workflow/audit-log.repository.js';
 import { SlaRuleRepository, HolidayRepository } from './workflow/sla-rule.repository.js';
 import { NotificationRepository } from './notifications/notification.repository.js';
 import { NotificationService } from './notifications/notification.service.js';
+import { CompanyResolver } from './modules/companies/company-resolver.js';
+import { CompanyDefaults } from './modules/companies/company-defaults.js';
 import { SettingsService, DynamicNotifier } from './modules/settings/settings.service.js';
 import { DashboardService } from './modules/dashboard/dashboard.service.js';
 import { ReportsService } from './modules/reports/reports.service.js';
@@ -77,7 +79,11 @@ export function buildContainer() {
 
   // The notifier follows the admin's saved mail settings at send time
   // (console/gmail/microsoft/custom) — no restart needed after changes.
-  const settingsService = new SettingsService(prisma);
+  // Which company a message / rule belongs to; "no company" = the main (oldest) one.
+  const companyResolver = new CompanyResolver(prisma);
+  // Mail server + weekend days are per company (a company without its own
+  // mail settings sends through the main company's).
+  const settingsService = new SettingsService(prisma, companyResolver);
   const notifier = new DynamicNotifier(settingsService);
   // With Redis, emails are queued and the worker delivers them (with
   // retries); without it they send inline exactly as before.
@@ -94,9 +100,11 @@ export function buildContainer() {
     notifier,
     redisEnabled ? (job) => getMailQueue().add('send', job) : undefined,
     publishNotify,
-    (key, locale, params) => templateService.render(key, locale, params),
+    // Each company words its own e-mails.
+    (key, locale, params, companyId) => templateService.render(key, locale, params, companyId),
     config.APP_URL,
     notificationGroups,
+    companyResolver,
   );
   // "When X enters status Y, email Z" — fires after each transition commits.
   const linkTokenService = new LinkTokenService(linkTokens, config.APP_URL, config.LINK_TTL_HOURS);
@@ -106,6 +114,7 @@ export function buildContainer() {
     templateService,
     linkTokenService,
     notificationGroups,
+    companyResolver,
   );
   onTransition((event) => triggerService.handle(event));
   const dashboardService = new DashboardService(prisma);
@@ -187,7 +196,7 @@ export function buildContainer() {
   const openWorkHalter = new OpenWorkHalter(unitOfWork(haltScope));
 
   // Named primary owners per process — steer reminders, never permissions.
-  const responsibilityService = new ResponsibilityService(prisma);
+  const responsibilityService = new ResponsibilityService(prisma, companyResolver);
 
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
   const slaFirings = new SlaFiringRepository(prisma);
@@ -202,6 +211,7 @@ export function buildContainer() {
       notifications,
       calendar: settingsService,
       responsibility: responsibilityService,
+      companies: companyResolver,
     },
     [
       onboardingWatcher(employees, onboardingWorkflow, contracts, linkTokenService),
@@ -217,7 +227,9 @@ export function buildContainer() {
   const companies = new CompanyRepository(prisma);
   // Roles, assignments and the manager seats that drive them.
   const assignmentService = new AssignmentService(prisma, audit);
-  const companyService = new CompanyService(prisma, audit, assignmentService);
+  // A new company starts with the default automation rules + holiday calendar.
+  const companyDefaults = new CompanyDefaults(slaRules, holidays);
+  const companyService = new CompanyService(prisma, audit, assignmentService, companyDefaults);
   const orgService = new OrgService(prisma, audit, assignmentService);
   const authService = new AuthService(
     users,
@@ -306,6 +318,8 @@ export function buildContainer() {
     offboardingService,
     authService,
     companyService,
+    companyDefaults,
+    companyResolver,
     assignmentService,
     orgService,
     settingsService,

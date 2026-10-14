@@ -4,6 +4,7 @@ import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
 import { api } from '../api/client';
 import PageHeader from '../components/PageHeader.vue';
+import { useActiveCompanyName } from '../composables/useActiveCompany';
 import FormErrorAlert from '../components/FormErrorAlert.vue';
 import { useForm } from '../composables/useForm';
 import { rules as v } from '../validation/rules';
@@ -50,6 +51,8 @@ const WATCHABLE: Record<string, string[]> = {
 };
 
 const { t } = useI18n();
+/** Each company has its own settings here — the header says whose. */
+const companyName = useActiveCompanyName();
 const rules = ref<SlaRuleRow[]>([]);
 const loaded = ref(false);
 const busy = ref('');
@@ -143,7 +146,7 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 1100px">
-    <PageHeader :title="$t('sla.title')" :subtitle="$t('sla.subtitle')">
+    <PageHeader :title="$t('sla.title')" :subtitle="$t('sla.subtitleCompany', { company: companyName })">
       <v-btn color="primary" prepend-icon="plus" @click="ruleForm.reset(); newDialog = true">
         {{ $t('sla.addRule') }}
       </v-btn>

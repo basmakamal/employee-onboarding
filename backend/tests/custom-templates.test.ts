@@ -39,23 +39,24 @@ const draft = { name: 'Welcome pack', subjectAr: 'أهلًا', subjectEn: 'Welco
 describe('TemplateService custom templates', () => {
   it('create derives a custom.* key from the name and stores the audience', async () => {
     const { svc, prisma } = setup();
-    await svc.create({ ...draft, audience: 'employee' }, 'u1');
+    await svc.create('co-a', { ...draft, audience: 'employee' }, 'u1');
     const data = (prisma.emailTemplate.create.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
     expect(data['key']).toBe('custom.welcome-pack');
+    expect(data['companyId']).toBe('co-a');
     expect(data['audience']).toBe('employee');
     expect(data['updatedById']).toBe('u1');
   });
 
   it('keeps keys unique when a name repeats', async () => {
     const { svc, prisma } = setup([customRow()]);
-    await svc.create({ ...draft, audience: 'staff' });
+    await svc.create('co-a', { ...draft, audience: 'staff' });
     const data = (prisma.emailTemplate.create.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
     expect(data['key']).toBe('custom.welcome-pack-2');
   });
 
   it('lists custom templates after the built-ins, flagged as custom', async () => {
     const { svc } = setup([customRow()]);
-    const list = await svc.list();
+    const list = await svc.list('co-a');
     const last = list[list.length - 1]!;
     expect(last.key).toBe('custom.welcome-pack');
     expect(last.custom).toBe(true);
@@ -65,7 +66,7 @@ describe('TemplateService custom templates', () => {
 
   it('renders a custom template and fills its placeholders', async () => {
     const { svc } = setup([customRow()]);
-    const out = await svc.render('custom.welcome-pack', 'en', { name: 'Sara', status: 'ACTIVE' });
+    const out = await svc.render('custom.welcome-pack', 'en', { name: 'Sara', status: 'ACTIVE' }, 'co-a');
     expect(out.subject).toBe('Welcome Sara');
     expect(out.text).toContain('Body ACTIVE');
     expect(out.templateVersion).toBe(1);
@@ -73,33 +74,33 @@ describe('TemplateService custom templates', () => {
 
   it('refuses to render a custom template that is switched off', async () => {
     const { svc } = setup([customRow({ active: false })]);
-    await expect(svc.render('custom.welcome-pack', 'en', { name: 'Sara' })).rejects.toBeInstanceOf(GuardFailedError);
+    await expect(svc.render('custom.welcome-pack', 'en', { name: 'Sara' }, 'co-a')).rejects.toBeInstanceOf(GuardFailedError);
   });
 
   it('will not delete a custom template still used by a trigger', async () => {
     const { svc, prisma } = setup([customRow()], { triggers: 1, rules: 0 });
-    await expect(svc.revert('custom.welcome-pack')).rejects.toThrow(/used by 1 trigger/);
+    await expect(svc.revert('co-a', 'custom.welcome-pack')).rejects.toThrow(/used by 1 trigger/);
     expect(prisma.emailTemplate.deleteMany).not.toHaveBeenCalled();
   });
 
   it('deletes an unused custom template', async () => {
     const { svc, prisma } = setup([customRow()]);
-    await svc.revert('custom.welcome-pack');
-    expect(prisma.emailTemplate.deleteMany).toHaveBeenCalledWith({ where: { key: 'custom.welcome-pack' } });
+    await svc.revert('co-a', 'custom.welcome-pack');
+    expect(prisma.emailTemplate.deleteMany).toHaveBeenCalledWith({ where: { companyId: 'co-a', key: 'custom.welcome-pack' } });
   });
 
   it('a trigger may point at a custom template, and the picker offers it', async () => {
     const { svc } = setup([customRow()]);
     const prisma = { emailTrigger: { create: vi.fn().mockImplementation(({ data }: { data: object }) => Promise.resolve({ id: 't1', ...data })) } };
     const triggers = new TriggerService(prisma as unknown as PrismaClient, {} as NotificationService, svc);
-    const created = await triggers.create({
+    const created = await triggers.create('co-a', {
       processKey: 'EMPLOYEE', status: 'CREATED', templateKey: 'custom.welcome-pack', recipient: 'SUBJECT',
     });
     expect(created.templateKey).toBe('custom.welcome-pack');
-    const options = await triggers.options();
+    const options = await triggers.options('co-a');
     expect(options.templates.some((t) => t.key === 'custom.welcome-pack')).toBe(true);
     await expect(
-      triggers.create({ processKey: 'EMPLOYEE', status: 'CREATED', templateKey: 'custom.nope', recipient: 'SUBJECT' }),
+      triggers.create('co-a', { processKey: 'EMPLOYEE', status: 'CREATED', templateKey: 'custom.nope', recipient: 'SUBJECT' }),
     ).rejects.toBeInstanceOf(GuardFailedError);
   });
 });

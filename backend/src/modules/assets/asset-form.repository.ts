@@ -1,6 +1,7 @@
 import type { Db } from '../../common/prisma.js';
 import type { EmployeeScope } from '../../auth/authz/authorize.js';
 import type { AssetFormStatus, AssetCondition } from '../../generated/prisma/enums.js';
+import { viaEmployeeCompanyWhere, type CompanyFilter } from '../../workflow/company-filter.js';
 
 export interface AssetFormItemInput {
   assetId?: string;
@@ -73,9 +74,9 @@ export class AssetFormRepository {
   }
 
   /** SLA scan input — forms sitting in a status since before the threshold. */
-  listInStatusSince(status: AssetFormStatus, threshold: Date, limit = 500) {
+  listInStatusSince(status: AssetFormStatus, threshold: Date, limit = 500, company?: CompanyFilter) {
     return this.db.assetForm.findMany({
-      where: { status, updatedAt: { lt: threshold } },
+      where: { status, updatedAt: { lt: threshold }, ...viaEmployeeCompanyWhere(company) },
       include: { employee: true },
       orderBy: { updatedAt: 'asc' },
       take: limit,

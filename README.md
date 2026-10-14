@@ -304,8 +304,8 @@ rate-limited and need no login; the token in the link is the only gate.
 | `/api/notifications` | In-app bell, SSE stream, e-mail log (`/log`) | |
 | `/api/dashboard` | Home-page summary | |
 | `/api/reports/*` | Excel exports | |
-| `/api/settings/*` | SLA rules, holidays, status ownership, responsibility, e-mail settings | ADMIN |
-| `/api/email-templates`, `/api/email-triggers` | Editable bilingual templates, memo triggers (who gets which notice) | |
+| `/api/settings/*` | SLA rules, holidays, weekend days, status ownership, responsibility, e-mail settings | ADMIN. **Per company**: automation rules, calendar, primary owners and the mail server belong to the selected company (a company without its own mail server sends through the main company's). Status ownership and responsible teams are shared |
+| `/api/email-templates`, `/api/email-triggers` | Editable bilingual templates, memo triggers (who gets which notice) | **Per company**: each company words its own e-mails and has its own triggers; every message uses the wording and mail server of the company it is about |
 | `/api/users` | Staff accounts & roles, invitations | ADMIN |
 | `/api/lists` | Editable dropdown lists | **Per company**: every company owns its own copy, seeded from the catalogue at boot or on first use |
 | `/api/ai/*` | Letter drafting, assistant | Off without `ANTHROPIC_API_KEY` |
