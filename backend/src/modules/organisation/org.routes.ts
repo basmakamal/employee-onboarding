@@ -32,6 +32,15 @@ const positionSchema = z.object({
 export function orgRouter(service: OrgService): Router {
   const router = Router();
 
+  /** Reporting lines (active people and their direct managers), inside the actor's scope. */
+  router.get(
+    '/reporting',
+    requirePermission('org.read', 'org.manage', 'employees.read'),
+    asyncHandler(async (req, res) => {
+      res.json(await service.listReporting(contextOf(req)));
+    }),
+  );
+
   router.get(
     '/units',
     requirePermission('org.read', 'org.manage', 'employees.read'),

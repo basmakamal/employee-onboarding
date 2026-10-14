@@ -13,6 +13,7 @@ import ProcessCard from '../components/ProcessCard.vue';
 import StatusChip from '../components/StatusChip.vue';
 import EmploymentHistory from '../components/EmploymentHistory.vue';
 import EmployeeAccountCard from '../components/EmployeeAccountCard.vue';
+import ReadinessCard from '../components/ReadinessCard.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 
@@ -239,6 +240,7 @@ async function load() {
   // The payload carries the newest timeline page; older ones load on demand.
   timelineLogs.value = employee.value.auditLogs;
   timelinePage.value = 1;
+  readinessKey.value += 1;
   void loadPhoto();
 }
 
@@ -557,6 +559,8 @@ function formActions(status: string): Array<'send' | 'cancel' | 'revise'> {
 
 // ------------------------------------------------------------- tabs
 const tab = ref('overview');
+/** Bumped after each reload of the file, so the readiness checklist re-checks too. */
+const readinessKey = ref(0);
 
 // ------------------------------------------------------- onboarding pipeline
 const PIPELINE_STAGES = [
@@ -2071,6 +2075,7 @@ onMounted(load);
 
       <!-- Requests & services + onboarding documents -->
       <v-col cols="12" md="5">
+        <ReadinessCard v-if="!['EXPIRED', 'WITHDRAWN', 'INACTIVE'].includes(employee.status)" :employee-id="id" :refresh-key="readinessKey" />
         <EmployeeAccountCard
           v-if="!['EXPIRED', 'WITHDRAWN'].includes(employee.status)"
           :employee-id="id"

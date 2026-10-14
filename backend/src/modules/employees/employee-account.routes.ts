@@ -4,6 +4,7 @@ import { asyncHandler, validate } from '../../common/http.js';
 import { requirePermission } from '../../auth/authz/authorize.js';
 import type { Actor } from '../../workflow/engine.js';
 import type { EmployeeAccountService } from './employee-account.service.js';
+import { readinessOf } from './readiness.js';
 
 const createSchema = z.object({
   /** Defaults to the employee's own e-mail. */
@@ -13,9 +14,26 @@ const createSchema = z.object({
 });
 
 /** /api/employees/:id/account — the employee's self-service sign-in, managed by HR. */
-export function employeeAccountRouter(service: EmployeeAccountService): Router {
+export function employeeAccountRouter(
+  service: EmployeeAccountService,
+  /** Loads what the readiness checklist needs. */
+  readinessSource?: (employeeId: string) => Promise<Parameters<typeof readinessOf>[0] | null>,
+): Router {
   const router = Router();
   const actor = (req: { actor?: Actor }): Actor => req.actor ?? { type: 'USER' };
+
+  /** Ready to work and be paid? The checklist the employee file shows. */
+  router.get(
+    '/:id/readiness',
+    asyncHandler(async (req, res) => {
+      const input = readinessSource ? await readinessSource(req.params['id'] as string) : null;
+      if (!input) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'employee not found' } });
+        return;
+      }
+      res.json(readinessOf(input));
+    }),
+  );
 
   router.get(
     '/:id/account',

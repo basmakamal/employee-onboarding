@@ -80,7 +80,19 @@ staffApi.use('/employee-documents', docRouters.flat);
 staffApi.use('/employees/:id', employeeScopeGuard(container.repos.employees));
 // Employment history first: `/employees/changes` must not be read as an employee id.
 staffApi.use('/employees', employmentHistoryRouter(container.employmentHistory));
-staffApi.use('/employees', employeeAccountRouter(container.employeeAccounts));
+staffApi.use(
+  '/employees',
+  employeeAccountRouter(container.employeeAccounts, (id) =>
+    container.prisma.employee.findUnique({
+      where: { id },
+      select: {
+        status: true, hireDate: true, orgUnitId: true, positionId: true, managerId: true, nationalId: true, iban: true,
+        contract: { select: { status: true } },
+        account: { select: { active: true } },
+      },
+    }),
+  ),
+);
 // The audit trail of the selected company (read-only).
 staffApi.use('/audit', auditRouter(container.prisma));
 // Contracts / documents / offboardings across the company (scoped, paged).
@@ -164,11 +176,17 @@ staffApi.get(
     }
 
     // Growth of the unbounded tables — what retention keeps in check.
-    const [auditLogs, notifications, slaFirings, linkTokens] = await Promise.all([
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+    const [auditLogs, notifications, slaFirings, linkTokens, lastRun, failedEmails, pendingEmails, failedChanges] = await Promise.all([
       container.prisma.auditLog.count(),
       container.prisma.notification.count(),
       container.prisma.slaFiring.count(),
       container.prisma.linkToken.count(),
+      // The automation engine marks what it writes (see request-context).
+      container.prisma.auditLog.findFirst({ where: { source: 'SCHEDULER' }, orderBy: { at: 'desc' }, select: { at: true } }),
+      container.prisma.notification.count({ where: { channel: 'EMAIL', status: 'FAILED', createdAt: { gte: weekAgo } } }),
+      container.prisma.notification.count({ where: { channel: 'EMAIL', status: 'PENDING', createdAt: { lt: new Date(Date.now() - 15 * 60_000) } } }),
+      container.prisma.employmentEvent.count({ where: { status: 'FAILED' } }),
     ]);
 
     let disk: { totalGb: number; freeGb: number; usedPct: number } | null = null;
@@ -190,6 +208,15 @@ staffApi.get(
       redis: redisEnabled ? redis : { up: false, configured: false },
       queues: { mail },
       tables: { auditLogs, notifications, slaFirings, linkTokens },
+      jobs: {
+        /** When the automation last wrote anything (a reminder, an expiry, a dated change). */
+        lastAutomationActivity: lastRun?.at ?? null,
+        failedEmailsLast7Days: failedEmails,
+        /** Waiting more than 15 minutes — the mail queue or worker may be down. */
+        stuckEmails: pendingEmails,
+        failedScheduledChanges: failedChanges,
+        mode: redisEnabled ? 'worker' : 'inline',
+      },
       storage: disk,
       uptimeSeconds: Math.round(process.uptime()),
     });

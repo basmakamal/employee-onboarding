@@ -1,5 +1,5 @@
 import type { PrismaClient } from '../../generated/prisma/client.js';
-import type { CompanyContext } from '../../auth/authz/authorize.js';
+import { scopeWhere, type CompanyContext } from '../../auth/authz/authorize.js';
 import type { AssignmentService } from '../../auth/assignment.service.js';
 import type { AuditLogRepository } from '../../workflow/audit-log.repository.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
@@ -211,6 +211,28 @@ export class OrgService {
       ...(ctx.actor.id ? { actorId: ctx.actor.id } : {}),
       companyId: ctx.companyId,
       metadata,
+    });
+  }
+
+  /**
+   * Who reports to whom: the active people the actor may see, each with
+   * their direct manager. The UI folds this into a tree (people whose
+   * manager is outside the actor's view start a branch of their own).
+   */
+  listReporting(ctx: CompanyContext) {
+    return this.db.employee.findMany({
+      where: { AND: [scopeWhere(ctx), { status: 'ACTIVE' }] },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        employeeNo: true,
+        managerId: true,
+        position: { select: { titleAr: true, titleEn: true } },
+        orgUnit: { select: { nameAr: true, nameEn: true } },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      take: 2000,
     });
   }
 

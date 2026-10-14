@@ -53,6 +53,17 @@ export class DashboardService {
     const expiryUntil = new Date(now.getTime() + EXPIRY_WINDOW_DAYS * 86_400_000);
     const trendStart = new Date(now.getTime() - TREND_WEEKS * 7 * 86_400_000);
 
+    const soon = new Date(now.getTime() + 30 * 86_400_000);
+    const [upcomingChanges, withoutLogin] = await Promise.all([
+      this.prisma.employmentEvent.findMany({
+        where: { status: 'SCHEDULED', effectiveDate: { lte: soon }, employee: emp({}), category: { in: ['ORG_UNIT', 'POSITION', 'MANAGER'] } },
+        orderBy: { effectiveDate: 'asc' },
+        take: 6,
+        select: { batchId: true, category: true, effectiveDate: true, employee: { select: { id: true, firstName: true, lastName: true } } },
+      }),
+      this.prisma.employee.count({ where: emp({ status: 'ACTIVE', account: null }) }),
+    ]);
+
     const [
       byStatus, gosi, medical, criminal, assetForms, offboardings, recent, stalled, expiring, custody, hires, intakes,
       joiners,
@@ -176,6 +187,16 @@ export class DashboardService {
       .slice(0, 8);
 
     const value = {
+      /** Transfers / promotions taking effect in the next 30 days. */
+      upcomingChanges: upcomingChanges.map((c) => ({
+        batchId: c.batchId,
+        category: c.category,
+        effectiveDate: c.effectiveDate.toISOString().slice(0, 10),
+        employeeId: c.employee.id,
+        name: `${c.employee.firstName} ${c.employee.lastName}`.trim(),
+      })),
+      /** Active people who cannot use My space yet. */
+      withoutLogin,
       onboarding,
       employees,
       processes: {
