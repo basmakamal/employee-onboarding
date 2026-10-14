@@ -22,6 +22,7 @@ export const router = createRouter({
     { path: '/trainees', redirect: '/employees' },
     { path: '/trainees/:id', redirect: (to) => `/employees/${to.params['id'] as string}` },
     { path: '/employees', name: 'employees', component: () => import('../pages/EmployeesPage.vue') },
+    { path: '/me', name: 'my-space', component: () => import('../pages/MySpacePage.vue'), meta: { self: true } },
     { path: '/employee-changes', name: 'employee-changes', component: () => import('../pages/EmployeeChangesPage.vue') },
     {
       path: '/employees/:id',
@@ -146,6 +147,12 @@ router.beforeEach(async (to) => {
   if (auth.user?.mustChangePassword && to.name !== 'change-password') {
     return { name: 'change-password' };
   }
+
+  // An employee's self-service sign-in lives in "My space" only (the server
+  // refuses it everywhere else anyway); staff have no "My space".
+  const selfService = !!auth.user?.employeeId;
+  if (selfService && !to.meta['self'] && to.name !== 'change-password') return { name: 'my-space' };
+  if (!selfService && to.meta['self']) return { name: 'home' };
 
   const permission = to.meta['permission'] as string | undefined;
   if (permission && !auth.can(permission)) return { name: auth.user?.activeCompany ? 'home' : 'select-company' };

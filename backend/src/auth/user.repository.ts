@@ -21,6 +21,8 @@ export const USER_LIST_SELECT = {
  * a second round trip.
  */
 export const WITH_ASSIGNMENTS = {
+  /** A self-service account's employee: its company and whether it is still employed. */
+  employee: { select: { id: true, companyId: true, status: true } },
   assignments: {
     select: {
       companyId: true,
@@ -79,7 +81,11 @@ export class UserRepository {
   /** Server-side page of staff accounts (search across name/email). */
   async listPaged(query: { q?: string; page: number; limit: number }) {
     const q = query.q?.trim();
-    const where = q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }] } : {};
+    // Staff accounts only — employee self-service logins are managed from the employee file.
+    const where = {
+      role: { not: 'EMPLOYEE' as const },
+      ...(q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }] } : {}),
+    };
     const [items, total] = await Promise.all([
       this.db.user.findMany({
         where,

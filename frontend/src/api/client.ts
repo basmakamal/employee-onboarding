@@ -42,6 +42,8 @@ export interface SessionUser {
   activeCompany: SessionCompany | null;
   /** A profile picture exists at /api/auth/me/photo. */
   hasPhoto?: boolean;
+  /** Set for an employee's self-service sign-in: the app shows only "My space". */
+  employeeId?: string | null;
   /** Still on a temporary password — the app forces a change before anything else. */
   mustChangePassword?: boolean;
 }

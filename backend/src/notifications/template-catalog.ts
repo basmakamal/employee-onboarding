@@ -205,6 +205,10 @@ export const TEMPLATE_CATALOG: Record<string, TemplateMeta> = {
     audience: 'staff', nameAr: 'دعوة مستخدم جديد', nameEn: 'Staff invitation',
     placeholders: ['name', 'email', 'tempPassword', 'linkUrl'], hasCta: true,
   },
+  'employee.account_invitation': {
+    audience: 'employee', nameAr: 'دعوة الموظف إلى الخدمة الذاتية', nameEn: 'Employee self-service invitation',
+    placeholders: ['name', 'email', 'tempPassword', 'linkUrl'], hasCta: true,
+  },
   /** Free-form template for admin-defined triggers — often addressed to the employee, so no internal link. */
   'custom.status_change': {
     audience: 'employee', nameAr: 'رسالة عند تغيّر الحالة', nameEn: 'Status-change message',
