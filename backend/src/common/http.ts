@@ -2,6 +2,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { ZodError, type ZodType } from 'zod';
 import { DomainError, GuardFailedError } from '../workflow/errors.js';
 import { logger } from './logger.js';
+import { documented } from '../docs/route-doc.js';
 
 /**
  * Strip keys whose value is `undefined` — bridges Zod optionals
@@ -26,10 +27,11 @@ export function asyncHandler(
 
 /** Validate req.body against a Zod schema; the parsed value replaces it. */
 export function validate(schema: ZodType): RequestHandler {
-  return (req, _res, next) => {
+  const handler: RequestHandler = (req, _res, next) => {
     req.body = schema.parse(req.body);
     next();
   };
+  return documented(handler, { body: schema });
 }
 
 /**
@@ -38,10 +40,11 @@ export function validate(schema: ZodType): RequestHandler {
  * so every consumer needs the same coerce-and-clamp treatment.
  */
 export function validateQuery(schema: ZodType): RequestHandler {
-  return (req, _res, next) => {
+  const handler: RequestHandler = (req, _res, next) => {
     (req as { pagedQuery?: unknown }).pagedQuery = schema.parse(req.query);
     next();
   };
+  return documented(handler, { query: schema });
 }
 
 /** The query parsed by validateQuery, typed at the call site. */

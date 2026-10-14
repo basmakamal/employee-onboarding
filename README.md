@@ -289,6 +289,19 @@ The frontend needs no `.env`; it reads everything from the API.
 
 ## 6. API map
 
+**Interactive docs (Swagger):** open `/api/docs/` on any running backend
+(locally <http://localhost:3000/api/docs/>, on the server
+`https://<your-domain>/api/docs/`). The raw OpenAPI file is at
+`/api/docs/openapi.json` — import it into Postman if you prefer.
+
+The spec is **generated from the code**, not written by hand: every mounted
+route is listed with its path parameters, the request body / query rules
+(from the same Zod schemas that validate the request), the permission it
+needs and whether it works inside the selected company. A new route appears
+the moment it is added. To try a staff endpoint: `POST /api/auth/login` →
+copy `accessToken` → **Authorize** → paste. Set `API_DOCS=false` in
+`backend/.env` to switch the docs off on a server.
+
 All staff endpoints live under `/api` and require a Bearer access token (the UI
 handles refresh silently). Signed-link endpoints (`/api/link/*`) are
 rate-limited and need no login; the token in the link is the only gate.
