@@ -78,6 +78,7 @@ export const LIST_DEFS: ListDef[] = [
     defaults: [
       v('BRANCH', 'فرع / موقع', 'Branch / location'),
       v('DEPARTMENT', 'قسم', 'Department'),
+      v('TEAM', 'فريق', 'Team'),
     ],
   },
 

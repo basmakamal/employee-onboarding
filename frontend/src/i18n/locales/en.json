@@ -36,7 +36,8 @@
     "contracts": "Contracts",
     "documents": "Documents & expiry",
     "offboardings": "Offboarding",
-    "audit": "Audit trail"
+    "audit": "Audit trail",
+    "health": "System health"
   },
   "users": {
     "assignments": "Assignments",
@@ -151,7 +152,10 @@
     "recentEmpty": "No activity yet.",
     "whoNeedsYou": "Who needs you",
     "statJoined": "Joined this month",
-    "statTracks": "Open file tracks"
+    "statTracks": "Open file tracks",
+    "upcomingChanges": "Transfers & promotions coming up",
+    "attnNoLogin": "{n} active employees have no login for My space yet",
+    "attnNoLoginOne": "1 active employee has no login for My space yet"
   },
   "settings": {
     "title": "Settings",
@@ -528,7 +532,15 @@
     "deleteTitle": "Delete title",
     "deleteTitleConfirm": "Delete \"{name}\"? Titles held by employees cannot be deleted — deactivate them instead.",
     "noTitles": "No job titles yet",
-    "noTitlesHint": "Titles belong to the company, not to a department; the department is set on the employee."
+    "noTitlesHint": "Titles belong to the company, not to a department; the department is set on the employee.",
+    "teams": "Teams",
+    "reporting": "Reporting lines",
+    "team": "Team",
+    "partOf": "Part of",
+    "teamsEmpty": "No teams yet",
+    "teamsEmptyHint": "A team is a unit of type \"Team\" — add it under its department in the Structure tab.",
+    "reportingEmpty": "No active employees to show.",
+    "reportsCount": "{n} reporting"
   },
   "errors": {
     "fixFields": "Please correct the highlighted fields.",
@@ -1588,5 +1600,80 @@
       "SCHEDULER": "Automation",
       "SYSTEM": "System"
     }
+  },
+  "readiness": {
+    "title": "Ready for work & payroll",
+    "ready": "Ready",
+    "notReady": "Not ready",
+    "hint": "Attendance and payroll accept this person only when every required item holds.",
+    "soon": "with a coming module",
+    "optional": "recommended",
+    "items": {
+      "EMPLOYED": "Employment is active",
+      "HIRE_DATE": "Hire date recorded",
+      "CONTRACT": "Contract is active",
+      "UNIT": "Placed in a branch / department",
+      "POSITION": "Job title set",
+      "NATIONAL_ID": "National / Iqama number on file",
+      "IBAN": "IBAN on file (salary transfer)",
+      "MANAGER": "Direct manager set",
+      "LOGIN": "Self-service login created",
+      "SCHEDULE": "Work schedule assigned",
+      "SALARY": "Salary set"
+    }
+  },
+  "health": {
+    "title": "System health",
+    "subtitle": "Is everything running? Database, background work, e-mail delivery and storage — for administrators.",
+    "refresh": "Refresh",
+    "never": "no activity yet",
+    "minutesAgo": "{n} min ago",
+    "hoursAgo": "{n} h ago",
+    "daysHours": "{d} d {h} h",
+    "hours": "{h} h",
+    "up": "Running",
+    "down": "Down",
+    "upMs": "Running · {ms} ms",
+    "notConfigured": "Not configured (inline mode)",
+    "disk": "{freeGb} GB free of {totalGb} GB ({usedPct}% used)",
+    "mode": {
+      "worker": "worker process",
+      "inline": "inside the API"
+    },
+    "checks": {
+      "db": "Database",
+      "redis": "Redis (queues and sessions)",
+      "automation": "Automation last active",
+      "failedEmails": "E-mails failed (7 days)",
+      "stuckEmails": "E-mails waiting over 15 min",
+      "failedChanges": "Scheduled changes not applied",
+      "storage": "File storage"
+    },
+    "explain": {
+      "db": "All records live here.",
+      "redis": "Carries the e-mail queue and the automation jobs.",
+      "automation": "The last reminder, expiry or dated change the engine wrote.",
+      "failedEmails": "Check the mail settings of the company if this grows.",
+      "stuckEmails": "The mail worker may be stopped.",
+      "failedChanges": "Transfers whose unit or title closed before their date — see Transfers & promotions.",
+      "storage": "Uploaded documents, photos and archives."
+    },
+    "mailQueue": "E-mail queue",
+    "noQueue": "No queue — e-mails are sent directly (inline mode).",
+    "queueStates": {
+      "waiting": "Waiting",
+      "active": "Sending",
+      "completed": "Sent",
+      "failed": "Failed",
+      "delayed": "Retrying later"
+    },
+    "tables": "Table growth",
+    "tableNames": {
+      "auditLogs": "Audit entries",
+      "notifications": "Notifications",
+      "slaFirings": "Automation memory",
+      "linkTokens": "Signed links"
+    },
+    "uptime": "API running for {uptime}"
   }
 }

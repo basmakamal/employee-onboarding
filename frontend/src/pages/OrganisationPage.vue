@@ -13,6 +13,7 @@ import { useListsStore } from '../stores/lists';
 import { useConfirm } from '../composables/useConfirm';
 import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
+import OrgReportingTree from '../components/OrgReportingTree.vue';
 import FormErrorAlert from '../components/FormErrorAlert.vue';
 import { useForm } from '../composables/useForm';
 import { rules } from '../validation/rules';
@@ -49,7 +50,7 @@ const ar = computed(() => locale.value.startsWith('ar'));
 const name = (u: { nameAr: string; nameEn: string }) => (ar.value ? u.nameAr : u.nameEn);
 const title = (p: Title) => (ar.value ? p.titleAr : p.titleEn);
 
-const tab = ref<'structure' | 'titles'>('structure');
+const tab = ref<'structure' | 'teams' | 'reporting' | 'titles'>('structure');
 const units = ref<Unit[]>([]);
 const titles = ref<Title[]>([]);
 const staff = ref<StaffUser[]>([]);
@@ -93,6 +94,13 @@ function toggle(u: Unit) {
   collapsed.value = next;
 }
 const typeLabel = (code: string) => lists.label('ORG_UNIT_TYPE', code) ?? code;
+
+/** Teams are units of type TEAM anywhere in the tree — listed with the unit they sit under. */
+const teams = computed(() => units.value.filter((u) => u.type === 'TEAM'));
+const parentName = (u: Unit) => {
+  const parent = units.value.find((p) => p.id === u.parentId);
+  return parent ? name(parent) : '—';
+};
 const typeItems = computed(() => lists.items('ORG_UNIT_TYPE'));
 const staffItems = computed(() => [
   { title: t('org.noManager'), value: null },
@@ -198,11 +206,13 @@ onMounted(async () => {
   <v-container class="py-8" style="max-width: 1100px">
     <PageHeader :title="$t('org.title_')" :subtitle="$t('org.subtitle', { company: auth.user?.activeCompany ? name(auth.user.activeCompany) : '' })">
       <v-btn v-if="tab === 'structure' && auth.can('org.manage')" color="primary" prepend-icon="plus" @click="openUnit()">{{ $t('org.newBranch') }}</v-btn>
-      <v-btn v-else-if="auth.can('org.manage')" color="primary" prepend-icon="plus" @click="openTitle()">{{ $t('org.newTitle') }}</v-btn>
+      <v-btn v-else-if="tab === 'titles' && auth.can('org.manage')" color="primary" prepend-icon="plus" @click="openTitle()">{{ $t('org.newTitle') }}</v-btn>
     </PageHeader>
 
     <v-tabs v-model="tab" class="mb-4">
       <v-tab value="structure">{{ $t('org.structure') }}</v-tab>
+      <v-tab value="teams">{{ $t('org.teams') }}</v-tab>
+      <v-tab value="reporting">{{ $t('org.reporting') }}</v-tab>
       <v-tab value="titles">{{ $t('org.titles') }}</v-tab>
     </v-tabs>
 
@@ -260,6 +270,38 @@ onMounted(async () => {
       </v-table>
       <v-card-text class="text-caption text-medium-emphasis">{{ $t('org.hint') }}</v-card-text>
     </v-card>
+
+    <!-- ───────── teams (units of type Team) ───────── -->
+    <v-card v-else-if="tab === 'teams'">
+      <EmptyState v-if="teams.length === 0" icon="fluent:people-team" :title="$t('org.teamsEmpty')" :hint="$t('org.teamsEmptyHint')" />
+      <v-table v-else density="comfortable">
+        <thead>
+          <tr>
+            <th>{{ $t('org.team') }}</th>
+            <th>{{ $t('org.partOf') }}</th>
+            <th style="width: 220px">{{ $t('org.manager') }}</th>
+            <th style="width: 100px" class="text-end">{{ $t('org.employees') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="u in teams" :key="u.id" :class="{ 'org-row--inactive': !u.active }">
+            <td>
+              <div class="text-body-2 font-weight-semibold">{{ name(u) }}</div>
+              <div class="text-caption text-medium-emphasis">{{ u.code }}</div>
+            </td>
+            <td class="text-body-2">{{ parentName(u) }}</td>
+            <td>
+              <span v-if="u.manager" class="text-body-2">{{ u.manager.name }}</span>
+              <span v-else class="text-caption text-disabled">{{ $t('org.noManager') }}</span>
+            </td>
+            <td class="text-end tnum">{{ u._count.employees }}</td>
+          </tr>
+        </tbody>
+      </v-table>
+    </v-card>
+
+    <!-- ───────── reporting lines ───────── -->
+    <OrgReportingTree v-else-if="tab === 'reporting'" />
 
     <!-- ───────── titles ───────── -->
     <v-card v-else>

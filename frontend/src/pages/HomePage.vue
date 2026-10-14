@@ -40,6 +40,10 @@ interface DashboardData {
   processes: { gosi: CountMap; medical: CountMap; criminal: CountMap };
   attention: AttentionItem[];
   counts: { stalled: number; expiringDocs: number; custodyWaiting: number; joinedThisMonth: number };
+  /** Transfers / promotions taking effect in the next 30 days. */
+  upcomingChanges?: Array<{ batchId: string; category: string; effectiveDate: string; employeeId: string; name: string }>;
+  /** Active people without a self-service login. */
+  withoutLogin?: number;
   recentJoiners: Joiner[];
   recent: Array<{
     id: string;
@@ -88,6 +92,9 @@ const attentionSummary = computed(() => {
     c.stalled ? { key: 'stalled', text: one(c.stalled, 'attnStalled'), to: '/employees?filter=onboarding', tone: 'warning' } : null,
     c.expiringDocs ? { key: 'expiring', text: one(c.expiringDocs, 'attnExpiring'), to: '/reports', tone: 'warning' } : null,
     c.custodyWaiting ? { key: 'custody', text: one(c.custodyWaiting, 'attnCustody'), to: '/employees?filter=active', tone: 'info' } : null,
+    data.value?.withoutLogin && auth.can('employees.write')
+      ? { key: 'logins', text: one(data.value.withoutLogin, 'attnNoLogin'), to: '/employees?filter=active', tone: 'info' }
+      : null,
   ].filter((x): x is NonNullable<typeof x> => x !== null);
 });
 
@@ -121,6 +128,10 @@ const stages = computed(() => PIPELINE_STAGES.filter((s) => (data.value?.onboard
 const upcoming = computed(() =>
   (data.value?.attention ?? []).filter((a) => a.kind === 'expiring').sort((a, b) => a.days - b.days).slice(0, 6),
 );
+
+const changes = computed(() => data.value?.upcomingChanges ?? []);
+const changeDate = (d: string) =>
+  new Date(`${d}T00:00:00Z`).toLocaleDateString(locale.value === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short' });
 
 // ── helpers ──────────────────────────────────────────────────────────────
 /** One of six soft tints, always the same for the same person. */
@@ -308,6 +319,22 @@ onMounted(async () => {
               </router-link>
             </div>
             <div v-else class="panel__empty">{{ $t('dashboard.upcomingEmpty') }}</div>
+          </v-card>
+
+          <v-card v-if="changes.length" class="panel mb-4">
+            <div class="panel__head">
+              <h2 class="panel__title">{{ $t('dashboard.upcomingChanges') }}</h2>
+              <router-link to="/employee-changes" class="panel__link">{{ $t('common.viewAll') }}</router-link>
+            </div>
+            <div class="list">
+              <router-link v-for="c in changes" :key="c.batchId + c.category" :to="`/employees/${c.employeeId}`" class="list__row">
+                <div class="min-w-0 flex-grow-1">
+                  <div class="list__text text-truncate">{{ c.name }}</div>
+                  <div class="list__meta text-truncate">{{ $t(`history.categories.${c.category}`) }} · {{ changeDate(c.effectiveDate) }}</div>
+                </div>
+                <v-icon icon="chevron-right" size="16" class="list__chev flip-rtl" />
+              </router-link>
+            </div>
           </v-card>
 
           <v-card class="panel mb-4">
