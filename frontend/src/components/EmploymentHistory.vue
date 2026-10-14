@@ -33,7 +33,12 @@ export interface HistoryEvent {
   approvedBy: { id: string; name: string } | null;
 }
 
-const props = defineProps<{ employeeId: string; canEdit: boolean }>();
+const props = defineProps<{
+  employeeId: string;
+  canEdit: boolean;
+  /** Where the history comes from — My space reads its own via /api/me/history. */
+  endpoint?: string;
+}>();
 const emit = defineEmits<{ changed: [] }>();
 
 const { t, locale } = useI18n();
@@ -49,7 +54,7 @@ async function load() {
   loading.value = true;
   loadError.value = '';
   try {
-    events.value = await api.get<HistoryEvent[]>(`/api/employees/${props.employeeId}/history`);
+    events.value = await api.get<HistoryEvent[]>(props.endpoint ?? `/api/employees/${props.employeeId}/history`);
   } catch (e) {
     loadError.value = errorText(e);
   } finally {

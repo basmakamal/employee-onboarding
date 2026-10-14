@@ -121,4 +121,13 @@ export const SYSTEM_ROLES: Array<{
     level: 'COMPANY',
     permissions: ['org.read', 'employees.read', 'settlement.approve', 'reports.view'],
   },
+  {
+    // A self-service sign-in. It holds NO staff permission: everything it can
+    // see is its own record, through /api/me only (the staff API refuses it).
+    code: 'EMPLOYEE',
+    nameAr: 'موظف (الخدمة الذاتية)',
+    nameEn: 'Employee (self-service)',
+    level: 'COMPANY',
+    permissions: [],
+  },
 ];

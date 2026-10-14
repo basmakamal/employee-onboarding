@@ -15,14 +15,16 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 /// Staff role groups — each workflow status is owned by a group (machine
-/// transitions declare `roles`); ADMIN overrides everything. Trainees and
-/// employees are NOT users — they act through signed link tokens.
+/// transitions declare `roles`); ADMIN overrides everything. Candidates act
+/// through signed link tokens; an employee may additionally get a
+/// self-service account (EMPLOYEE), which only ever sees its own record.
 enum Role {
   HR // trainee stage, criminal record, offboarding flow
   INSURANCE // GOSI + medical insurance cards
   IT // asset registry + custody forms
   FINANCE // final settlement + file closure
   ADMIN
+  EMPLOYEE // self-service account of one employee — never reaches the staff API
 }
 
 /// One lifecycle for the whole journey (BRD stages 1–3): the onboarding
@@ -356,6 +358,9 @@ model User {
   /// context, never a proof of authorisation.
   activeCompany   Company? @relation("ActiveCompany", fields: [activeCompanyId], references: [id])
   activeCompanyId String?
+  /// Set for a self-service account (role EMPLOYEE): the one employee record it may see.
+  employee   Employee? @relation("EmployeeAccount", fields: [employeeId], references: [id], onDelete: SetNull)
+  employeeId String?   @unique
   createdAt    DateTime @default(now())
 
   assignments         UserAssignment[]
@@ -456,6 +461,8 @@ model Employee {
   expiryDocuments EmployeeDocument[]
   requests        EmployeeRequest[]
   employmentEvents EmploymentEvent[]
+  /// The employee's own sign-in (self-service), when HR has created one.
+  account         User?                    @relation("EmployeeAccount")
   auditLogs       AuditLog[]               @relation("EmployeeAudit")
 
   /// (status, statusChangedAt) serves both the status filters and the SLA

@@ -12,6 +12,7 @@ import { rules } from '../validation/rules';
 import ProcessCard from '../components/ProcessCard.vue';
 import StatusChip from '../components/StatusChip.vue';
 import EmploymentHistory from '../components/EmploymentHistory.vue';
+import EmployeeAccountCard from '../components/EmployeeAccountCard.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 
@@ -2070,6 +2071,13 @@ onMounted(load);
 
       <!-- Requests & services + onboarding documents -->
       <v-col cols="12" md="5">
+        <EmployeeAccountCard
+          v-if="!['EXPIRED', 'WITHDRAWN'].includes(employee.status)"
+          :employee-id="id"
+          :employee-status="employee.status"
+          :employee-email="employee.email"
+          :can-edit="auth.can('employees.write')"
+        />
         <v-card v-if="!isPipeline" class="mb-4">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">

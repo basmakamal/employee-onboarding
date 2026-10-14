@@ -163,6 +163,9 @@ export class AssignmentService {
     for (const item of items) {
       const role = roleByCode.get(item.roleCode);
       if (!role) throw new GuardFailedError('BAD_ROLE', `unknown or inactive role ${item.roleCode}`);
+      if (item.roleCode === 'EMPLOYEE') {
+        throw new GuardFailedError('BAD_ROLE', 'the employee self-service role is given from the employee file, not to staff');
+      }
       const companyId = item.companyId ?? null;
       const orgUnitId = item.orgUnitId ?? null;
       if (orgUnitId && !companyId) throw new GuardFailedError('BAD_SCOPE', 'a unit assignment needs its company');

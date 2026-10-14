@@ -58,6 +58,8 @@ export interface Actor {
   companyId?: string;
   /** Where inside the company the user may reach. */
   scope?: { companyId: string | null; all: boolean; orgUnitPaths: string[] };
+  /** Self-service account: the one employee record this user is. */
+  employeeId?: string;
 }
 
 export interface TransitionContext<TRecord> {

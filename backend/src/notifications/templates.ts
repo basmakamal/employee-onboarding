@@ -906,6 +906,36 @@ const T: Record<string, Record<Locale, Template>> = {
       }, SIGN_OFF.en),
   },
 
+  /** An employee's own self-service sign-in (My space), created by HR. */
+  'employee.account_invitation': {
+    ar: (p) =>
+      branded('ar', 'حسابك في الخدمة الذاتية جاهز', {
+        title: 'مساحتك في نظام الموارد البشرية',
+        paragraphs: [
+          `مرحبًا ${p.name ?? ''},`,
+          'أنشأ قسم الموارد البشرية حسابًا لك لتطّلع على بياناتك ومستنداتك ومسارك الوظيفي، وقريبًا الحضور والإجازات وقسائم الراتب.',
+          `البريد الإلكتروني: ${p.email ?? ''}`,
+          `كلمة المرور المؤقتة: ${p.tempPassword ?? ''}`,
+          'عند أول تسجيل دخول سيُطلب منك اختيار كلمة مرور خاصة بك. يعمل الحساب من أول يوم عمل لك.',
+        ],
+        ...(p.linkUrl ? { cta: { label: 'تسجيل الدخول', url: p.linkUrl } } : {}),
+        note: 'يُرجى الاحتفاظ بكلمة المرور المؤقتة سرّية وعدم مشاركتها مع أي شخص.',
+      }, SIGN_OFF.ar),
+    en: (p) =>
+      branded('en', 'Your self-service account is ready', {
+        title: 'Your space in the HR system',
+        paragraphs: [
+          `Hello ${p.name ?? ''},`,
+          'HR has created an account for you to see your details, documents and career history — and soon your attendance, leave and payslips.',
+          `Email: ${p.email ?? ''}`,
+          `Temporary password: ${p.tempPassword ?? ''}`,
+          'The first time you sign in you will be asked to choose your own password. The account works from your first working day.',
+        ],
+        ...(p.linkUrl ? { cta: { label: 'Sign in', url: p.linkUrl } } : {}),
+        note: 'Please keep the temporary password to yourself and do not share it with anyone.',
+      }, SIGN_OFF.en),
+  },
+
   /**
    * Generic status-change notice for admin-defined triggers. Works out of the
    * box; admins usually replace the wording per trigger in Email templates.

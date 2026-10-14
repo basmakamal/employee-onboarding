@@ -27,7 +27,9 @@
     "inbox": "Inbox",
     "newEmployee": "New employee",
     "lists": "Lists",
-    "employeeChanges": "Transfers & promotions"
+    "employeeChanges": "Transfers & promotions",
+    "mySpace": "My space",
+    "groupMine": "My space"
   },
   "users": {
     "assignments": "Assignments",
@@ -662,7 +664,10 @@
       "AI_EMPTY": "The assistant returned no answer. Please try again.",
       "NO_CHANGE": "Nothing would change — choose a different branch, job title or manager.",
       "NOT_SCHEDULED": "Only a change that has not taken effect yet can be cancelled.",
-      "BAD_DATE": "Enter a valid effective date."
+      "BAD_DATE": "Enter a valid effective date.",
+      "ACCOUNT_NOT_ACTIVE": "Your access opens on your first working day and closes when your employment ends. Please contact HR.",
+      "ACCOUNT_EXISTS": "This employee already has a login.",
+      "EMAIL_TAKEN": "Another account already signs in with this e-mail — use a different one."
     }
   },
   "login": {
@@ -1372,7 +1377,28 @@
     "photoHint": "JPEG or PNG, up to 5 MB. A square photo looks best.",
     "upload": "Upload picture",
     "adminOnly": "Email and role are managed by an administrator.",
-    "menu": "Account"
+    "menu": "Account",
+    "employee": {
+      "title": "Self-service login",
+      "none": "This employee has no login yet. With one they can see their details, documents and career history — and later their attendance, leave and payslips.",
+      "create": "Create login",
+      "loginEmail": "Login e-mail",
+      "inviteHint": "E-mail a temporary password. Turn off to see it once and hand it over yourself.",
+      "on": "Active",
+      "off": "Switched off",
+      "lastLogin": "Last sign-in: {date}",
+      "tempPassword": "still on a temporary password",
+      "resetByMail": "Reset password by e-mail",
+      "resetShowBtn": "Reset and show password",
+      "reset": "Reset password",
+      "resetMail": "Send a new temporary password to {email}? The current password stops working.",
+      "resetShow": "Create a new temporary password and show it to you once? The current password stops working.",
+      "disable": "Switch login off",
+      "enable": "Switch login on",
+      "disableConfirm": "The employee will not be able to sign in until the login is switched on again.",
+      "opensWhenActive": "The login works only while the employee is active — it can be prepared now and opens on the first working day.",
+      "handOver": "Hand this temporary password to the employee. It is shown only now; they choose their own at the first sign-in."
+    }
   },
   "contractPage": {
     "title": "Your employment contract",
@@ -1484,5 +1510,22 @@
     "viewOther": "Cancelled / not applied",
     "pageEmpty": "Nothing here",
     "pageEmptyHint": "Changes are entered from an employee's file → Career history → Transfer / promotion."
+  },
+  "mySpace": {
+    "hello": "Hello, {name}",
+    "subtitle": "Your details, documents and career history.",
+    "overview": "My details",
+    "documents": "My documents",
+    "employeeNo": "Employee number",
+    "iban": "IBAN (salary account)",
+    "correctHint": "Something wrong or out of date? Tell HR — they will correct it for you.",
+    "expiryDocs": "ID documents",
+    "formDocs": "Files you sent with the data form",
+    "noDocs": "Nothing here yet.",
+    "expires": "Expires {date}",
+    "expired": "Expired",
+    "daysLeft": "{n} days left",
+    "download": "Download",
+    "downloadFailed": "The file could not be downloaded. Please try again."
   }
 }
