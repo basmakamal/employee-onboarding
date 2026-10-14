@@ -35,7 +35,8 @@
     "groupOrganisation": "Organisation",
     "contracts": "Contracts",
     "documents": "Documents & expiry",
-    "offboardings": "Offboarding"
+    "offboardings": "Offboarding",
+    "audit": "Audit trail"
   },
   "users": {
     "assignments": "Assignments",
@@ -445,7 +446,14 @@
     "SUBMIT_CONTRACT": "Contract submitted for approval",
     "REJECT_CONTRACT": "Contract rejected",
     "WITHDRAW": "Withdrawn",
-    "CANCEL": "Cancelled"
+    "CANCEL": "Cancelled",
+    "EMPLOYMENT_CHANGED": "Employment changed",
+    "EMPLOYMENT_CHANGE_SCHEDULED": "Employment change scheduled",
+    "EMPLOYMENT_CHANGE_CANCELLED": "Scheduled change cancelled",
+    "ACCOUNT_CREATED": "Login created",
+    "ACCOUNT_ENABLED": "Login switched on",
+    "ACCOUNT_DISABLED": "Login switched off",
+    "ACCOUNT_PASSWORD_RESET": "Login password reset"
   },
   "actors": {
     "USER": "Staff",
@@ -734,7 +742,8 @@
       "settlement": "Settlement",
       "reports": "Reports",
       "emails": "E-mail",
-      "ai": "AI"
+      "ai": "AI",
+      "audit": "Audit"
     },
     "HR": "Human Resources",
     "INSURANCE": "Insurance",
@@ -1555,5 +1564,29 @@
     "opened": "Opened",
     "noOffboardings": "No offboarding cases here.",
     "docType": "Document type"
+  },
+  "auditTrail": {
+    "title": "Audit trail",
+    "subtitle": "Who did what in {company}, when and from where — with before and after values for edits. Entries can never be changed or deleted.",
+    "record": "Record type",
+    "action": "Action",
+    "source": "Source",
+    "from": "From",
+    "to": "To",
+    "search": "Employee, number or record id",
+    "when": "When",
+    "who": "Who",
+    "what": "What",
+    "employee": "Employee",
+    "details": "Details",
+    "empty": "No entries match.",
+    "byLink": "Via signed link",
+    "bySystem": "System",
+    "sources": {
+      "WEB": "Web",
+      "LINK": "Signed link",
+      "SCHEDULER": "Automation",
+      "SYSTEM": "System"
+    }
   }
 }

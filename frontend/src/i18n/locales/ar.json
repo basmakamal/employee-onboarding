@@ -35,7 +35,8 @@
     "groupOrganisation": "الهيكل التنظيمي",
     "contracts": "العقود",
     "documents": "المستندات والصلاحية",
-    "offboardings": "إنهاء الخدمة"
+    "offboardings": "إنهاء الخدمة",
+    "audit": "سجل التدقيق"
   },
   "users": {
     "assignments": "الإسنادات",
@@ -445,7 +446,14 @@
     "SUBMIT_CONTRACT": "أُرسل العقد للموافقة",
     "REJECT_CONTRACT": "رُفض العقد",
     "WITHDRAW": "انسحاب",
-    "CANCEL": "إلغاء"
+    "CANCEL": "إلغاء",
+    "EMPLOYMENT_CHANGED": "تغيير وظيفي",
+    "EMPLOYMENT_CHANGE_SCHEDULED": "جدولة تغيير وظيفي",
+    "EMPLOYMENT_CHANGE_CANCELLED": "إلغاء تغيير مجدول",
+    "ACCOUNT_CREATED": "إنشاء حساب دخول",
+    "ACCOUNT_ENABLED": "تفعيل حساب الدخول",
+    "ACCOUNT_DISABLED": "إيقاف حساب الدخول",
+    "ACCOUNT_PASSWORD_RESET": "إعادة تعيين كلمة مرور الحساب"
   },
   "actors": {
     "USER": "موظف النظام",
@@ -734,7 +742,8 @@
       "settlement": "التسوية",
       "reports": "التقارير",
       "emails": "البريد",
-      "ai": "الذكاء الاصطناعي"
+      "ai": "الذكاء الاصطناعي",
+      "audit": "التدقيق"
     },
     "HR": "الموارد البشرية",
     "INSURANCE": "التأمينات",
@@ -1555,5 +1564,29 @@
     "opened": "تاريخ الفتح",
     "noOffboardings": "لا توجد حالات إنهاء خدمة هنا.",
     "docType": "نوع المستند"
+  },
+  "auditTrail": {
+    "title": "سجل التدقيق",
+    "subtitle": "من فعل ماذا في {company}، ومتى ومن أين — مع القيم قبل التعديل وبعده. لا يمكن تعديل أي إدخال أو حذفه.",
+    "record": "نوع السجل",
+    "action": "الإجراء",
+    "source": "المصدر",
+    "from": "من",
+    "to": "إلى",
+    "search": "الموظف أو الرقم أو معرّف السجل",
+    "when": "الوقت",
+    "who": "المنفّذ",
+    "what": "الإجراء",
+    "employee": "الموظف",
+    "details": "التفاصيل",
+    "empty": "لا توجد إدخالات مطابقة.",
+    "byLink": "عبر رابط موقّع",
+    "bySystem": "النظام",
+    "sources": {
+      "WEB": "الويب",
+      "LINK": "رابط موقّع",
+      "SCHEDULER": "الأتمتة",
+      "SYSTEM": "النظام"
+    }
   }
 }

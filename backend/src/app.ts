@@ -8,6 +8,7 @@ import { errorHandler } from './common/http.js';
 import { config } from './common/config.js';
 import swaggerUi from 'swagger-ui-express';
 import { buildOpenApi } from './docs/openapi.js';
+import { requestContext } from './common/request-context.js';
 
 export interface AppDeps {
   /** Resolves when dependencies (DB) are reachable; rejects otherwise. */
@@ -32,6 +33,8 @@ export function createApp(deps: AppDeps = {}) {
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
   app.use(pinoHttp({ logger }));
+  // Request id + source for everything this request writes to the audit trail.
+  app.use(requestContext());
 
   const limiterDefaults = {
     standardHeaders: true,

@@ -23,6 +23,7 @@ import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
 import { employeeAccountRouter } from './modules/employees/employee-account.routes.js';
 import { meRouter } from './modules/self-service/me.routes.js';
+import { auditRouter } from './modules/audit/audit.routes.js';
 import { registersRouter } from './modules/registers/registers.routes.js';
 import { employeeScopeGuard } from './modules/employees/employee-scope.guard.js';
 import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
@@ -80,6 +81,8 @@ staffApi.use('/employees/:id', employeeScopeGuard(container.repos.employees));
 // Employment history first: `/employees/changes` must not be read as an employee id.
 staffApi.use('/employees', employmentHistoryRouter(container.employmentHistory));
 staffApi.use('/employees', employeeAccountRouter(container.employeeAccounts));
+// The audit trail of the selected company (read-only).
+staffApi.use('/audit', auditRouter(container.prisma));
 // Contracts / documents / offboardings across the company (scoped, paged).
 staffApi.use('/registers', registersRouter(container.prisma));
 // An employee's own data, for their self-service sign-in.

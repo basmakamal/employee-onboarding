@@ -165,6 +165,9 @@ describe('AuditLogRepository', () => {
         actorType: 'SYSTEM',
         employeeId: 'e1',
         metadata: { rule: 'form-10d-expire' },
+        // No request in progress: a system action is marked SYSTEM, with no request id.
+        source: 'SYSTEM',
+        requestId: null,
       },
     });
   });

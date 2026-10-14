@@ -45,6 +45,7 @@ const PAGES: Array<{ to: string; key: string; icon: string; permission?: string 
   { to: '/emails', key: 'nav.emailLog', icon: 'fluent:mail', permission: 'emails.view' },
   { to: '/assistant', key: 'nav.assistant', icon: 'fluent:bot-sparkle', permission: 'ai.use' },
   { to: '/employee-changes', key: 'nav.employeeChanges', icon: 'fluent:history' },
+  { to: '/audit', key: 'nav.audit', icon: 'fluent:shield-checkmark', permission: 'audit.read' },
   { to: '/contracts', key: 'nav.contracts', icon: 'fluent:document-text', permission: 'contracts.write' },
   { to: '/documents', key: 'nav.documents', icon: 'fluent:document-folder', permission: 'documents.read' },
   { to: '/offboardings', key: 'nav.offboardings', icon: 'fluent:clipboard-task', permission: 'offboarding.manage' },
