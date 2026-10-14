@@ -26,7 +26,8 @@
     "people": "People",
     "inbox": "Inbox",
     "newEmployee": "New employee",
-    "lists": "Lists"
+    "lists": "Lists",
+    "employeeChanges": "Transfers & promotions"
   },
   "users": {
     "assignments": "Assignments",
@@ -532,7 +533,7 @@
       "unitCode": "Use letters, digits, dash or underscore (up to 41), starting with a letter or digit — e.g. CS-CALL or 52.",
       "handle": "Start with a letter, then letters, digits or underscore — e.g. RIYADA.",
       "mismatch": "The two values do not match.",
-    "emailList": "Not a valid e-mail address: {value}"
+      "emailList": "Not a valid e-mail address: {value}"
     },
     "fields": {
       "firstName": "First name",
@@ -592,7 +593,7 @@
     },
     "codes": {
       "RATE_LIMITED": "Too many attempts. Please wait a few minutes and try again.",
-    "VALIDATION_ERROR": "Some fields are missing or invalid.",
+      "VALIDATION_ERROR": "Some fields are missing or invalid.",
       "BAD_REQUEST": "The request could not be read. Please reload the page and try again.",
       "NETWORK": "Cannot reach the server. Check your connection and try again.",
       "INTERNAL": "Something went wrong while saving your changes. Please try again or contact support.",
@@ -658,7 +659,10 @@
       "MAIL_INCOMPLETE": "Complete the mail server settings first.",
       "BAD_PROCESS": "That process is not valid here.",
       "AI_DISABLED": "The AI assistant is not configured.",
-      "AI_EMPTY": "The assistant returned no answer. Please try again."
+      "AI_EMPTY": "The assistant returned no answer. Please try again.",
+      "NO_CHANGE": "Nothing would change — choose a different branch, job title or manager.",
+      "NOT_SCHEDULED": "Only a change that has not taken effect yet can be cancelled.",
+      "BAD_DATE": "Enter a valid effective date."
     }
   },
   "login": {
@@ -697,8 +701,30 @@
     "delete": "Delete role",
     "deleteConfirm": "Delete the role \"{name}\"? Only possible while nobody holds it.",
     "levelHint": "Guides the assignment editor; it does not restrict where the role can be assigned.",
-    "levels": {"GLOBAL": "All companies", "COMPANY": "A company", "UNIT": "A branch / department"},
-    "areas": {"companies": "Companies", "users": "Staff & roles", "settings": "Settings", "org": "Organisation", "lists": "Lists", "employees": "Employees", "onboarding": "Onboarding", "contracts": "Contracts", "documents": "Documents", "requests": "Requests", "processes": "Processes", "assets": "Assets", "offboarding": "Offboarding", "settlement": "Settlement", "reports": "Reports", "emails": "E-mail", "ai": "AI"},
+    "levels": {
+      "GLOBAL": "All companies",
+      "COMPANY": "A company",
+      "UNIT": "A branch / department"
+    },
+    "areas": {
+      "companies": "Companies",
+      "users": "Staff & roles",
+      "settings": "Settings",
+      "org": "Organisation",
+      "lists": "Lists",
+      "employees": "Employees",
+      "onboarding": "Onboarding",
+      "contracts": "Contracts",
+      "documents": "Documents",
+      "requests": "Requests",
+      "processes": "Processes",
+      "assets": "Assets",
+      "offboarding": "Offboarding",
+      "settlement": "Settlement",
+      "reports": "Reports",
+      "emails": "E-mail",
+      "ai": "AI"
+    },
     "HR": "Human Resources",
     "INSURANCE": "Insurance",
     "IT": "IT",
@@ -1409,5 +1435,54 @@
     "empty": "No values yet.",
     "moveUp": "Move up",
     "moveDown": "Move down"
+  },
+  "history": {
+    "tab": "Career history",
+    "title": "Employment history",
+    "subtitle": "Where this person worked, in which role and under whom — by the date each change took effect.",
+    "add": "Transfer / promotion",
+    "effectiveDate": "Effective date",
+    "nowHint": "Today or earlier: the change applies immediately.",
+    "futureHint": "A future date: the change waits as \"Scheduled\" and takes effect automatically on that day.",
+    "keepCurrent": "Fill only what changes; leave the rest empty to keep it as it is.",
+    "newUnit": "New branch / department",
+    "newPosition": "New job title",
+    "newManager": "New direct manager",
+    "reason": "Reason",
+    "schedule": "Schedule",
+    "applyNow": "Apply",
+    "pickOne": "Choose a new branch / department, job title or manager.",
+    "cancel": "Cancel change",
+    "cancelConfirm": "Cancel the change scheduled for {date}? It will not take effect.",
+    "empty": "No history yet.",
+    "none": "—",
+    "removed": "(removed)",
+    "by": "By {name}",
+    "recorded": "Recorded {date}",
+    "failed": "Not applied: {reason}",
+    "change": "Change",
+    "statusCol": "Status",
+    "status": {
+      "SCHEDULED": "Scheduled",
+      "APPLIED": "Applied",
+      "CANCELLED": "Cancelled",
+      "FAILED": "Not applied"
+    },
+    "categories": {
+      "OPENING": "History started",
+      "ORG_UNIT": "Branch / department",
+      "POSITION": "Job title",
+      "MANAGER": "Direct manager",
+      "STATUS": "Status",
+      "EMPLOYMENT_TYPE": "Employment type",
+      "HIRE_DATE": "Hire date"
+    },
+    "pageTitle": "Transfers & promotions",
+    "pageSubtitle": "Changes of branch, job title and manager in {company} — upcoming and past.",
+    "viewUpcoming": "Upcoming",
+    "viewApplied": "Applied",
+    "viewOther": "Cancelled / not applied",
+    "pageEmpty": "Nothing here",
+    "pageEmptyHint": "Changes are entered from an employee's file → Career history → Transfer / promotion."
   }
 }

@@ -49,6 +49,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/', icon: 'fluent:home', key: 'nav.home' },
       { to: '/employees', icon: 'fluent:people', key: 'nav.employees' },
+      { to: '/employee-changes', icon: 'fluent:history', key: 'nav.employeeChanges' },
       { to: '/organisation', icon: 'fluent:people-community', key: 'nav.organisation', permission: 'org.read' },
     ],
   },

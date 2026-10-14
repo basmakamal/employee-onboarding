@@ -44,6 +44,7 @@ const PAGES: Array<{ to: string; key: string; icon: string; permission?: string 
   { to: '/reports', key: 'nav.reports', icon: 'fluent:data-trending', permission: 'reports.view' },
   { to: '/emails', key: 'nav.emailLog', icon: 'fluent:mail', permission: 'emails.view' },
   { to: '/assistant', key: 'nav.assistant', icon: 'fluent:bot-sparkle', permission: 'ai.use' },
+  { to: '/employee-changes', key: 'nav.employeeChanges', icon: 'fluent:history' },
   { to: '/organisation', key: 'nav.organisation', icon: 'fluent:people-community', permission: 'org.read' },
   { to: '/companies', key: 'nav.companies', icon: 'fluent:building-people', permission: 'companies.manage' },
   { to: '/users', key: 'nav.users', icon: 'fluent:person-key', permission: 'users.manage' },

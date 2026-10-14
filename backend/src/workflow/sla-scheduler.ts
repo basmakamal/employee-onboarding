@@ -90,6 +90,8 @@ export class SlaScheduler {
       calendar?: { getCalendar(companyId: string): Promise<{ weekendDays: number[] }> };
       /** The main company — it also watches records that have no company. */
       companies?: { mainCompanyId(): Promise<string | null> };
+      /** Other time-driven work run on every tick (e.g. scheduled employment changes). */
+      jobs?: Array<{ name: string; run(now: Date): Promise<unknown> }>;
       /** Named primary owners per process — they receive reminders in addition to the role group. */
       responsibility?: { get(processKey: string, scope?: { companyId?: string | null }): Promise<string[]> };
     },
@@ -99,6 +101,13 @@ export class SlaScheduler {
   }
 
   async tick(now: Date = new Date()): Promise<void> {
+    for (const job of this.deps.jobs ?? []) {
+      try {
+        await job.run(now);
+      } catch (err) {
+        logger.error({ err, job: job.name }, 'scheduled job failed');
+      }
+    }
     const rules = await this.deps.rules.listAllActive();
     const mainId = (await this.deps.companies?.mainCompanyId()) ?? null;
     // Each company's weekend — fetched once per company per tick.

@@ -221,6 +221,7 @@ model Company {
   emailTemplates EmailTemplate[]
   emailTriggers EmailTrigger[]
   settings      Setting[]
+  employmentEvents EmploymentEvent[]
   auditLogs     AuditLog[]
   notifications Notification[]
   assignments   UserAssignment[]
@@ -368,6 +369,8 @@ model User {
   notifications       Notification[]
   employeeRequests    EmployeeRequest[]
   groupMemberships    NotificationGroupMember[]
+  employmentEventsCreated  EmploymentEvent[] @relation("EmploymentEventCreatedBy")
+  employmentEventsApproved EmploymentEvent[] @relation("EmploymentEventApprovedBy")
 
   @@map("users")
 }
@@ -452,6 +455,7 @@ model Employee {
   linkTokens      LinkToken[]
   expiryDocuments EmployeeDocument[]
   requests        EmployeeRequest[]
+  employmentEvents EmploymentEvent[]
   auditLogs       AuditLog[]               @relation("EmployeeAudit")
 
   /// (status, statusChangedAt) serves both the status filters and the SLA
@@ -1042,4 +1046,44 @@ model ListValue {
   @@unique([companyId, list, code])
   @@index([companyId, list, active, sortOrder])
   @@map("list_values")
+}
+
+/// Employment history — WHAT changed in someone's employment and WHEN it took
+/// effect (a transfer, a promotion, a new manager, a status change). This is
+/// business history: the audit log records who pressed which button; this
+/// table answers "where did this person work on 1 March?". Rows are never
+/// overwritten: a future-dated change waits as SCHEDULED and is applied on
+/// its date; a change of mind is CANCELLED, not deleted.
+model EmploymentEvent {
+  id            String    @id @default(cuid())
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId    String
+  /// OPENING | ORG_UNIT | POSITION | MANAGER | STATUS | EMPLOYMENT_TYPE | HIRE_DATE
+  category      String
+  /// Snapshots ({ id?, code?, ar?, en? }) so the history still reads right after a unit is renamed or removed.
+  oldValue      Json?
+  newValue      Json?
+  /// The local (company time zone) date the change takes effect.
+  effectiveDate DateTime  @db.Date
+  /// SCHEDULED → APPLIED, or CANCELLED / FAILED.
+  status        String    @default("APPLIED")
+  appliedAt     DateTime?
+  /// The rows of one change (unit + title + manager together) share a batch id.
+  batchId       String
+  reason        String?   @db.Text
+  /// Why a scheduled change could not be applied (unit closed, title inactive…).
+  failReason    String?
+  createdBy     User?     @relation("EmploymentEventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById   String?
+  approvedBy    User?     @relation("EmploymentEventApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedById  String?
+  approvedAt    DateTime?
+  recordedAt    DateTime  @default(now())
+
+  @@index([companyId, employeeId, effectiveDate])
+  @@index([companyId, status, effectiveDate])
+  @@index([batchId])
+  @@map("employment_events")
 }

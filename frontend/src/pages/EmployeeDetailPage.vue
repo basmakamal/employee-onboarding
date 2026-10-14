@@ -11,6 +11,7 @@ import FormErrorAlert from '../components/FormErrorAlert.vue';
 import { rules } from '../validation/rules';
 import ProcessCard from '../components/ProcessCard.vue';
 import StatusChip from '../components/StatusChip.vue';
+import EmploymentHistory from '../components/EmploymentHistory.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 
@@ -1597,6 +1598,9 @@ onMounted(load);
       <v-tab value="timeline" prepend-icon="history">
         {{ $t('profile.timelineTab') }}
       </v-tab>
+      <v-tab value="employment" prepend-icon="arrow-left-right">
+        {{ $t('history.tab') }}
+      </v-tab>
     </v-tabs>
 
     <v-window v-model="tab" :touch="false">
@@ -2199,6 +2203,11 @@ onMounted(load);
         </v-card>
       </v-col>
     </v-row>
+      </v-window-item>
+
+      <!-- Employment history: dated transfers, promotions, manager and status changes -->
+      <v-window-item value="employment">
+        <EmploymentHistory v-if="tab === 'employment'" :employee-id="id" :can-edit="auth.can('employees.write')" @changed="load" />
       </v-window-item>
 
       <!-- Timeline tab (السجل الزمني) -->
