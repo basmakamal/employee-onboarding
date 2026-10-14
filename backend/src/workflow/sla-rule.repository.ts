@@ -72,10 +72,10 @@ export class SlaRuleRepository {
 export class HolidayRepository {
   constructor(private readonly db: Db) {}
 
-  /** A company's holidays inside a range — input to working-day math. */
+  /** A company's company-wide holidays inside a range — input to the automation's working-day math. */
   listBetween(companyId: string, from: Date, to: Date) {
     return this.db.holiday.findMany({
-      where: { companyId, date: { gte: from, lte: to } },
+      where: { companyId, orgUnitId: null, date: { gte: from, lte: to } },
       orderBy: { date: 'asc' },
     });
   }
@@ -84,8 +84,9 @@ export class HolidayRepository {
     return this.db.holiday.findMany({ where: { companyId }, orderBy: { date: 'asc' } });
   }
 
-  add(companyId: string, date: Date, name: string) {
-    return this.db.holiday.create({ data: { companyId, date, name } });
+  /** A holiday for the whole company, or (with `orgUnitId`) for one branch and the units under it. */
+  add(companyId: string, date: Date, name: string, orgUnitId?: string | null) {
+    return this.db.holiday.create({ data: { companyId, date, name, orgUnitId: orgUnitId ?? null } });
   }
 
   /** Remove one of the company's holidays; another company's is a 404. */

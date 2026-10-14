@@ -62,6 +62,14 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
+    key: 'nav.groupWorkforce',
+    items: [
+      { to: '/workforce/schedule', icon: 'fluent:calendar', key: 'nav.teamSchedule', permission: ['schedule.read', 'schedule.manage'] },
+      { to: '/workforce/shifts', icon: 'fluent:clock-alarm', key: 'nav.shifts', permission: ['schedule.read', 'schedule.manage'] },
+      { to: '/calendar', icon: 'fluent:calendar', key: 'nav.calendar', permission: 'settings.manage' },
+    ],
+  },
+  {
     key: 'nav.groupOrganisation',
     items: [{ to: '/organisation', icon: 'fluent:people-community', key: 'nav.organisation', permission: 'org.read' }],
   },
@@ -83,7 +91,6 @@ const GROUPS: NavGroup[] = [
       { to: '/lists', icon: 'fluent:text-bullet-list-square', key: 'nav.lists', permission: 'lists.manage' },
       { to: '/automation', icon: 'fluent:clock-alarm', key: 'nav.automation', permission: 'settings.manage' },
       { to: '/email-templates', icon: 'fluent:mail-multiple', key: 'nav.emailTemplates', permission: 'settings.manage' },
-      { to: '/calendar', icon: 'fluent:calendar', key: 'nav.calendar', permission: 'settings.manage' },
       { to: '/settings', icon: 'fluent:settings', key: 'nav.settings', permission: 'settings.manage' },
       { to: '/audit', icon: 'fluent:shield-checkmark', key: 'nav.audit', permission: 'audit.read' },
       { to: '/system-health', icon: 'fluent:toolbox', key: 'nav.health', permission: 'settings.manage' },

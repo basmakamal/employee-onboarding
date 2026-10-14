@@ -17,6 +17,8 @@ import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
 const holidaySchema = z.object({
   date: z.coerce.date(),
   name: z.string().min(1),
+  /** Optional: only this branch / unit (and the units under it) is off. */
+  orgUnitId: z.string().min(1).nullable().optional(),
 });
 
 const testSchema = z.object({ to: z.string().email() });
@@ -107,6 +109,8 @@ export function settingsRouter(
   holidays: HolidayRepository,
   responsibility: ResponsibilityService,
   groups?: NotificationGroupRepository,
+  /** Checks a branch-specific holiday's unit belongs to the company. */
+  orgUnits: { exists(companyId: string, id: string): Promise<boolean> } = { exists: async () => false },
 ): Router {
   const router = Router();
   router.use(requirePermission('settings.manage'));
@@ -209,8 +213,12 @@ export function settingsRouter(
     '/holidays',
     validate(holidaySchema),
     asyncHandler(async (req, res) => {
-      const { date, name } = req.body as z.infer<typeof holidaySchema>;
-      res.status(201).json(await holidays.add(contextOf(req).companyId, date, name));
+      const { date, name, orgUnitId } = req.body as z.infer<typeof holidaySchema>;
+      const { companyId } = contextOf(req);
+      if (orgUnitId && !(await orgUnits.exists(companyId, orgUnitId))) {
+        throw new GuardFailedError('BAD_ORG_UNIT', 'pick a branch or department of this company', 'orgUnitId');
+      }
+      res.status(201).json(await holidays.add(companyId, date, name, orgUnitId ?? null));
     }),
   );
 

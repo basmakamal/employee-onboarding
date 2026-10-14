@@ -24,6 +24,7 @@ import { aiRouter } from './ai/ai.routes.js';
 import { employeeAccountRouter } from './modules/employees/employee-account.routes.js';
 import { meRouter } from './modules/self-service/me.routes.js';
 import { auditRouter } from './modules/audit/audit.routes.js';
+import { employeeScheduleRouter, myScheduleHandler, workforceRouter } from './modules/workforce/workforce.routes.js';
 import { registersRouter } from './modules/registers/registers.routes.js';
 import { employeeScopeGuard } from './modules/employees/employee-scope.guard.js';
 import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
@@ -89,15 +90,22 @@ staffApi.use(
         status: true, hireDate: true, orgUnitId: true, positionId: true, managerId: true, nationalId: true, iban: true,
         contract: { select: { status: true } },
         account: { select: { active: true } },
+        companyId: true,
       },
-    }),
+    }).then(async (e) =>
+      e ? { ...e, hasSchedule: e.companyId ? await container.scheduleService.hasScheduleToday(e.companyId, id) : false } : null,
+    ),
   ),
 );
 // The audit trail of the selected company (read-only).
 staffApi.use('/audit', auditRouter(container.prisma));
 // Contracts / documents / offboardings across the company (scoped, paged).
 staffApi.use('/registers', registersRouter(container.prisma));
+// Work schedules: shifts, patterns, the team schedule; one person's schedule under /employees/:id.
+staffApi.use('/workforce', workforceRouter(container.scheduleService, container.prisma));
+staffApi.use('/employees', employeeScheduleRouter(container.scheduleService));
 // An employee's own data, for their self-service sign-in.
+staffApi.get('/me/schedule', ...myScheduleHandler(container.scheduleService));
 staffApi.use('/me', meRouter(container.prisma));
 staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
@@ -112,6 +120,10 @@ staffApi.use(
     container.repos.holidays,
     container.responsibilityService,
     container.repos.notificationGroups,
+    {
+      exists: async (companyId: string, id: string) =>
+        !!(await container.prisma.orgUnit.findFirst({ where: { id, companyId }, select: { id: true } })),
+    },
   ),
 );
 staffApi.use('/users', usersRouter(container.repos.users, container.notifications, config.APP_URL));

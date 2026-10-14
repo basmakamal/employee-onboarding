@@ -12,6 +12,7 @@ import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 import { errorText } from '../validation/errors';
 import EmploymentHistory from '../components/EmploymentHistory.vue';
+import EmployeeSchedule from '../components/EmployeeSchedule.vue';
 
 interface Profile {
   id: string;
@@ -117,6 +118,7 @@ async function download(doc: Docs['onboarding'][number]) {
 
     <v-tabs v-model="tab" color="primary" class="mb-4">
       <v-tab value="overview" prepend-icon="user">{{ $t('mySpace.overview') }}</v-tab>
+      <v-tab value="schedule" prepend-icon="calendar">{{ $t('mySpace.schedule') }}</v-tab>
       <v-tab value="history" prepend-icon="arrow-left-right">{{ $t('history.tab') }}</v-tab>
       <v-tab value="documents" prepend-icon="file-text">{{ $t('mySpace.documents') }}</v-tab>
     </v-tabs>
@@ -135,6 +137,10 @@ async function download(doc: Docs['onboarding'][number]) {
             <p class="text-caption text-medium-emphasis mt-4 mb-0">{{ $t('mySpace.correctHint') }}</p>
           </v-card-text>
         </v-card>
+      </v-window-item>
+
+      <v-window-item value="schedule">
+        <EmployeeSchedule v-if="profile && tab === 'schedule'" :employee-id="profile.id" :can-edit="false" self />
       </v-window-item>
 
       <v-window-item value="history">

@@ -9,11 +9,14 @@ import { useActiveCompanyName } from '../composables/useActiveCompany';
 import FormErrorAlert from '../components/FormErrorAlert.vue';
 import { useForm } from '../composables/useForm';
 import { rules } from '../validation/rules';
+import { useOrgOptions } from '../composables/useOrgOptions';
 
 interface HolidayRow {
   id: string;
   date: string;
   name: string;
+  /** Set when only one branch (and the units under it) is off. */
+  orgUnitId: string | null;
 }
 
 /** JS getUTCDay() numbering: 0=Sun … 5=Fri, 6=Sat. */
@@ -27,7 +30,10 @@ const snackbar = ref({ show: false, text: '', color: 'success' });
 
 const weekendDays = ref<number[]>([5, 6]);
 const holidays = ref<HolidayRow[]>([]);
-const newHoliday = ref({ date: '', name: '' });
+const newHoliday = ref({ date: '', name: '', orgUnitId: null as string | null });
+const org = useOrgOptions();
+void org.load();
+const unitName = (id: string | null) => (id ? (org.unitItems.value.find((u) => u.value === id)?.title.replace(/^(— )+/, '') ?? '') : '');
 const holidayForm = useForm();
 const calendarBusy = ref(false);
 const viewYear = ref(new Date().getFullYear());
@@ -69,8 +75,9 @@ function addHoliday() {
     await api.post('/api/settings/holidays', {
       date: newHoliday.value.date,
       name: newHoliday.value.name.trim(),
+      ...(newHoliday.value.orgUnitId ? { orgUnitId: newHoliday.value.orgUnitId } : {}),
     });
-    newHoliday.value = { date: '', name: '' };
+    newHoliday.value = { date: '', name: '', orgUnitId: null };
     holidayForm.reset();
     notify(t('common.saved'));
     await load();
@@ -141,6 +148,7 @@ onMounted(load);
             <v-list-item-title>{{ holiday.name }}</v-list-item-title>
             <v-list-item-subtitle>
               {{ new Date(holiday.date).toLocaleDateString() }}
+              <v-chip v-if="holiday.orgUnitId" size="x-small" variant="tonal" color="info" class="ms-1">{{ unitName(holiday.orgUnitId) || $t('calendar.oneBranch') }}</v-chip>
             </v-list-item-subtitle>
             <template #append>
               <v-btn
@@ -176,6 +184,18 @@ onMounted(load);
             :rules="[rules.required, rules.maxLength(120)]"
             :error-messages="holidayForm.errorsFor('name')"
             style="max-width: 280px"
+          />
+          <v-select
+            v-model="newHoliday.orgUnitId"
+            :items="org.unitItems.value"
+            :label="$t('calendar.branch')"
+            :placeholder="$t('calendar.allBranches')"
+            persistent-placeholder
+            density="compact"
+            hide-details="auto"
+            clearable
+            :error-messages="holidayForm.errorsFor('orgUnitId')"
+            style="max-width: 260px"
           />
           <v-btn
             color="primary"

@@ -37,7 +37,10 @@
     "documents": "Documents & expiry",
     "offboardings": "Offboarding",
     "audit": "Audit trail",
-    "health": "System health"
+    "health": "System health",
+    "groupWorkforce": "Workforce",
+    "teamSchedule": "Team schedule",
+    "shifts": "Shifts & patterns"
   },
   "users": {
     "assignments": "Assignments",
@@ -693,7 +696,20 @@
       "BAD_DATE": "Enter a valid effective date.",
       "ACCOUNT_NOT_ACTIVE": "Your access opens on your first working day and closes when your employment ends. Please contact HR.",
       "ACCOUNT_EXISTS": "This employee already has a login.",
-      "EMAIL_TAKEN": "Another account already signs in with this e-mail — use a different one."
+      "EMAIL_TAKEN": "Another account already signs in with this e-mail — use a different one.",
+      "SCHEDULE_OVERLAP": "Another schedule already covers these dates.",
+      "USE_TEMPORARY": "For a limited period inside the current schedule, add a temporary schedule instead.",
+      "TEMPORARY_NEEDS_END": "A temporary schedule needs an end date.",
+      "SCHEDULE_STARTED": "This schedule has already started — end it instead.",
+      "SHIFTS_OVERLAP": "Two shifts overlap on the same day of the pattern.",
+      "SHIFT_IN_USE": "A pattern still uses this shift — deactivate it instead.",
+      "PATTERN_IN_USE": "People are still assigned to this pattern — deactivate it instead.",
+      "BREAK_TOO_LONG": "The break must be shorter than the shift.",
+      "ZERO_SHIFT": "The shift must end at a different time than it starts.",
+      "BAD_CYCLE": "A rotation repeats every 2 to 56 days.",
+      "EMPTY_PATTERN": "Put at least one shift in the pattern.",
+      "END_BEFORE_START": "The end date is before the start date.",
+      "BAD_PATTERN": "Pick an active pattern."
     }
   },
   "login": {
@@ -755,7 +771,8 @@
       "reports": "Reports",
       "emails": "E-mail",
       "ai": "AI",
-      "audit": "Audit"
+      "audit": "Audit",
+      "schedule": "Workforce"
     },
     "HR": "Human Resources",
     "INSURANCE": "Insurance",
@@ -896,7 +913,10 @@
       "4": "Thursday",
       "5": "Friday",
       "6": "Saturday"
-    }
+    },
+    "branch": "Branch (optional)",
+    "allBranches": "Whole company",
+    "oneBranch": "One branch"
   },
   "sla": {
     "title": "Automation rules",
@@ -1553,7 +1573,8 @@
     "expired": "Expired",
     "daysLeft": "{n} days left",
     "download": "Download",
-    "downloadFailed": "The file could not be downloaded. Please try again."
+    "downloadFailed": "The file could not be downloaded. Please try again.",
+    "schedule": "My schedule"
   },
   "registers": {
     "contractsTitle": "Contracts",
@@ -1675,5 +1696,91 @@
       "linkTokens": "Signed links"
     },
     "uptime": "API running for {uptime}"
+  },
+  "shifts": {
+    "title": "Shifts & patterns",
+    "subtitle": "The working hours of {company}: reusable shifts, and the weekly or rotating patterns people are put on.",
+    "shiftsTab": "Shifts",
+    "patternsTab": "Patterns",
+    "newShift": "New shift",
+    "editShift": "Edit shift",
+    "newPattern": "New pattern",
+    "editPattern": "Edit pattern",
+    "shift": "Shift",
+    "hours": "Hours",
+    "breakCol": "Break",
+    "graceCol": "Grace",
+    "min": "min",
+    "overnight": "overnight",
+    "workTime": "{h} h of work",
+    "requiredShort": "{h} h within the window",
+    "code": "Code",
+    "kinds": {
+      "FIXED": "Fixed hours",
+      "FLEXIBLE": "Flexible"
+    },
+    "fixedHint": "Starts and ends at set times.",
+    "flexibleHint": "A window during which the required time must be worked.",
+    "start": "Starts",
+    "end": "Ends",
+    "windowStart": "Window opens",
+    "windowEnd": "Window closes",
+    "overnightHint": "Ends the next morning (overnight shift).",
+    "requiredMinutes": "Minutes to work",
+    "breakMinutes": "Unpaid break (minutes)",
+    "graceMinutes": "Lateness grace (minutes)",
+    "color": "Colour",
+    "noShifts": "No shifts yet",
+    "noShiftsHint": "Start with your usual working hours, e.g. 08:00–16:00.",
+    "deleteShift": "Delete shift",
+    "deleteShiftConfirm": "Delete the shift \"{name}\"?",
+    "pattern": "Pattern",
+    "cycle": "Repeats",
+    "perWeek": "Hours per week",
+    "people": "Assignments",
+    "weekly": "Weekly",
+    "rotation": "Rotation",
+    "rotationOf": "every {n} days",
+    "cycleDays": "Days in the cycle",
+    "dayN": "Day {n}",
+    "weeklyHint": "The same shifts each week — e.g. Sunday to Thursday mornings.",
+    "rotationHint": "A cycle that repeats from each person's start date — e.g. 2 nights, 2 off.",
+    "restDay": "Rest day",
+    "restShort": "Off",
+    "noPatterns": "No patterns yet",
+    "noPatternsHint": "Create shifts first, then a pattern that places them on days.",
+    "deletePattern": "Delete pattern",
+    "deletePatternConfirm": "Delete the pattern \"{name}\"?"
+  },
+  "schedule": {
+    "tab": "Schedule",
+    "title": "Work schedule",
+    "subtitle": "The shifts of the next two weeks, day by day — holidays included.",
+    "earlier": "Earlier",
+    "later": "Later",
+    "today": "Today",
+    "assign": "Assign schedule",
+    "history": "Schedules over time",
+    "none": "No schedule assigned yet.",
+    "temporary": "Temporary",
+    "inForce": "In force",
+    "onwards": "until further notice",
+    "remove": "Remove",
+    "removeConfirm": "Remove this schedule? It has not started yet.",
+    "end": "End",
+    "lastDay": "Last day on this schedule",
+    "pattern": "Pattern",
+    "from": "From",
+    "to": "Until",
+    "temporaryHint": "Covers a limited period (a covering week, Ramadan hours…) and overrides the regular schedule on those days.",
+    "openEndedHint": "Leave empty to keep it until further notice.",
+    "replacesHint": "A new regular schedule ends the current one the day before it starts.",
+    "noPatterns": "There is no active pattern yet — create one under Workforce → Shifts & patterns.",
+    "teamTitle": "Team schedule",
+    "teamSubtitle": "Who works what in {company}, week by week.",
+    "thisWeek": "This week",
+    "oneWeek": "1 week",
+    "twoWeeks": "2 weeks",
+    "teamEmpty": "Nobody to show for this filter."
   }
 }
