@@ -216,6 +216,7 @@ const app = createApp({
   },
   authRouter: authRouter(container.authService),
   staffRouter: staffApi,
+  ...(config.API_DOCS ? { docs: { title: 'HR System', version: process.env['npm_package_version'] ?? '1.0.0' } } : {}),
   linkRouter: linkRouter(
     container.onboardingService,
     container.assetService,

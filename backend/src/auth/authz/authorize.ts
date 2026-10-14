@@ -19,6 +19,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { CompanyRequiredError, ForbiddenError } from '../../workflow/errors.js';
 import { SYSTEM_ROLES, type Permission } from './permissions.js';
 import type { Scope } from './scope.js';
+import { documented } from '../../docs/route-doc.js';
 
 const LEGACY_BUNDLES = new Map(SYSTEM_ROLES.map((r) => [r.code, new Set<string>(r.permissions)]));
 
@@ -39,13 +40,14 @@ export function can(actor: Actor | undefined, ...permissions: Permission[]): boo
 
 /** Route gate — run AFTER requireAuth. 403 with a stable code. */
 export function requirePermission(...permissions: Permission[]): RequestHandler {
-  return (req, _res, next) => {
+  const handler: RequestHandler = (req, _res, next) => {
     if (!can(req.actor, ...permissions)) {
       next(new ForbiddenError(`requires permission: ${permissions.join(' or ')}`));
       return;
     }
     next();
   };
+  return documented(handler, { permissions });
 }
 
 /**
@@ -133,13 +135,14 @@ export function auditScope(scope: EmployeeScope | undefined): Prisma.AuditLogWhe
 
 /** Route gate for company-owned data: no selected company → refused. */
 export function requireCompany(): RequestHandler {
-  return (req, _res, next) => {
+  const handler: RequestHandler = (req, _res, next) => {
     if (!req.actor?.companyId) {
       next(new CompanyRequiredError());
       return;
     }
     next();
   };
+  return documented(handler, { company: true });
 }
 
 /** The `where` fragment shape every scoped repository accepts. */

@@ -6,6 +6,8 @@ import { pinoHttp } from 'pino-http';
 import { logger } from './common/logger.js';
 import { errorHandler } from './common/http.js';
 import { config } from './common/config.js';
+import swaggerUi from 'swagger-ui-express';
+import { buildOpenApi } from './docs/openapi.js';
 
 export interface AppDeps {
   /** Resolves when dependencies (DB) are reachable; rejects otherwise. */
@@ -18,6 +20,8 @@ export interface AppDeps {
   linkRouter?: Router;
   /** Read-only lookups a signed-link page needs before any sign-in (dropdown lists). */
   publicRouter?: Router;
+  /** Serve Swagger UI at /api/docs, generated from the mounted routes. */
+  docs?: { title: string; version: string };
 }
 
 export function createApp(deps: AppDeps = {}) {
@@ -63,6 +67,25 @@ export function createApp(deps: AppDeps = {}) {
         res.status(503).json({ status: 'not-ready', checks: { db: 'down' } });
       });
   });
+
+  // API docs — mounted before the staff router (which would demand a token).
+  // The spec is built on first request, when every route is mounted.
+  if (deps.docs) {
+    const docs = deps.docs;
+    let spec: ReturnType<typeof buildOpenApi> | null = null;
+    app.get('/api/docs/openapi.json', (_req, res) => {
+      spec ??= buildOpenApi(app, docs);
+      res.json(spec);
+    });
+    app.use(
+      '/api/docs',
+      swaggerUi.serve,
+      swaggerUi.setup(undefined, {
+        customSiteTitle: `${docs.title} — API`,
+        swaggerOptions: { url: '/api/docs/openapi.json', persistAuthorization: true, docExpansion: 'none', filter: true },
+      }),
+    );
+  }
 
   if (deps.authRouter) app.use('/api/auth', deps.authRouter);
   if (deps.linkRouter) app.use('/api/link', deps.linkRouter);

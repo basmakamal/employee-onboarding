@@ -41,6 +41,14 @@ const envSchema = z
      * service is a PDPL decision, so it must be opted OUT of explicitly
      * with AI_REDACT_PII=false.
      */
+    /**
+     * Swagger UI at /api/docs (and the spec at /api/docs/openapi.json).
+     * On by default; set API_DOCS=false to hide the API map on a server.
+     */
+    API_DOCS: z
+      .string()
+      .default('true')
+      .transform((v) => v !== 'false'),
     AI_REDACT_PII: z
       .string()
       .default('true')

@@ -3,6 +3,7 @@ import type { AuthService } from './auth.service.js';
 import type { Actor } from '../workflow/engine.js';
 import { UnauthorizedError } from '../workflow/errors.js';
 import { asyncHandler } from '../common/http.js';
+import { documented } from '../docs/route-doc.js';
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -17,7 +18,7 @@ declare module 'express-serve-static-core' {
  * the user's assignments. Route gates live in auth/authz/authorize.ts.
  */
 export function requireAuth(auth: AuthService): RequestHandler {
-  return asyncHandler(async (req, _res, next) => {
+  return documented(asyncHandler(async (req, _res, next) => {
     const header = req.header('authorization') ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
     if (!token) throw new UnauthorizedError();
@@ -33,5 +34,5 @@ export function requireAuth(auth: AuthService): RequestHandler {
       scope: user.scope,
     };
     next();
-  });
+  }), { auth: true });
 }
