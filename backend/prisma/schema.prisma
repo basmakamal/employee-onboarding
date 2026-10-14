@@ -202,6 +202,8 @@ model Company {
   nameAr    String
   nameEn    String
   active    Boolean  @default(true)
+  /// IANA time zone (e.g. Asia/Riyadh) — which local day a punch, a leave day or a deadline falls on.
+  timezone  String   @default("Asia/Riyadh")
   /// The company manager (a staff account). Setting it maintains a
   /// COMPANY_MANAGER assignment, so the person's login sees this company.
   manager   User?    @relation("CompanyManager", fields: [managerId], references: [id], onDelete: SetNull)

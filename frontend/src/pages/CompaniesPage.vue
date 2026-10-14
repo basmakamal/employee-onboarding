@@ -24,6 +24,7 @@ interface CompanyRow {
   nameEn: string;
   active: boolean;
   managerId: string | null;
+  timezone: string;
   manager: { id: string; name: string; email: string } | null;
   createdAt: string;
   _count: { employees: number; orgUnits: number; assignments: number };
@@ -40,6 +41,13 @@ const notify = (text: string, color = 'success') => (snackbar.value = { show: tr
 const name = (c: CompanyRow) => (locale.value.startsWith('ar') ? c.nameAr : c.nameEn);
 
 const staff = ref<StaffUser[]>([]);
+/** Every IANA zone the browser knows; the common ones for the region first. */
+const TIME_ZONES = (() => {
+  const first = ['Asia/Riyadh', 'Asia/Dubai', 'Asia/Kuwait', 'Asia/Bahrain', 'Asia/Qatar', 'Africa/Cairo', 'Asia/Amman', 'Europe/London', 'UTC'];
+  const all = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.('timeZone') ?? [];
+  return [...first, ...all.filter((z) => !first.includes(z))];
+})();
+
 const staffItems = computed(() => [
   { title: t('org.noManager'), value: null },
   ...staff.value.filter((s) => s.active).map((s) => ({ title: s.name, value: s.id, props: { subtitle: s.email } })),
@@ -71,27 +79,27 @@ async function load() {
   }
 }
 
-const dialog = ref<{ show: boolean; id: string | null; code: string; nameAr: string; nameEn: string; active: boolean; managerId: string | null }>({
-  show: false, id: null, code: '', nameAr: '', nameEn: '', active: true, managerId: null,
+const dialog = ref<{ show: boolean; id: string | null; code: string; nameAr: string; nameEn: string; active: boolean; managerId: string | null; timezone: string }>({
+  show: false, id: null, code: '', nameAr: '', nameEn: '', active: true, managerId: null, timezone: 'Asia/Riyadh',
 });
 const form = useForm();
 
 function openCreate() {
   form.reset();
-  dialog.value = { show: true, id: null, code: '', nameAr: '', nameEn: '', active: true, managerId: null };
+  dialog.value = { show: true, id: null, code: '', nameAr: '', nameEn: '', active: true, managerId: null, timezone: 'Asia/Riyadh' };
 }
 function openEdit(c: CompanyRow) {
   form.reset();
-  dialog.value = { show: true, id: c.id, code: c.code, nameAr: c.nameAr, nameEn: c.nameEn, active: c.active, managerId: c.managerId };
+  dialog.value = { show: true, id: c.id, code: c.code, nameAr: c.nameAr, nameEn: c.nameEn, active: c.active, managerId: c.managerId, timezone: c.timezone ?? 'Asia/Riyadh' };
 }
 
 function save() {
   return form.submit(async () => {
     const d = dialog.value;
     if (d.id) {
-      await api.put(`/api/companies/${d.id}`, { nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim(), active: d.active, managerId: d.managerId });
+      await api.put(`/api/companies/${d.id}`, { nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim(), active: d.active, managerId: d.managerId, timezone: d.timezone });
     } else {
-      await api.post('/api/companies', { code: d.code.trim().toUpperCase(), nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim(), managerId: d.managerId });
+      await api.post('/api/companies', { code: d.code.trim().toUpperCase(), nameAr: d.nameAr.trim(), nameEn: d.nameEn.trim(), managerId: d.managerId, timezone: d.timezone });
     }
     dialog.value.show = false;
     notify(t('common.saved'));
@@ -182,6 +190,17 @@ onMounted(load);
           <v-text-field v-model="dialog.nameAr" :label="$t('company.nameAr') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="form.errorsFor('nameAr')" dir="rtl" />
           <v-text-field v-model="dialog.nameEn" :label="$t('company.nameEn') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="form.errorsFor('nameEn')" dir="ltr" />
           <v-select v-model="dialog.managerId" :items="staffItems" :label="$t('company.manager')" :hint="$t('company.managerHint')" persistent-hint :error-messages="form.errorsFor('managerId')" class="mb-2" />
+          <v-autocomplete
+            v-model="dialog.timezone"
+            :items="TIME_ZONES"
+            :label="$t('company.timezone') + ' *'"
+            :hint="$t('company.timezoneHint')"
+            persistent-hint
+            :rules="[rules.required]"
+            :error-messages="form.errorsFor('timezone')"
+            dir="ltr"
+            class="mb-2"
+          />
           <v-switch v-if="dialog.id" v-model="dialog.active" :label="$t('company.active')" color="success" hide-details />
           </v-form>
         </v-card-text>

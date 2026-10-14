@@ -59,7 +59,7 @@ describe('NotificationService.notifyTeam', () => {
     );
 
     expect(groups.membersFor).toHaveBeenCalledWith('EMPLOYEE', 'FORM_RECEIVED');
-    expect(users.listActiveByRole).toHaveBeenCalledWith('HR');
+    expect(users.listActiveByRole).toHaveBeenCalledWith('HR', null);
     // Two HR users × (IN_APP + EMAIL).
     expect(rows.filter((r) => r.channel === 'EMAIL').map((r) => r.recipientEmail)).toEqual([
       'hr1@example.com',
@@ -113,7 +113,7 @@ describe('NotificationService.notifyTeam', () => {
       { entity: 'ASSET_FORM', entityId: 'f1' },
     );
 
-    expect(users.listActiveByRole).toHaveBeenCalledWith('IT');
+    expect(users.listActiveByRole).toHaveBeenCalledWith('IT', null);
     expect(users.listActiveByIds).toHaveBeenCalledWith(['u-x']);
   });
 });

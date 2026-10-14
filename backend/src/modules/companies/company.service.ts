@@ -12,6 +12,8 @@ export interface CompanyInput {
   active?: boolean | undefined;
   /** The company manager (staff account) — kept in step with a COMPANY_MANAGER assignment. */
   managerId?: string | null | undefined;
+  /** IANA time zone; Asia/Riyadh when not given. */
+  timezone?: string | undefined;
 }
 
 const COMPANY_SELECT = {
@@ -20,6 +22,7 @@ const COMPANY_SELECT = {
   nameAr: true,
   nameEn: true,
   active: true,
+  timezone: true,
   managerId: true,
   manager: { select: { id: true, name: true, email: true } },
   createdAt: true,
@@ -75,6 +78,7 @@ export class CompanyService {
         nameEn: input.nameEn.trim(),
         active: input.active ?? true,
         managerId: input.managerId ?? null,
+        ...(input.timezone ? { timezone: input.timezone } : {}),
       },
       select: COMPANY_SELECT,
     });
@@ -103,6 +107,7 @@ export class CompanyService {
       nameEn?: string | undefined;
       active?: boolean | undefined;
       managerId?: string | null | undefined;
+      timezone?: string | undefined;
     },
     actor: Actor,
   ) {
@@ -116,6 +121,7 @@ export class CompanyService {
         ...(changes.nameEn !== undefined ? { nameEn: changes.nameEn.trim() } : {}),
         ...(changes.active !== undefined ? { active: changes.active } : {}),
         ...(changes.managerId !== undefined ? { managerId: changes.managerId ?? null } : {}),
+        ...(changes.timezone !== undefined ? { timezone: changes.timezone } : {}),
       },
       select: COMPANY_SELECT,
     });

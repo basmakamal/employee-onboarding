@@ -46,9 +46,28 @@ export class UserRepository {
     return this.db.user.update({ where: { id }, data: { activeCompanyId: companyId }, include: WITH_ASSIGNMENTS });
   }
 
-  /** Active staff of a role — notification fan-out targets. */
-  listActiveByRole(role: Role) {
-    return this.db.user.findMany({ where: { role, active: true } });
+  /**
+   * Active staff of a role — notification fan-out targets. With a company,
+   * only people who can work in that company: a global assignment, an
+   * assignment in that company, or (legacy) no assignment rows at all.
+   * Staff of another company never hear about this company's records.
+   */
+  listActiveByRole(role: Role, companyId?: string | null) {
+    return this.db.user.findMany({
+      where: {
+        role,
+        active: true,
+        ...(companyId
+          ? {
+              OR: [
+                { assignments: { none: {} } },
+                { assignments: { some: { companyId: null } } },
+                { assignments: { some: { companyId } } },
+              ],
+            }
+          : {}),
+      },
+    });
   }
 
   /** Named primary owners of a process — only the ones still active. */
