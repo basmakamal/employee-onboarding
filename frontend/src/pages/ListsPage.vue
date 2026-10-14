@@ -15,9 +15,19 @@ import { api } from '../api/client';
 import { useListsStore, type ListDto, type ListValueDto } from '../stores/lists';
 import { useConfirm } from '../composables/useConfirm';
 import PageHeader from '../components/PageHeader.vue';
+import { useAuthStore } from '../stores/auth';
+import { usePreferencesStore } from '../stores/preferences';
 
 const { t } = useI18n();
 const lists = useListsStore();
+const auth = useAuthStore();
+const prefs = usePreferencesStore();
+/** Each company has its own lists — the header says whose these are. */
+const companyName = computed(() => {
+  const c = auth.user?.activeCompany;
+  if (!c) return '';
+  return prefs.locale === 'ar' ? c.nameAr : c.nameEn;
+});
 const confirm = useConfirm();
 
 const selectedKey = ref('');
@@ -161,7 +171,7 @@ async function remove(row: ListValueDto) {
 
 <template>
   <v-container fluid class="pa-4 pa-md-6">
-    <PageHeader :title="$t('lists.title')" :subtitle="$t('lists.subtitle')" />
+    <PageHeader :title="$t('lists.title')" :subtitle="$t('lists.subtitleCompany', { company: companyName })" />
 
     <v-row>
       <!-- Which list -->

@@ -191,7 +191,7 @@ const maxBirthDate = computed(() => {
 
 onMounted(async () => {
   // The dropdowns first, so a returning value can be matched against them.
-  await lists.loadPublic().catch(() => undefined);
+  await lists.loadPublic(token).catch(() => undefined);
   try {
     const data = await api.get<FormContext>(`/api/link/${token}`);
     if (data.purpose !== 'DATA_FORM') throw new Error();

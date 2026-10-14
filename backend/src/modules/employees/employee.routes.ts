@@ -17,7 +17,7 @@ import {
   verifyUploadedFiles,
 } from '../../common/storage.js';
 import { GuardFailedError } from '../../workflow/errors.js';
-import { requirePermission } from '../../auth/authz/authorize.js';
+import { contextOf, requirePermission } from '../../auth/authz/authorize.js';
 import type { EmployeeService } from './employee.service.js';
 import type { OnboardingService } from './onboarding.service.js';
 import type { Actor } from '../../workflow/engine.js';
@@ -210,8 +210,8 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
    *  Registered BEFORE /:id so "options" is never parsed as an id. */
   router.get(
     '/options',
-    asyncHandler(async (_req, res) => {
-      res.json(await service.fieldOptions());
+    asyncHandler(async (req, res) => {
+      res.json(await service.fieldOptions(contextOf(req).companyId));
     }),
   );
 

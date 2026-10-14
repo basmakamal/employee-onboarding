@@ -105,7 +105,9 @@ export class OnboardingService {
     /** Named primary owners of the onboarding pipeline — they get every team notice in addition to HR. */
     private readonly responsibility?: { get(processKey: string): Promise<string[]> },
     /** Remembers a department / project / title typed on a new record as a list value. */
-    private readonly lists?: { ensureValue(key: string, value: string | null | undefined): Promise<void> },
+    private readonly lists?: {
+      ensureValue(companyId: string | null | undefined, key: string, value: string | null | undefined): Promise<void>;
+    },
   ) {}
 
   async create(input: CreateOnboardingData & PlacementInput, actor: Actor) {
@@ -113,9 +115,9 @@ export class OnboardingService {
     // are checked against it (and the actor's own scope) before anything is written.
     const placement = await resolvePlacement(this.repos.employees, actor, input);
     const data = { ...input, ...placement };
-    await this.lists?.ensureValue('DEPARTMENT', data.department);
-    await this.lists?.ensureValue('PROJECT', data.project);
-    await this.lists?.ensureValue('JOB_TITLE', data.jobTitle);
+    await this.lists?.ensureValue(actor.companyId, 'DEPARTMENT', data.department);
+    await this.lists?.ensureValue(actor.companyId, 'PROJECT', data.project);
+    await this.lists?.ensureValue(actor.companyId, 'JOB_TITLE', data.jobTitle);
     return this.transact(async (s) => {
       const employee = await s.employees.createOnboarding(data);
       await s.audit.append({

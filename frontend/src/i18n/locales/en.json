@@ -1377,6 +1377,7 @@
   "lists": {
     "title": "Lists",
     "subtitle": "Every dropdown in the system, with its labels in Arabic and English.",
+    "subtitleCompany": "Every dropdown used in {company}, with its labels in Arabic and English. Each company has its own lists.",
     "kindFree": "Open list",
     "kindEnum": "Fixed list",
     "publicForm": "Shown on the data form",

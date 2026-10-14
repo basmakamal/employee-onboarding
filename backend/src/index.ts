@@ -21,7 +21,7 @@ import { notificationRouter } from './notifications/notification.routes.js';
 import { emailTemplatesRouter, emailTriggersRouter } from './notifications/email-admin.routes.js';
 import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
-import { listsRouter, publicListsRouter } from './modules/lists/lists.routes.js';
+import { listsRouter } from './modules/lists/lists.routes.js';
 import { asyncHandler } from './common/http.js';
 import { statfsSync } from 'node:fs';
 import { closeQueues, getMailQueue, getSharedRedis, redisEnabled } from './common/queue.js';
@@ -74,9 +74,6 @@ staffApi.use(
 staffApi.use('/users', usersRouter(container.repos.users, container.notifications, config.APP_URL));
 staffApi.use('/lists', listsRouter(container.listService));
 
-// No sign-in: the data form's dropdowns.
-const publicApi = Router();
-publicApi.use('/lists', publicListsRouter(container.listService));
 staffApi.use(
   '/notifications',
   notificationRouter(container.repos.notificationRepo, container.notifications),
@@ -213,12 +210,12 @@ const app = createApp({
   },
   authRouter: authRouter(container.authService),
   staffRouter: staffApi,
-  publicRouter: publicApi,
   linkRouter: linkRouter(
     container.onboardingService,
     container.assetService,
     container.offboardingService,
     container.linkTokenService,
+    container.listService,
   ),
 });
 
