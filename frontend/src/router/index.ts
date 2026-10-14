@@ -24,6 +24,9 @@ export const router = createRouter({
     { path: '/employees', name: 'employees', component: () => import('../pages/EmployeesPage.vue') },
     { path: '/me', name: 'my-space', component: () => import('../pages/MySpacePage.vue'), meta: { self: true } },
     { path: '/employee-changes', name: 'employee-changes', component: () => import('../pages/EmployeeChangesPage.vue') },
+    { path: '/contracts', name: 'contracts', component: () => import('../pages/ContractsPage.vue'), meta: { permission: ['contracts.write', 'employees.read'] } },
+    { path: '/documents', name: 'documents', component: () => import('../pages/DocumentsRegisterPage.vue'), meta: { permission: 'documents.read' } },
+    { path: '/offboardings', name: 'offboardings', component: () => import('../pages/OffboardingsPage.vue'), meta: { permission: ['offboarding.manage', 'settlement.approve'] } },
     {
       path: '/employees/:id',
       name: 'employee-detail',
@@ -154,8 +157,9 @@ router.beforeEach(async (to) => {
   if (selfService && !to.meta['self'] && to.name !== 'change-password') return { name: 'my-space' };
   if (!selfService && to.meta['self']) return { name: 'home' };
 
-  const permission = to.meta['permission'] as string | undefined;
-  if (permission && !auth.can(permission)) return { name: auth.user?.activeCompany ? 'home' : 'select-company' };
+  // One permission, or a list of which any one is enough.
+  const permission = to.meta['permission'] as string | string[] | undefined;
+  if (permission && !auth.can(...(Array.isArray(permission) ? permission : [permission]))) return { name: auth.user?.activeCompany ? 'home' : 'select-company' };
 
   // Company-owned pages need a selected workspace. Global administration
   // (companies, users, settings…) is marked meta.global and stays reachable.

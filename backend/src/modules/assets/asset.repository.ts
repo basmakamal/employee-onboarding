@@ -4,7 +4,7 @@ import type { Db } from '../../common/prisma.js';
 export class AssetRepository {
   constructor(private readonly db: Db) {}
 
-  create(data: { type: string; name: string; serialNumber?: string; notes?: string }) {
+  create(data: { companyId: string; type: string; name: string; serialNumber?: string; notes?: string }) {
     return this.db.asset.create({ data });
   }
 
@@ -15,7 +15,8 @@ export class AssetRepository {
     });
   }
 
-  list() {
-    return this.db.asset.findMany({ orderBy: [{ type: 'asc' }, { name: 'asc' }] });
+  /** The registry of one company. */
+  list(companyId: string) {
+    return this.db.asset.findMany({ where: { companyId }, orderBy: [{ type: 'asc' }, { name: 'asc' }] });
   }
 }

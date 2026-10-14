@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
-import { requirePermission } from '../../auth/authz/authorize.js';
+import { contextOf, requirePermission } from '../../auth/authz/authorize.js';
 import type { AssetService } from './asset.service.js';
 import type { Actor } from '../../workflow/engine.js';
 
@@ -38,8 +38,8 @@ export function assetRouter(service: AssetService): Router {
   // Registry
   router.get(
     '/assets',
-    asyncHandler(async (_req, res) => {
-      res.json(await service.listAssets());
+    asyncHandler(async (req, res) => {
+      res.json(await service.listAssets(contextOf(req).companyId));
     }),
   );
   router.post(
@@ -47,7 +47,7 @@ export function assetRouter(service: AssetService): Router {
     requirePermission('assets.manage'),
     validate(assetSchema),
     asyncHandler(async (req, res) => {
-      res.status(201).json(await service.createAsset(compact(req.body as z.infer<typeof assetSchema>)));
+      res.status(201).json(await service.createAsset(contextOf(req).companyId, compact(req.body as z.infer<typeof assetSchema>)));
     }),
   );
 

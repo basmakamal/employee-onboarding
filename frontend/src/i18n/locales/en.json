@@ -29,7 +29,13 @@
     "lists": "Lists",
     "employeeChanges": "Transfers & promotions",
     "mySpace": "My space",
-    "groupMine": "My space"
+    "groupMine": "My space",
+    "groupDashboard": "Dashboard",
+    "groupEmployees": "Employees",
+    "groupOrganisation": "Organisation",
+    "contracts": "Contracts",
+    "documents": "Documents & expiry",
+    "offboardings": "Offboarding"
   },
   "users": {
     "assignments": "Assignments",
@@ -1527,5 +1533,27 @@
     "daysLeft": "{n} days left",
     "download": "Download",
     "downloadFailed": "The file could not be downloaded. Please try again."
+  },
+  "registers": {
+    "contractsTitle": "Contracts",
+    "contractsSubtitle": "Every contract in {company} — status, term and platform reference. Salaries stay on the employee file.",
+    "contractStatus": "Contract status",
+    "endDate": "End date",
+    "endsIn": "in {n} days",
+    "ended": "Ended",
+    "noContracts": "No contracts match.",
+    "documentsTitle": "Documents & expiry",
+    "documentsSubtitle": "Iqama, passports, permits and other dated documents in {company} — expired and due soon.",
+    "expired": "Expired",
+    "within": "Next {n} days",
+    "all": "All",
+    "expiredAgo": "expired {n} days ago",
+    "noDocuments": "No documents in this window.",
+    "offboardingsTitle": "Offboarding",
+    "offboardingsSubtitle": "People leaving {company} and the step each case is at.",
+    "openCases": "Open cases",
+    "opened": "Opened",
+    "noOffboardings": "No offboarding cases here.",
+    "docType": "Document type"
   }
 }
