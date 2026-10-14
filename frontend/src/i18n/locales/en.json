@@ -447,6 +447,8 @@
     "codeInvalid": "Start with a letter, then letters, digits or underscore (2–31 characters), e.g. RIYADA.",
     "manager": "Company manager",
     "managerHint": "A staff account. Setting it gives that person the whole company.",
+    "timezone": "Time zone",
+    "timezoneHint": "The local time of this company — which day a clock-in, a leave day or a deadline falls on.",
     "selectTitle": "Choose a company",
     "selectSubtitle": "Pick the company you want to work in. You can switch at any time from the header.",
     "search": "Search companies…",

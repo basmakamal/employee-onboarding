@@ -173,8 +173,10 @@ export class NotificationService {
     ref?: EntityRef,
     locale: Locale = 'ar',
   ): Promise<void> {
-    const staff = await this.users.listActiveByRole(role as never);
-    await this.fanOut(staff, templateKey, params, ref, locale);
+    // Only the role's staff who work in the record's company.
+    const companyId = await this.companyFor(ref);
+    const staff = await this.users.listActiveByRole(role as never, companyId);
+    await this.fanOut(staff, templateKey, params, ref, locale, companyId);
   }
 
   /**
@@ -190,13 +192,14 @@ export class NotificationService {
     ref?: EntityRef,
     locale: Locale = 'ar',
   ): Promise<void> {
+    const companyId = await this.companyFor(ref);
     const [group, owners] = await Promise.all([
-      this.users.listActiveByRole(role as never),
+      this.users.listActiveByRole(role as never, companyId),
       this.users.listActiveByIds(userIds),
     ]);
     const seen = new Set<string>();
     const staff = [...group, ...owners].filter((u) => !seen.has(u.id) && seen.add(u.id));
-    await this.fanOut(staff, templateKey, params, ref, locale);
+    await this.fanOut(staff, templateKey, params, ref, locale, companyId);
   }
 
   /**
@@ -266,9 +269,11 @@ export class NotificationService {
     params: TemplateParams,
     ref: EntityRef | undefined,
     locale: Locale,
+    /** Already resolved by the caller — saves a second lookup. */
+    knownCompanyId?: string | null,
   ): Promise<void> {
     if (staff.length === 0) return;
-    const companyId = await this.companyFor(ref);
+    const companyId = knownCompanyId !== undefined ? knownCompanyId : await this.companyFor(ref);
     const message = await this.render(templateKey, locale, this.withLinks(params, ref), companyId);
     const stamp = {
       templateKey: message.templateKey ?? templateKey,

@@ -12,7 +12,23 @@ const createSchema = z.object({
   nameEn: z.string().trim().min(1).max(120),
   active: z.boolean().optional(),
   managerId: z.string().min(1).nullable().optional(),
+  /** IANA time zone, e.g. Asia/Riyadh. */
+  timezone: z
+    .string()
+    .trim()
+    .refine((tz) => isTimeZone(tz), { message: 'not a known time zone' })
+    .optional(),
 });
+
+/** True for a time zone the runtime knows (Asia/Riyadh, Europe/London, UTC…). */
+function isTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const updateSchema = createSchema.omit({ code: true }).partial();
 

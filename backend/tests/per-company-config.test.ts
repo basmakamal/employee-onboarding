@@ -53,6 +53,13 @@ describe('NotificationService — the company of a message', () => {
     expect(render).toHaveBeenCalledWith('staff.record_stalled', 'ar', expect.anything(), 'co-b');
   });
 
+  it("a role notice reaches only the role's staff in the record's company", async () => {
+    const { service } = makeService('co-tabby');
+    const users = (service as unknown as { users: { listActiveByRole: ReturnType<typeof vi.fn> } }).users;
+    await service.notifyRole('HR', 'staff.record_stalled', { name: 'Sara' }, { entity: 'EMPLOYEE', entityId: 'e1' });
+    expect(users.listActiveByRole).toHaveBeenCalledWith('HR', 'co-tabby');
+  });
+
   it('a message about nothing in particular belongs to the main company', async () => {
     const { service, render } = makeService(null);
     await service.notifyExternal('new.staff@x.com', 'staff.invitation', { name: 'New' });
