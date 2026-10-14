@@ -44,6 +44,7 @@ export const PERMISSIONS = {
   'reports.export': { nameAr: 'تصدير التقارير', nameEn: 'Export reports' },
   'emails.view': { nameAr: 'عرض سجل الرسائل', nameEn: 'View the e-mail log' },
   'ai.use': { nameAr: 'استخدام المساعد الذكي', nameEn: 'Use the AI assistant' },
+  'audit.read': { nameAr: 'عرض سجل التدقيق', nameEn: 'View the audit trail' },
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -87,7 +88,7 @@ export const SYSTEM_ROLES: Array<{
     nameAr: 'مدير وحدة تنظيمية',
     nameEn: 'Unit manager (branch / department / team)',
     level: 'UNIT',
-    permissions: ['org.read', 'employees.read', 'documents.read', 'requests.write', 'reports.view'],
+    permissions: ['org.read', 'employees.read', 'documents.read', 'requests.write', 'reports.view', 'audit.read'],
   },
   {
     code: 'HR',

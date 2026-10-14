@@ -26,6 +26,7 @@ export const router = createRouter({
     { path: '/employee-changes', name: 'employee-changes', component: () => import('../pages/EmployeeChangesPage.vue') },
     { path: '/contracts', name: 'contracts', component: () => import('../pages/ContractsPage.vue'), meta: { permission: ['contracts.write', 'employees.read'] } },
     { path: '/documents', name: 'documents', component: () => import('../pages/DocumentsRegisterPage.vue'), meta: { permission: 'documents.read' } },
+    { path: '/audit', name: 'audit', component: () => import('../pages/AuditPage.vue'), meta: { permission: 'audit.read' } },
     { path: '/offboardings', name: 'offboardings', component: () => import('../pages/OffboardingsPage.vue'), meta: { permission: ['offboarding.manage', 'settlement.approve'] } },
     {
       path: '/employees/:id',

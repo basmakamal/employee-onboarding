@@ -85,6 +85,7 @@ const GROUPS: NavGroup[] = [
       { to: '/email-templates', icon: 'fluent:mail-multiple', key: 'nav.emailTemplates', permission: 'settings.manage' },
       { to: '/calendar', icon: 'fluent:calendar', key: 'nav.calendar', permission: 'settings.manage' },
       { to: '/settings', icon: 'fluent:settings', key: 'nav.settings', permission: 'settings.manage' },
+      { to: '/audit', icon: 'fluent:shield-checkmark', key: 'nav.audit', permission: 'audit.read' },
     ],
   },
 ];

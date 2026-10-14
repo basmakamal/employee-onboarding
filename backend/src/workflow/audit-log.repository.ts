@@ -1,4 +1,5 @@
 import type { Db } from '../common/prisma.js';
+import { currentContext } from '../common/request-context.js';
 import type { Prisma } from '../generated/prisma/client.js';
 
 export type ActorType = 'USER' | 'LINK' | 'SYSTEM';
@@ -15,6 +16,10 @@ export interface AuditEntry {
   /** Owning company (denormalised); null for global administration. */
   companyId?: string | null;
   metadata?: Prisma.InputJsonValue;
+  /** Field-level before / after: { field: { from, to } } — never raw secrets or ID numbers. */
+  changes?: Prisma.InputJsonValue;
+  /** Overrides the source taken from the request context. */
+  source?: string;
 }
 
 /**
@@ -25,8 +30,16 @@ export interface AuditEntry {
 export class AuditLogRepository {
   constructor(private readonly db: Db) {}
 
+  /** Stamps the request id and source of the work in progress (see request-context). */
   append(entry: AuditEntry) {
-    return this.db.auditLog.create({ data: entry });
+    const ctx = currentContext();
+    return this.db.auditLog.create({
+      data: {
+        ...entry,
+        source: entry.source ?? ctx?.source ?? (entry.actorType === 'SYSTEM' ? 'SYSTEM' : null),
+        requestId: ctx?.requestId ?? null,
+      },
+    });
   }
 
   listByEntity(entity: string, entityId: string) {

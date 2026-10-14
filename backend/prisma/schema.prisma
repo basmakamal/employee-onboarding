@@ -1020,6 +1020,12 @@ model AuditLog {
   companyId  String?
 
   metadata Json?
+  /// Field-level before / after for edits: { field: { from, to } } (sensitive values masked).
+  changes  Json?
+  /// WEB | LINK | SCHEDULER | SYSTEM — where the action came from.
+  source    String?
+  /// The request (or scheduler run) that caused it — ties several entries to one action.
+  requestId String?
   at       DateTime @default(now())
 
   @@index([entity, entityId])

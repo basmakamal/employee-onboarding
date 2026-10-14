@@ -5,6 +5,7 @@ import type { AuditLogRepository } from './audit-log.repository.js';
 import type { NotificationService } from '../notifications/notification.service.js';
 import { workingDaysBetween } from './working-days.js';
 import type { CompanyFilter } from './company-filter.js';
+import { withContext } from '../common/request-context.js';
 import { config } from '../common/config.js';
 import { logger } from '../common/logger.js';
 
@@ -101,6 +102,11 @@ export class SlaScheduler {
   }
 
   async tick(now: Date = new Date()): Promise<void> {
+    // Everything this run writes to the audit trail is marked as the scheduler's.
+    return withContext({ requestId: `tick-${now.toISOString()}`, source: 'SCHEDULER' }, () => this.runTick(now));
+  }
+
+  private async runTick(now: Date): Promise<void> {
     for (const job of this.deps.jobs ?? []) {
       try {
         await job.run(now);

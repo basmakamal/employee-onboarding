@@ -7,7 +7,7 @@ import {
 import { NotFoundError } from '../../workflow/errors.js';
 import { actorScope } from '../../auth/authz/authorize.js';
 import { resolvePlacement, type PlacementInput } from './org-placement.js';
-import type { Employee } from '../../generated/prisma/client.js';
+import type { Employee, Prisma } from '../../generated/prisma/client.js';
 import type { UnitOfWork } from '../../common/prisma.js';
 import type {
   EmployeeListQuery,
@@ -65,6 +65,23 @@ export interface EmployeeTxScope {
 interface ListsLike {
   codes(companyId: string, key: string): Promise<string[]>;
   ensureValue(companyId: string | null | undefined, key: string, value: string | null | undefined): Promise<void>;
+}
+
+/** Identity and bank numbers never enter the audit trail — only the fact that they changed. */
+const MASKED_FIELDS = new Set(['nationalId', 'iban', 'passwordHash']);
+
+/** { field: { from, to } } for the fields an edit actually changed. */
+export function profileChanges(before: Record<string, unknown>, after: Record<string, unknown>): Record<string, { from: unknown; to: unknown }> {
+  const plain = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : (v ?? null));
+  const out: Record<string, { from: unknown; to: unknown }> = {};
+  for (const [field, next] of Object.entries(after)) {
+    if (next === undefined || field === 'companyId') continue;
+    const was = plain(before[field]);
+    const now = plain(next);
+    if (JSON.stringify(was) === JSON.stringify(now)) continue;
+    out[field] = MASKED_FIELDS.has(field) ? { from: was === null ? null : '•••', to: now === null ? null : '•••' } : { from: was, to: now };
+  }
+  return out;
 }
 
 export class EmployeeService {
@@ -199,6 +216,7 @@ export class EmployeeService {
         ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId: id,
         metadata: { fields: Object.keys(input) },
+        changes: profileChanges(before, data) as Prisma.InputJsonValue,
       });
       return updated;
     });
