@@ -16,6 +16,7 @@ import ReadinessCard from '../components/ReadinessCard.vue';
 import EmployeeSchedule from '../components/EmployeeSchedule.vue';
 import PersonAttendance from '../components/PersonAttendance.vue';
 import EmployeeLeave from '../components/EmployeeLeave.vue';
+import EmployeePay from '../components/EmployeePay.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 
@@ -1617,6 +1618,9 @@ onMounted(load);
       <v-tab v-if="auth.can('leave.read', 'leave.manage', 'leave.approve')" value="leave" prepend-icon="calendar-check">
         {{ $t('leave.tab') }}
       </v-tab>
+      <v-tab v-if="auth.can('compensation.read')" value="pay" prepend-icon="banknote">
+        {{ $t('pay.tab') }}
+      </v-tab>
     </v-tabs>
 
     <v-window v-model="tab" :touch="false">
@@ -2225,6 +2229,11 @@ onMounted(load);
       <!-- Work schedule: who works which shifts, day by day -->
       <v-window-item value="schedule">
         <EmployeeSchedule v-if="tab === 'schedule'" :employee-id="id" :can-edit="auth.can('schedule.manage')" @changed="readinessKey += 1" />
+      </v-window-item>
+
+      <!-- Pay: confidential — only for people with compensation.read -->
+      <v-window-item value="pay">
+        <EmployeePay v-if="tab === 'pay'" :employee-id="id" :can-edit="auth.can('compensation.write')" @changed="readinessKey += 1" />
       </v-window-item>
 
       <!-- Leave: balances, requests and the balance history -->

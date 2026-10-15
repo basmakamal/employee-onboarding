@@ -40,6 +40,8 @@ export interface ReadinessInput {
   contract: { status: string } | null;
   /** A work schedule in force today (Phase C). Undefined = not checked. */
   hasSchedule?: boolean;
+  /** Pay with a basic salary in force today (Phase E). Undefined = not checked. */
+  hasPay?: boolean;
 }
 
 export function readinessOf(e: ReadinessInput): { ready: boolean; items: ReadinessItem[] } {
@@ -55,7 +57,9 @@ export function readinessOf(e: ReadinessInput): { ready: boolean; items: Readine
     e.hasSchedule === undefined
       ? { key: 'SCHEDULE', ok: false, required: true, soon: true }
       : { key: 'SCHEDULE', ok: e.hasSchedule, required: true },
-    { key: 'SALARY', ok: false, required: true, soon: true },
+    e.hasPay === undefined
+      ? { key: 'SALARY', ok: false, required: true, soon: true }
+      : { key: 'SALARY', ok: e.hasPay, required: true },
   ];
   const ready = items.every((i) => i.ok || !i.required || i.soon);
   return { ready, items };

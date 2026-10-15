@@ -27,6 +27,7 @@ import { employeeScheduleRouter, workforceRouter } from './modules/workforce/wor
 import { attendanceRouter, employeeAttendanceRouter } from './modules/workforce/attendance.routes.js';
 import { employeeLeaveRouter, leaveRouter } from './modules/workforce/leave.routes.js';
 import { approvalsRouter } from './modules/workforce/approvals.routes.js';
+import { employeeCompensationRouter, payrollSetupRouter } from './modules/payroll/compensation.routes.js';
 import { registersRouter } from './modules/registers/registers.routes.js';
 import { employeeScopeGuard } from './modules/employees/employee-scope.guard.js';
 import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
@@ -92,7 +93,13 @@ staffApi.use(
         companyId: true,
       },
     }).then(async (e) =>
-      e ? { ...e, hasSchedule: e.companyId ? await container.scheduleService.hasScheduleToday(e.companyId, id) : false } : null,
+      e
+        ? {
+            ...e,
+            hasSchedule: e.companyId ? await container.scheduleService.hasScheduleToday(e.companyId, id) : false,
+            hasPay: e.companyId ? await container.compensationService.hasPayToday(e.companyId, id) : false,
+          }
+        : null,
     ),
   ),
 );
@@ -111,6 +118,9 @@ staffApi.use('/leave', leaveRouter(container.leaveService, container.prisma));
 staffApi.use('/employees', employeeLeaveRouter(container.leaveService));
 // One inbox for approvers: leave and overtime waiting for them.
 staffApi.use('/approvals', approvalsRouter(container.prisma));
+// Pay: components and payroll policy; the Pay tab of the employee file.
+staffApi.use('/payroll', payrollSetupRouter(container.compensationService));
+staffApi.use('/employees', employeeCompensationRouter(container.compensationService));
 staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
 staffApi.use('/org', orgRouter(container.orgService));
