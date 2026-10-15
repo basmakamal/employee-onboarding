@@ -25,6 +25,19 @@ const envSchema = z
      * app behaves as before — inline email, in-process SLA timer.
      */
     REDIS_URL: z.string().url().optional(),
+    /**
+     * Key for encrypting bank details at rest (AES-256-GCM): 32 random bytes,
+     * base64 (`openssl rand -base64 32`). Without it IBANs stay unencrypted
+     * (a warning is logged at start-up); once set, existing ones are
+     * encrypted at the next start. Losing it makes stored IBANs unreadable.
+     */
+    DATA_ENCRYPTION_KEY: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z
+        .string()
+        .refine((v) => Buffer.from(v, 'base64').length === 32, 'DATA_ENCRYPTION_KEY must be 32 bytes, base64 (openssl rand -base64 32)')
+        .optional(),
+    ),
     /** Public base URL of the frontend — signed links point here. */
     APP_URL: z.string().url().default('http://localhost:3000'),
     /** Uploaded files live here — outside the webroot, gitignored. */

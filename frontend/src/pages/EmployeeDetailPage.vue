@@ -566,6 +566,25 @@ const tab = ref(typeof route.query.tab === 'string' ? route.query.tab : 'overvie
 /** Bumped after each reload of the file, so the readiness checklist re-checks too. */
 const readinessKey = ref(0);
 
+// ─────────────────────────────────────────────── bank details
+/** The full IBAN, shown for a minute after an audited request (pay permission only). */
+const fullIban = ref<string | null>(null);
+const ibanBusy = ref(false);
+let ibanTimer: ReturnType<typeof setTimeout> | undefined;
+async function showIban() {
+  ibanBusy.value = true;
+  try {
+    const r = await api.get<{ iban: string | null }>(`/api/employees/${id}/iban`);
+    fullIban.value = r.iban;
+    clearTimeout(ibanTimer);
+    ibanTimer = setTimeout(() => (fullIban.value = null), 60_000);
+  } catch (e) {
+    notify(errorText(e), 'error');
+  } finally {
+    ibanBusy.value = false;
+  }
+}
+
 // ------------------------------------------------------- onboarding pipeline
 const PIPELINE_STAGES = [
   'CREATED',
@@ -1671,7 +1690,7 @@ onMounted(load);
                       : null,
                   },
                   { icon: 'map-pin', label: $t('fields.splAddress'), value: employee.splAddress, ltr: true },
-                  { icon: 'landmark', label: $t('fields.iban'), value: employee.iban, ltr: true },
+                  { icon: 'landmark', label: $t('fields.iban'), value: fullIban ?? employee.iban, ltr: true, iban: true },
                   { icon: 'graduation-cap', label: $t('fields.qualification'), value: employee.qualification ? $t(`enums.qualification.${employee.qualification}`) : null },
                   { icon: 'book-open', label: $t('fields.major'), value: employee.major },
                   { icon: 'contact', label: $t('fields.emergencyContactName'), value: employee.emergencyContactName },
@@ -1688,6 +1707,19 @@ onMounted(load);
                 <div class="text-body-2 font-weight-medium" :dir="field.ltr && field.value ? 'ltr' : undefined">
                   {{ field.value ?? '—' }}
                 </div>
+                <!-- Bank details are masked; people who pay salaries can show the full number (audited). -->
+                <v-btn
+                  v-if="field.iban && employee.iban && !fullIban && auth.can('compensation.read')"
+                  size="x-small"
+                  variant="text"
+                  color="primary"
+                  prepend-icon="eye"
+                  class="px-1 mt-n1"
+                  :loading="ibanBusy"
+                  @click="showIban"
+                >
+                  {{ $t('fields.showIban') }}
+                </v-btn>
               </v-col>
             </v-row>
           </v-card-text>

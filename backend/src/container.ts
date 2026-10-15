@@ -1,4 +1,5 @@
 import { config } from './common/config.js';
+import { configureFieldCrypto } from './common/field-crypto.js';
 import { prisma, type Db, type UnitOfWork } from './common/prisma.js';
 import { EventBus } from './events/event-bus.js';
 import { EmployeeRepository } from './modules/employees/employee.repository.js';
@@ -70,6 +71,8 @@ import { OrgService } from './modules/organisation/org.service.js';
  * chosen and wired. Everything else receives its dependencies.
  */
 export function buildContainer() {
+  // Bank details are encrypted at rest with DATA_ENCRYPTION_KEY (when set).
+  configureFieldCrypto(config.DATA_ENCRYPTION_KEY);
   const employees = new EmployeeRepository(prisma);
   const documents = new OnboardingDocumentRepository(prisma);
   const contracts = new ContractRepository(prisma);
