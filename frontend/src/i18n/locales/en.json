@@ -40,7 +40,9 @@
     "teamSchedule": "Team schedule",
     "shifts": "Shifts & patterns",
     "attendance": "Attendance",
-    "overtime": "Overtime approvals"
+    "overtime": "Overtime approvals",
+    "leave": "Leave",
+    "leaveTypes": "Leave types"
   },
   "users": {
     "assignments": "Assignments",
@@ -704,7 +706,7 @@
       "ZERO_SHIFT": "The shift must end at a different time than it starts.",
       "BAD_CYCLE": "A rotation repeats every 2 to 56 days.",
       "EMPTY_PATTERN": "Put at least one shift in the pattern.",
-      "END_BEFORE_START": "The end date is before the start date.",
+      "END_BEFORE_START": "The last day is before the first day.",
       "BAD_PATTERN": "Pick an active pattern.",
       "DAY_LOCKED": "This day is already in a payroll run and can no longer change.",
       "NOTHING_TO_REVIEW": "This day has no exception to review.",
@@ -716,7 +718,27 @@
       "ALREADY_DECIDED": "This request has already been decided.",
       "BAD_MINUTES": "Enter a valid number of minutes.",
       "DUPLICATE_PUNCH": "This punch is already recorded.",
-      "NOT_MANUAL": "Only punches entered by hand can be deleted."
+      "NOT_MANUAL": "Only punches entered by hand can be deleted.",
+      "INSUFFICIENT_BALANCE": "Not enough leave balance for these days.",
+      "LEAVE_OVERLAP": "Another leave already covers these dates.",
+      "YEARLY_LIMIT": "This would go over the yearly limit for this leave.",
+      "ONCE_ONLY": "This leave can be taken only once in the employment.",
+      "NOT_ENOUGH_SERVICE": "Not enough months of service yet for this leave.",
+      "WRONG_GENDER": "This leave type does not apply to this employee.",
+      "NO_HALF_DAY": "A half day must be a single day of a type that allows it.",
+      "NO_WORKING_DAYS": "These dates contain no working day.",
+      "TOO_MANY_DAYS": "Too many days for one request of this type.",
+      "BAD_LEAVE_TYPE": "Pick an active leave type.",
+      "TOO_LONG": "One request covers at most a year.",
+      "SYSTEM_TYPE": "A built-in leave type can be switched off, not deleted.",
+      "TYPE_IN_USE": "This leave type has requests or balances — switch it off instead.",
+      "HAS_BALANCES": "People already hold balances of this type.",
+      "ACCRUAL_NEEDED": "Choose how the balance builds up.",
+      "DAYS_PER_YEAR": "Enter the days earned per year.",
+      "SENIORITY": "Enter both the senior days and the years, or neither.",
+      "BAD_TIERS": "Each pay step needs days and a percent from 0 to 100.",
+      "BAD_DAYS": "Enter the days to add or remove.",
+      "BEFORE_HIRE": "The leave starts before the employment does."
     }
   },
   "login": {
@@ -780,7 +802,8 @@
       "ai": "AI",
       "audit": "Audit",
       "schedule": "Workforce",
-      "attendance": "Attendance"
+      "attendance": "Attendance",
+      "leave": "Leave"
     },
     "HR": "Human Resources",
     "INSURANCE": "Insurance",
@@ -1780,7 +1803,8 @@
       "UNSCHEDULED": "No schedule",
       "LATE": "Late",
       "EARLY": "Left early",
-      "OVERTIME": "Overtime"
+      "OVERTIME": "Overtime",
+      "LEAVE": "On leave"
     },
     "reviews": {
       "NONE": "No exception",
@@ -1839,5 +1863,106 @@
     "approve": "Approve",
     "reject": "Reject",
     "approveOvertimeHint": "You may approve fewer minutes than asked."
+  },
+  "leave": {
+    "tab": "Leave",
+    "balances": "Balances",
+    "balancesHint": "Balances build up month by month; approved leave is taken off.",
+    "add": "Add leave",
+    "adjust": "Adjust balance",
+    "daysLeft": "days left",
+    "usedThisYear": "{n} taken this year",
+    "waitingN": "{n} waiting",
+    "takenThisYear": "days taken this year",
+    "noBalances": "No leave yet.",
+    "requests": "Leave",
+    "noRequests": "No leave entered yet.",
+    "nDays": "{n} day(s)",
+    "halfDay": "Half day",
+    "payPart": "{days} d at {percent}%",
+    "cancel": "Cancel leave",
+    "cancelConfirm": "Cancel this leave? It has not been decided yet.",
+    "cancelApprovedConfirm": "Cancel this approved leave? Its days go back to the balance and the attendance days are recalculated.",
+    "cancelledBy": "Cancelled by {name}",
+    "history": "Balance history",
+    "type": "Leave type",
+    "entry": "Entry",
+    "days": "Days",
+    "kinds": {
+      "ACCRUAL": "Earned",
+      "USE": "Taken",
+      "REVERSAL": "Given back",
+      "ADJUSTMENT": "Adjustment",
+      "EXPIRY": "Expired"
+    },
+    "firstDay": "First day",
+    "lastDay": "Last day",
+    "balanceAfter": "{n} days left after",
+    "balanceNow": "{n} days now",
+    "adjustHint": "Add days (e.g. the opening balance at go-live) or remove them with a minus sign. The reason is kept in the history.",
+    "daysSigned": "Days (+/−)",
+    "adjustNote": "Reason",
+    "pageTitle": "Leave",
+    "pageSubtitle": "Leave entered in {company}, waiting for a decision first.",
+    "pageEmpty": "Nothing here.",
+    "approveHint": "The days are taken off the balance and the attendance days are marked as leave."
+  },
+  "leaveTypes": {
+    "title": "Leave types",
+    "subtitle": "The kinds of leave in {company} and their rules.",
+    "new": "New leave type",
+    "edit": "Edit leave type",
+    "defaultsNote": "The built-in types follow the Saudi Labour Law (Arts. 109, 113, 114, 117, 151, 160) as defaults. Please confirm them with HR or legal before the first payroll — every number can be edited.",
+    "rules": "Rules",
+    "pay": "Pay",
+    "counting": "Days counted",
+    "off": "Off",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this leave type? It has never been used.",
+    "code": "Code",
+    "nameAr": "Name (Arabic)",
+    "nameEn": "Name (English)",
+    "balanceMode": "Balance",
+    "modes": {
+      "ACCRUAL": "Builds up a balance",
+      "NONE": "No balance (limits only)"
+    },
+    "countModes": {
+      "WORKING": "Working days",
+      "CALENDAR": "Calendar days"
+    },
+    "accrual": "Earned",
+    "accruals": {
+      "MONTHLY": "monthly",
+      "YEARLY": "on 1 January"
+    },
+    "daysPerYear": "Days a year",
+    "seniorDays": "Senior days a year",
+    "seniorAfter": "After years",
+    "carryMax": "Carry forward at most",
+    "carryHint": "Empty = everything carries forward",
+    "maxPerRequest": "Most days at a time",
+    "yearlyLimit": "Most days a year",
+    "minService": "Months of service first",
+    "gender": "For",
+    "genders": {
+      "ANY": "Everyone",
+      "FEMALE": "Women only",
+      "MALE": "Men only"
+    },
+    "paidPercent": "Paid",
+    "addTier": "Pay in steps",
+    "tiersHint": "Days already taken this year move the leave down the steps (sick leave: 30 days 100%, 60 days 75%, 30 days unpaid).",
+    "tierDays": "Days",
+    "allowHalfDay": "Half days allowed",
+    "oncePerService": "Once in the employment",
+    "active": "Active",
+    "sumAccrual": "{n} days a year, earned {how}",
+    "sumSenior": "{n} after {years} years",
+    "sumCarry": "carry forward ≤ {n}",
+    "sumMax": "up to {n} days at a time",
+    "sumYearly": "up to {n} days a year",
+    "sumOnce": "once in the employment",
+    "sumService": "after {n} months of service"
   }
 }

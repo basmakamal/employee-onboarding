@@ -96,6 +96,7 @@ export const COMPANY_SCOPED_PREFIXES = [
   '/audit',
   '/workforce',
   '/attendance',
+  '/leave',
 ] as const;
 
 /**

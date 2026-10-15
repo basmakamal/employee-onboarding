@@ -66,6 +66,8 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/workforce/attendance', icon: 'fluent:people-list', key: 'nav.attendance', permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] },
       { to: '/workforce/overtime', icon: 'fluent:checkmark-circle', key: 'nav.overtime', permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] },
+      { to: '/workforce/leave', icon: 'fluent:receipt', key: 'nav.leave', permission: ['leave.read', 'leave.manage', 'leave.approve'] },
+      { to: '/workforce/leave-types', icon: 'fluent:text-bullet-list-square', key: 'nav.leaveTypes', permission: ['leave.read', 'leave.manage', 'leave.approve'] },
       { to: '/workforce/schedule', icon: 'fluent:calendar', key: 'nav.teamSchedule', permission: ['schedule.read', 'schedule.manage'] },
       { to: '/workforce/shifts', icon: 'fluent:clock-alarm', key: 'nav.shifts', permission: ['schedule.read', 'schedule.manage'] },
       { to: '/calendar', icon: 'fluent:calendar', key: 'nav.calendar', permission: 'settings.manage' },

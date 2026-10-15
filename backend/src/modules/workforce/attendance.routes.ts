@@ -19,7 +19,7 @@ const daysSchema = z
     to: day,
     orgUnitId: z.string().min(1).optional(),
     q: z.string().trim().max(100).optional(),
-    status: z.enum(['PRESENT', 'ABSENT', 'INCOMPLETE', 'REST', 'HOLIDAY', 'UNSCHEDULED', 'LATE', 'EARLY', 'OVERTIME']).optional(),
+    status: z.enum(['PRESENT', 'ABSENT', 'INCOMPLETE', 'REST', 'HOLIDAY', 'UNSCHEDULED', 'LEAVE', 'LATE', 'EARLY', 'OVERTIME']).optional(),
     review: z.enum(['NONE', 'PENDING', 'CONFIRMED', 'EXCUSED']).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(50),

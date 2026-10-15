@@ -15,6 +15,7 @@ import EmploymentHistory from '../components/EmploymentHistory.vue';
 import ReadinessCard from '../components/ReadinessCard.vue';
 import EmployeeSchedule from '../components/EmployeeSchedule.vue';
 import PersonAttendance from '../components/PersonAttendance.vue';
+import EmployeeLeave from '../components/EmployeeLeave.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 
@@ -1613,6 +1614,9 @@ onMounted(load);
       <v-tab v-if="auth.can('attendance.read', 'attendance.manage', 'attendance.approve')" value="attendance" prepend-icon="clock">
         {{ $t('attendance.tab') }}
       </v-tab>
+      <v-tab v-if="auth.can('leave.read', 'leave.manage', 'leave.approve')" value="leave" prepend-icon="calendar-check">
+        {{ $t('leave.tab') }}
+      </v-tab>
     </v-tabs>
 
     <v-window v-model="tab" :touch="false">
@@ -2223,7 +2227,12 @@ onMounted(load);
         <EmployeeSchedule v-if="tab === 'schedule'" :employee-id="id" :can-edit="auth.can('schedule.manage')" @changed="readinessKey += 1" />
       </v-window-item>
 
-      <!-- Attendance: judged days, punches, corrections and overtime -->
+      <!-- Leave: balances, requests and the balance history -->
+      <v-window-item value="leave">
+        <EmployeeLeave v-if="tab === 'leave'" :employee-id="id" :can-manage="auth.can('leave.manage')" />
+      </v-window-item>
+
+      <!-- Attendance: judged days, punches and overtime -->
       <v-window-item value="attendance">
         <PersonAttendance v-if="tab === 'attendance'" :employee-id="id" :can-record="auth.can('attendance.manage')" :can-request-overtime="auth.can('attendance.manage', 'attendance.approve')" />
       </v-window-item>

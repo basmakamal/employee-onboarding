@@ -230,10 +230,13 @@ model Company {
   attendanceEvents AttendanceEvent[]
   attendanceDays   AttendanceDay[]
   overtimeRequests OvertimeRequest[]
+  leaveTypes       LeaveType[]
+  leaveRequests    LeaveRequest[]
+  leaveLedger      LeaveLedgerEntry[]
   auditLogs        AuditLog[]
   notifications    Notification[]
   assignments      UserAssignment[]
-  activeFor        User[]            @relation("ActiveCompany")
+  activeFor        User[]             @relation("ActiveCompany")
 
   @@map("companies")
 }
@@ -475,6 +478,8 @@ model Employee {
   attendanceEvents AttendanceEvent[]
   attendanceDays   AttendanceDay[]
   overtimeRequests OvertimeRequest[]
+  leaveRequests    LeaveRequest[]
+  leaveLedger      LeaveLedgerEntry[]
   auditLogs        AuditLog[]               @relation("EmployeeAudit")
 
   /// (status, statusChangedAt) serves both the status filters and the SLA
@@ -1243,8 +1248,10 @@ model AttendanceDay {
   employeeId        String
   /// The local (company time zone) date.
   date              DateTime  @db.Date
-  /// PRESENT | ABSENT | INCOMPLETE | REST | HOLIDAY | UNSCHEDULED
+  /// PRESENT | ABSENT | INCOMPLETE | REST | HOLIDAY | UNSCHEDULED | LEAVE
   status            String
+  /// The approved leave covering the day (its type code), if any.
+  leaveCode         String?
   /// Shift codes of the day, e.g. "M" or "N".
   shiftCodes        String?
   scheduledMinutes  Int       @default(0)
@@ -1294,4 +1301,119 @@ model OvertimeRequest {
   @@index([companyId, status, createdAt])
   @@index([employeeId, date])
   @@map("overtime_requests")
+}
+
+/// A kind of leave and its rules, per company. Seeded with Saudi Labour Law
+/// defaults (Arts. 109, 113, 114, 117, 151, 160) that HR may edit — nothing
+/// here is hard-coded in the calculation.
+model LeaveType {
+  id                String   @id @default(cuid())
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId         String
+  code              String
+  nameAr            String
+  nameEn            String
+  color             String?
+  /// Share of the wage paid during the leave (0 = unpaid). Sick leave uses payTiers instead.
+  paidPercent       Int      @default(100)
+  /// ACCRUAL (a balance builds up, e.g. annual) | NONE (no balance: limited per request / per year)
+  balanceMode       String   @default("NONE")
+  /// MONTHLY (1/12 of the yearly days each month) | YEARLY (all on 1 January, prorated for joiners)
+  accrual           String?
+  daysPerYear       Decimal? @db.Decimal(6, 2)
+  /// More days once the person has served seniorAfterYears (Art. 109: 30 after 5 years).
+  seniorDaysPerYear Decimal? @db.Decimal(6, 2)
+  seniorAfterYears  Int?
+  /// Unused days kept at the turn of the year (NULL = no cap).
+  carryForwardMax   Decimal? @db.Decimal(6, 2)
+  /// Most days in one calendar year (sick leave: 120).
+  yearlyLimit       Int?
+  /// Pay by days already taken this year, e.g. [{"days":30,"percent":100},{"days":60,"percent":75},{"days":30,"percent":0}].
+  payTiers          Json?
+  maxPerRequest     Int?
+  /// Once in the whole employment (Hajj).
+  oncePerService    Boolean  @default(false)
+  /// Months of service before it can be taken (Hajj: 24).
+  minServiceMonths  Int?
+  /// ANY | FEMALE | MALE
+  gender            String   @default("ANY")
+  /// WORKING (only the person's working days count) | CALENDAR (every day counts)
+  countMode         String   @default("WORKING")
+  allowHalfDay      Boolean  @default(false)
+  /// Seeded by the system — can be edited and switched off, not deleted.
+  system            Boolean  @default(false)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  requests LeaveRequest[]
+  ledger   LeaveLedgerEntry[]
+
+  @@unique([companyId, code])
+  @@map("leave_types")
+}
+
+/// A leave entered by staff for an employee, approved by the branch manager,
+/// the company manager or the super admin (the approver is recorded).
+model LeaveRequest {
+  id            String    @id @default(cuid())
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId    String
+  leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id])
+  leaveTypeId   String
+  startDate     DateTime  @db.Date
+  /// Inclusive.
+  endDate       DateTime  @db.Date
+  /// A single half day (only when the type allows it).
+  halfDay       Boolean   @default(false)
+  /// Days that count, by the type's counting mode (working or calendar days).
+  days          Decimal   @db.Decimal(6, 2)
+  /// How the days are paid, e.g. [{"days":2,"percent":100},{"days":1,"percent":75}].
+  payBreakdown  Json?
+  reason        String?   @db.Text
+  /// PENDING | APPROVED | REJECTED | CANCELLED
+  status        String    @default("PENDING")
+  requestedById String?
+  decidedById   String?
+  decidedAt     DateTime?
+  decisionNote  String?   @db.Text
+  cancelledById String?
+  cancelledAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  ledger LeaveLedgerEntry[]
+
+  @@index([companyId, status, createdAt])
+  @@index([employeeId, startDate])
+  @@map("leave_requests")
+}
+
+/// The balance is the sum of these rows — never one editable number.
+/// ACCRUAL (+), USE (−, an approved request), REVERSAL (+, a cancelled one),
+/// ADJUSTMENT (±, HR, e.g. the opening balance), EXPIRY (−, over the carry-forward cap).
+model LeaveLedgerEntry {
+  id          String        @id @default(cuid())
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String
+  employee    Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId  String
+  leaveType   LeaveType     @relation(fields: [leaveTypeId], references: [id])
+  leaveTypeId String
+  kind        String
+  days        Decimal       @db.Decimal(6, 2)
+  /// The day it counts from.
+  date        DateTime      @db.Date
+  request     LeaveRequest? @relation(fields: [requestId], references: [id])
+  requestId   String?
+  /// Makes automatic entries happen once: "2026-11" for a monthly accrual, "2026-carry" for a year-end expiry.
+  periodKey   String?
+  note        String?       @db.Text
+  createdById String?
+  createdAt   DateTime      @default(now())
+
+  @@unique([employeeId, leaveTypeId, kind, periodKey])
+  @@index([employeeId, leaveTypeId, date])
+  @@map("leave_ledger")
 }
