@@ -12,6 +12,7 @@ import EmptyState from '../components/EmptyState.vue';
 import FormErrorAlert from '../components/FormErrorAlert.vue';
 import { useActiveCompanyName } from '../composables/useActiveCompany';
 import { useForm } from '../composables/useForm';
+import { useApprovalCount } from '../composables/useApprovalCount';
 import { useAuthStore } from '../stores/auth';
 import { errorText } from '../validation/errors';
 import { REQUEST_COLOR, STATUS_COLOR, useAttendanceFormat } from '../composables/useAttendanceFormat';
@@ -82,7 +83,7 @@ function saveDecision() {
       ...(d.note.trim() ? { note: d.note.trim() } : {}),
     });
     d.show = false;
-    await load();
+    await Promise.all([load(), useApprovalCount().refresh()]);
   });
 }
 </script>

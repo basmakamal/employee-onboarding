@@ -13,6 +13,7 @@ import { api } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 import SkeletonBlock from '../components/SkeletonBlock.vue';
+import { useApprovalCount } from '../composables/useApprovalCount';
 import StatusChip from '../components/StatusChip.vue';
 
 type CountMap = Record<string, number>;
@@ -77,9 +78,11 @@ const today = computed(() =>
 );
 
 // ── attention ────────────────────────────────────────────────────────────
+// Requests waiting for this approver (0 for people who approve nothing).
+const approvals = useApprovalCount();
 const attentionTotal = computed(() => {
   const c = data.value?.counts;
-  return c ? c.stalled + c.expiringDocs + c.custodyWaiting : 0;
+  return (c ? c.stalled + c.expiringDocs + c.custodyWaiting : 0) + approvals.count.value.total;
 });
 
 /** One sentence per kind of problem, each pointing where it is fixed. */
@@ -87,7 +90,9 @@ const attentionSummary = computed(() => {
   const c = data.value?.counts;
   if (!c) return [];
   const one = (n: number, key: string) => (n === 1 ? t(`dashboard.${key}One`) : t(`dashboard.${key}`, { n }));
+  const waiting = approvals.count.value.total;
   return [
+    waiting ? { key: 'approvals', text: one(waiting, 'attnApprovals'), to: '/approvals', tone: 'warning' } : null,
     c.stalled ? { key: 'stalled', text: one(c.stalled, 'attnStalled'), to: '/employees?filter=onboarding', tone: 'warning' } : null,
     c.expiringDocs ? { key: 'expiring', text: one(c.expiringDocs, 'attnExpiring'), to: '/reports', tone: 'warning' } : null,
     c.custodyWaiting ? { key: 'custody', text: one(c.custodyWaiting, 'attnCustody'), to: '/employees?filter=active', tone: 'info' } : null,

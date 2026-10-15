@@ -26,6 +26,7 @@ import { auditRouter } from './modules/audit/audit.routes.js';
 import { employeeScheduleRouter, workforceRouter } from './modules/workforce/workforce.routes.js';
 import { attendanceRouter, employeeAttendanceRouter } from './modules/workforce/attendance.routes.js';
 import { employeeLeaveRouter, leaveRouter } from './modules/workforce/leave.routes.js';
+import { approvalsRouter } from './modules/workforce/approvals.routes.js';
 import { registersRouter } from './modules/registers/registers.routes.js';
 import { employeeScopeGuard } from './modules/employees/employee-scope.guard.js';
 import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
@@ -108,6 +109,8 @@ staffApi.use('/employees', employeeAttendanceRouter(container.attendanceService)
 // Leave: types, requests to approve, and the Leave tab of the employee file.
 staffApi.use('/leave', leaveRouter(container.leaveService, container.prisma));
 staffApi.use('/employees', employeeLeaveRouter(container.leaveService));
+// One inbox for approvers: leave and overtime waiting for them.
+staffApi.use('/approvals', approvalsRouter(container.prisma));
 staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
 staffApi.use('/org', orgRouter(container.orgService));

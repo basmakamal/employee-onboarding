@@ -42,7 +42,8 @@
     "attendance": "الحضور والانصراف",
     "overtime": "اعتماد العمل الإضافي",
     "leave": "الإجازات",
-    "leaveTypes": "أنواع الإجازات"
+    "leaveTypes": "أنواع الإجازات",
+    "approvals": "الموافقات"
   },
   "users": {
     "assignments": "الإسنادات",
@@ -158,7 +159,9 @@
     "whoNeedsYou": "من يحتاج إليك",
     "statJoined": "انضموا هذا الشهر",
     "statTracks": "إجراءات ملفات مفتوحة",
-    "upcomingChanges": "النقل والترقيات القادمة"
+    "upcomingChanges": "النقل والترقيات القادمة",
+    "attnApprovals": "{n} طلبات بانتظار اعتمادك",
+    "attnApprovalsOne": "طلب واحد بانتظار اعتمادك"
   },
   "settings": {
     "title": "الإعدادات",
@@ -1965,5 +1968,20 @@
     "sumYearly": "الحد السنوي: {n} يوم",
     "sumOnce": "مرة واحدة طوال الخدمة",
     "sumService": "بعد {n} شهر خدمة"
+  },
+  "approvals": {
+    "title": "الموافقات",
+    "subtitle": "الإجازات والعمل الإضافي بانتظار قرارك في {company}، الأقدم أولًا.",
+    "waiting": "بانتظار القرار",
+    "decided": "ما قرّرته",
+    "all": "الكل",
+    "today": "اليوم",
+    "daysAgo": "ينتظر منذ {n} يوم",
+    "selectAll": "تحديد الكل",
+    "selectedN": "تم تحديد {n}",
+    "approveSelected": "اعتماد {n}",
+    "bulkDone": "تم اعتماد {n}.",
+    "emptyWaiting": "لا يوجد شيء بانتظارك.",
+    "emptyDecided": "لم تتخذ أي قرار بعد."
   }
 }

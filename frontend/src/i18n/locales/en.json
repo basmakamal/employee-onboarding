@@ -42,7 +42,8 @@
     "attendance": "Attendance",
     "overtime": "Overtime approvals",
     "leave": "Leave",
-    "leaveTypes": "Leave types"
+    "leaveTypes": "Leave types",
+    "approvals": "Approvals"
   },
   "users": {
     "assignments": "Assignments",
@@ -158,7 +159,9 @@
     "whoNeedsYou": "Who needs you",
     "statJoined": "Joined this month",
     "statTracks": "Open file tracks",
-    "upcomingChanges": "Transfers & promotions coming up"
+    "upcomingChanges": "Transfers & promotions coming up",
+    "attnApprovals": "{n} requests are waiting for your approval",
+    "attnApprovalsOne": "1 request is waiting for your approval"
   },
   "settings": {
     "title": "Settings",
@@ -1964,5 +1967,20 @@
     "sumYearly": "up to {n} days a year",
     "sumOnce": "once in the employment",
     "sumService": "after {n} months of service"
+  },
+  "approvals": {
+    "title": "Approvals",
+    "subtitle": "Leave and overtime waiting for your decision in {company}, oldest first.",
+    "waiting": "Waiting",
+    "decided": "Decided by me",
+    "all": "All",
+    "today": "today",
+    "daysAgo": "waiting {n} day(s)",
+    "selectAll": "Select all",
+    "selectedN": "{n} selected",
+    "approveSelected": "Approve {n}",
+    "bulkDone": "{n} approved.",
+    "emptyWaiting": "Nothing is waiting for you.",
+    "emptyDecided": "You have not decided anything yet."
   }
 }
