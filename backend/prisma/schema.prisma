@@ -213,24 +213,27 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  employees     Employee[]
-  orgUnits      OrgUnit[]
-  positions     Position[]
-  assets        Asset[]
-  listValues    ListValue[]
-  slaRules      SlaRule[]
-  holidays      Holiday[]
-  emailTemplates EmailTemplate[]
-  emailTriggers EmailTrigger[]
-  settings      Setting[]
+  employees        Employee[]
+  orgUnits         OrgUnit[]
+  positions        Position[]
+  assets           Asset[]
+  listValues       ListValue[]
+  slaRules         SlaRule[]
+  holidays         Holiday[]
+  emailTemplates   EmailTemplate[]
+  emailTriggers    EmailTrigger[]
+  settings         Setting[]
   employmentEvents EmploymentEvent[]
-  shifts        ShiftDefinition[]
-  shiftPatterns ShiftPattern[]
+  shifts           ShiftDefinition[]
+  shiftPatterns    ShiftPattern[]
   shiftAssignments ShiftAssignment[]
-  auditLogs     AuditLog[]
-  notifications Notification[]
-  assignments   UserAssignment[]
-  activeFor     User[]           @relation("ActiveCompany")
+  attendanceEvents AttendanceEvent[]
+  attendanceDays   AttendanceDay[]
+  overtimeRequests OvertimeRequest[]
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+  assignments      UserAssignment[]
+  activeFor        User[]            @relation("ActiveCompany")
 
   @@map("companies")
 }
@@ -244,10 +247,10 @@ model Company {
 /// match, and a cycle is impossible to express. The unit's manager (a staff
 /// account) gets a UNIT_MANAGER assignment for exactly that subtree.
 model OrgUnit {
-  id        String   @id @default(cuid())
-  company   Company  @relation(fields: [companyId], references: [id])
+  id        String    @id @default(cuid())
+  company   Company   @relation(fields: [companyId], references: [id])
   companyId String
-  parent    OrgUnit? @relation("OrgUnitTree", fields: [parentId], references: [id])
+  parent    OrgUnit?  @relation("OrgUnitTree", fields: [parentId], references: [id])
   parentId  String?
   children  OrgUnit[] @relation("OrgUnitTree")
   type      String
@@ -255,12 +258,12 @@ model OrgUnit {
   nameAr    String
   nameEn    String
   path      String
-  depth     Int      @default(0)
-  active    Boolean  @default(true)
-  manager   User?    @relation("OrgUnitManager", fields: [managerId], references: [id], onDelete: SetNull)
+  depth     Int       @default(0)
+  active    Boolean   @default(true)
+  manager   User?     @relation("OrgUnitManager", fields: [managerId], references: [id], onDelete: SetNull)
   managerId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   employees Employee[]
 
@@ -343,12 +346,12 @@ model UserAssignment {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String
-  role         Role
-  passwordHash String? // set in Phase F (auth)
-  active       Boolean  @default(true)
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  name               String
+  role               Role
+  passwordHash       String? // set in Phase F (auth)
+  active             Boolean   @default(true)
   /// Invitation flow: true until the person signs in and sets their own password.
   mustChangePassword Boolean   @default(false)
   invitedAt          DateTime?
@@ -359,26 +362,26 @@ model User {
   /// The company workspace this user is working in. Set by the company
   /// selector, re-validated against assignments on every request — it is a
   /// context, never a proof of authorisation.
-  activeCompany   Company? @relation("ActiveCompany", fields: [activeCompanyId], references: [id])
-  activeCompanyId String?
+  activeCompany      Company?  @relation("ActiveCompany", fields: [activeCompanyId], references: [id])
+  activeCompanyId    String?
   /// Set for a self-service account (role EMPLOYEE): the one employee record it may see.
-  employee   Employee? @relation("EmployeeAccount", fields: [employeeId], references: [id], onDelete: SetNull)
-  employeeId String?   @unique
-  createdAt    DateTime @default(now())
+  employee           Employee? @relation("EmployeeAccount", fields: [employeeId], references: [id], onDelete: SetNull)
+  employeeId         String?   @unique
+  createdAt          DateTime  @default(now())
 
-  assignments         UserAssignment[]
-  managedCompanies    Company[]     @relation("CompanyManager")
-  managedUnits        OrgUnit[]     @relation("OrgUnitManager")
-  employeesCreated    Employee[]    @relation("EmployeeCreatedBy")
-  contractsCreated    Contract[]
-  assetFormsCreated   AssetForm[]
-  offboardingRequests Offboarding[] @relation("OffboardingRequestedBy")
-  auditEntries        AuditLog[]
-  notifications       Notification[]
-  employeeRequests    EmployeeRequest[]
-  groupMemberships    NotificationGroupMember[]
-  employmentEventsCreated  EmploymentEvent[] @relation("EmploymentEventCreatedBy")
-  employmentEventsApproved EmploymentEvent[] @relation("EmploymentEventApprovedBy")
+  assignments              UserAssignment[]
+  managedCompanies         Company[]                 @relation("CompanyManager")
+  managedUnits             OrgUnit[]                 @relation("OrgUnitManager")
+  employeesCreated         Employee[]                @relation("EmployeeCreatedBy")
+  contractsCreated         Contract[]
+  assetFormsCreated        AssetForm[]
+  offboardingRequests      Offboarding[]             @relation("OffboardingRequestedBy")
+  auditEntries             AuditLog[]
+  notifications            Notification[]
+  employeeRequests         EmployeeRequest[]
+  groupMemberships         NotificationGroupMember[]
+  employmentEventsCreated  EmploymentEvent[]         @relation("EmploymentEventCreatedBy")
+  employmentEventsApproved EmploymentEvent[]         @relation("EmploymentEventApprovedBy")
 
   @@map("users")
 }
@@ -388,61 +391,61 @@ model User {
 // ---------------------------------------------------------------------------
 
 model Employee {
-  id             String         @id @default(cuid())
+  id                    String          @id @default(cuid())
   /// e.g. EMP-0001 — allocated when the employee becomes ACTIVE, never before.
-  employeeNo     String?        @unique
+  employeeNo            String?         @unique
   /// الاسم الرباعي — kept as four parts because contracts, GOSI and Absher
   /// all expect them separately, and splitting a single string later is
   /// guesswork. firstName/lastName remain the display pair.
-  firstName        String
-  fatherName       String?
-  grandfatherName  String?
-  lastName         String
-  email            String
-  phone            String?
-  nationalId       String?
+  firstName             String
+  fatherName            String?
+  grandfatherName       String?
+  lastName              String
+  email                 String
+  phone                 String?
+  nationalId            String?
   /// Gregorian — the value every downstream system (contract, GOSI) needs.
-  birthDate        DateTime?
+  birthDate             DateTime?
   /// The Hijri date the employee actually entered, kept verbatim (e.g.
   /// 1400-05-12) so what HR reads back matches what was typed. birthDate is
   /// the converted equivalent; this is the source of truth for display.
-  birthDateHijri   String?
-  gender           Gender?
-  nationality      String?
-  maritalStatus    MaritalStatus?
+  birthDateHijri        String?
+  gender                Gender?
+  nationality           String?
+  maritalStatus         MaritalStatus?
   /// العنوان الوطني المختصر (سبل) — 4 letters + 4 digits, e.g. RRRD2929.
-  splAddress       String?
+  splAddress            String?
   /// Saudi IBAN: SA + 22 digits. Validated with the mod-97 checksum on entry
   /// so a mistyped digit surfaces at the form, not at payroll.
-  iban             String?
-  qualification    EducationLevel?
-  major            String?
+  iban                  String?
+  qualification         EducationLevel?
+  major                 String?
   emergencyContactName  String?
   emergencyContactPhone String?
   /// Legacy free-text placement — read-only mirrors until the org tables
   /// carry every record (dropped in the final multi-company phase).
-  department     String?
-  project        String?
-  jobTitle       String?
-  directManager  String?
+  department            String?
+  project               String?
+  jobTitle              String?
+  directManager         String?
   /// Nullable only until the legacy mapping has run everywhere; services
   /// always set it, and scoped queries never match a NULL.
-  company    Company?  @relation(fields: [companyId], references: [id])
-  companyId  String?
-  orgUnit    OrgUnit?  @relation(fields: [orgUnitId], references: [id])
-  orgUnitId  String?
-  position   Position? @relation(fields: [positionId], references: [id])
-  positionId String?
-  manager    Employee?  @relation("EmployeeManager", fields: [managerId], references: [id])
-  managerId  String?
-  reports    Employee[] @relation("EmployeeManager")
-  employmentType EmploymentType @default(FULL_TIME)
+  company               Company?        @relation(fields: [companyId], references: [id])
+  companyId             String?
+  orgUnit               OrgUnit?        @relation(fields: [orgUnitId], references: [id])
+  orgUnitId             String?
+  position              Position?       @relation(fields: [positionId], references: [id])
+  positionId            String?
+  manager               Employee?       @relation("EmployeeManager", fields: [managerId], references: [id])
+  managerId             String?
+  reports               Employee[]      @relation("EmployeeManager")
+  employmentType        EmploymentType  @default(FULL_TIME)
   /// Language of every email this person receives (set at creation, confirmed by the data form).
-  preferredLanguage Language @default(AR)
-  photoKey       String? // storage key of the profile photo (UPLOAD_DIR)
+  preferredLanguage     Language        @default(AR)
+  photoKey              String? // storage key of the profile photo (UPLOAD_DIR)
   /// Set on activation (contract approval or direct add of existing staff).
-  hireDate       DateTime?
-  status         EmployeeStatus @default(CREATED)
+  hireDate              DateTime?
+  status                EmployeeStatus  @default(CREATED)
 
   /// SLA anchor: every transition updates this; the scheduler measures from it.
   statusChangedAt DateTime @default(now())
@@ -453,22 +456,26 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  documents       OnboardingDocument[]
-  contract        Contract?
-  gosi            GosiProcess?
-  medical         MedicalInsuranceProcess?
-  criminalRecord  CriminalRecordProcess?
-  assetForms      AssetForm[]
-  offboardings    Offboarding[]
-  linkTokens      LinkToken[]
-  expiryDocuments EmployeeDocument[]
-  requests        EmployeeRequest[]
+  documents        OnboardingDocument[]
+  contract         Contract?
+  gosi             GosiProcess?
+  medical          MedicalInsuranceProcess?
+  criminalRecord   CriminalRecordProcess?
+  assetForms       AssetForm[]
+  offboardings     Offboarding[]
+  linkTokens       LinkToken[]
+  expiryDocuments  EmployeeDocument[]
+  requests         EmployeeRequest[]
   employmentEvents EmploymentEvent[]
   /// The employee's own sign-in (self-service), when HR has created one.
-  account         User?                    @relation("EmployeeAccount")
+  account          User?                    @relation("EmployeeAccount")
   /// Work schedules over time (effective-dated; temporary ones override).
   shiftAssignments ShiftAssignment[]
-  auditLogs       AuditLog[]               @relation("EmployeeAudit")
+  /// Raw punches (never edited) and the day-by-day result against the schedule.
+  attendanceEvents AttendanceEvent[]
+  attendanceDays   AttendanceDay[]
+  overtimeRequests OvertimeRequest[]
+  auditLogs        AuditLog[]               @relation("EmployeeAudit")
 
   /// (status, statusChangedAt) serves both the status filters and the SLA
   /// scan "in status X for longer than Y"; createdAt serves the list sort.
@@ -511,23 +518,23 @@ enum ContractStatus {
 }
 
 model Contract {
-  id          String    @id @default(cuid())
+  id              String         @id @default(cuid())
   /// Set by HR by hand — the contract itself lives on an external platform.
   status          ContractStatus @default(DRAFT)
   statusChangedAt DateTime       @default(now())
   rejectReason    String?
   /// Reference number on the external contracting platform (optional).
   externalRef     String?
-  employee    Employee  @relation(fields: [employeeId], references: [id])
-  employeeId  String    @unique
-  createdBy   User      @relation(fields: [createdById], references: [id])
-  createdById String
-  storageKey  String? // generated/uploaded contract document
-  details     Json? // salary, duration, terms
-  sentAt      DateTime?
-  approvedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  employee        Employee       @relation(fields: [employeeId], references: [id])
+  employeeId      String         @unique
+  createdBy       User           @relation(fields: [createdById], references: [id])
+  createdById     String
+  storageKey      String? // generated/uploaded contract document
+  details         Json? // salary, duration, terms
+  sentAt          DateTime?
+  approvedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@map("contracts")
 }
@@ -554,16 +561,16 @@ model EmployeeRequest {
 }
 
 model GosiProcess {
-  id         String          @id @default(cuid())
-  employee   Employee        @relation(fields: [employeeId], references: [id])
-  employeeId String          @unique
-  status     ProcessStatus   @default(PENDING)
-  holdReason GosiHoldReason?
-  holdNote   String?
+  id                    String          @id @default(cuid())
+  employee              Employee        @relation(fields: [employeeId], references: [id])
+  employeeId            String          @unique
+  status                ProcessStatus   @default(PENDING)
+  holdReason            GosiHoldReason?
+  holdNote              String?
   /// Proof document attached when the card is completed.
   certificateStorageKey String?
-  updatedAt  DateTime        @updatedAt
-  createdAt  DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  createdAt             DateTime        @default(now())
 
   /// SLA scan + dashboard groupBy both filter/aggregate on status.
   @@index([status, updatedAt])
@@ -571,16 +578,16 @@ model GosiProcess {
 }
 
 model MedicalInsuranceProcess {
-  id         String             @id @default(cuid())
-  employee   Employee           @relation(fields: [employeeId], references: [id])
-  employeeId String             @unique
-  status     ProcessStatus      @default(PENDING)
-  holdReason MedicalHoldReason?
-  holdNote   String?
+  id                    String             @id @default(cuid())
+  employee              Employee           @relation(fields: [employeeId], references: [id])
+  employeeId            String             @unique
+  status                ProcessStatus      @default(PENDING)
+  holdReason            MedicalHoldReason?
+  holdNote              String?
   /// Proof document attached when the card is completed.
   certificateStorageKey String?
-  updatedAt  DateTime           @updatedAt
-  createdAt  DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  createdAt             DateTime           @default(now())
 
   /// SLA scan + dashboard groupBy both filter/aggregate on status.
   @@index([status, updatedAt])
@@ -720,28 +727,32 @@ model Offboarding {
 /// evaluates active rules against records sitting in `status` for longer
 /// than `afterValue afterUnit` (measured from statusChangedAt).
 model SlaRule {
-  id            String    @id @default(cuid())
+  id                 String    @id @default(cuid())
   /// Every company runs its own automation: its rules watch only its records.
-  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String
-  processKey    String    @default("EMPLOYEE") // which state machine this targets
-  status        String // the status the record must be in
-  afterValue    Int
-  afterUnit     SlaUnit
-  action        SlaAction
-  notifySubject Boolean   @default(true) // the employee / new hire
-  notifyHr      Boolean   @default(true) // legacy flag; notifyRole is the target
-  /** Staff group that receives the reminder. */
-  notifyRole    String    @default("HR")
-  /** ESCALATE only: the higher group that gets the escalation. */
-  escalateToRole String?
+  company            Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId          String
+  processKey         String    @default("EMPLOYEE") // which state machine this targets
+  status             String // the status the record must be in
+  afterValue         Int
+  afterUnit          SlaUnit
+  action             SlaAction
+  notifySubject      Boolean   @default(true) // the employee / new hire
+  notifyHr           Boolean   @default(true) // legacy flag; notifyRole is the target
+  /**
+   * Staff group that receives the reminder.
+   */
+  notifyRole         String    @default("HR")
+  /**
+   * ESCALATE only: the higher group that gets the escalation.
+   */
+  escalateToRole     String?
   /// Optional template overrides; null = the watcher's built-in choice.
   subjectTemplateKey String?
   staffTemplateKey   String?
   /// Extra recipients (comma-separated) who get a copy of every staff message from this rule.
-  ccEmails      String?
-  active        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
+  ccEmails           String?
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now())
 
   firings SlaFiring[]
 
@@ -932,29 +943,29 @@ model NotificationGroupAssignment {
 // ---------------------------------------------------------------------------
 
 model Notification {
-  id             String              @id @default(cuid())
-  channel        NotificationChannel
-  status         NotificationStatus  @default(PENDING)
+  id              String              @id @default(cuid())
+  channel         NotificationChannel
+  status          NotificationStatus  @default(PENDING)
   /// Staff recipient (in-app + email) …
-  recipient      User?               @relation(fields: [recipientUserId], references: [id])
+  recipient       User?               @relation(fields: [recipientUserId], references: [id])
   recipientUserId String?
   /// … or external recipient (trainee/employee) by email.
-  recipientEmail String?
-  locale         String              @default("ar")
-  subject        String?
-  body           String              @db.Text
-  entity         String? // e.g. TRAINEE, ASSET_FORM — for deep links
-  entityId       String?
+  recipientEmail  String?
+  locale          String              @default("ar")
+  subject         String?
+  body            String              @db.Text
+  entity          String? // e.g. TRAINEE, ASSET_FORM — for deep links
+  entityId        String?
   /// Which template produced this message, and which version of it — so the
   /// history stays truthful after an admin edits the template.
   templateKey     String?
   templateVersion Int?
-  sentAt         DateTime?
-  readAt         DateTime? // in-app read marker
+  sentAt          DateTime?
+  readAt          DateTime? // in-app read marker
   /// The company the message is about (NULL for system / global mail) — the e-mail log is scoped by it.
-  company        Company?            @relation(fields: [companyId], references: [id])
-  companyId      String?
-  createdAt      DateTime            @default(now())
+  company         Company?            @relation(fields: [companyId], references: [id])
+  companyId       String?
+  createdAt       DateTime            @default(now())
 
   @@index([companyId, createdAt])
   @@index([recipientUserId, readAt])
@@ -1026,14 +1037,14 @@ model AuditLog {
   company    Company?  @relation(fields: [companyId], references: [id])
   companyId  String?
 
-  metadata Json?
+  metadata  Json?
   /// Field-level before / after for edits: { field: { from, to } } (sensitive values masked).
-  changes  Json?
+  changes   Json?
   /// WEB | LINK | SCHEDULER | SYSTEM — where the action came from.
   source    String?
   /// The request (or scheduler run) that caused it — ties several entries to one action.
   requestId String?
-  at       DateTime @default(now())
+  at        DateTime @default(now())
 
   @@index([entity, entityId])
   @@index([employeeId, at])
@@ -1145,20 +1156,20 @@ model ShiftDefinition {
 /// `cycleDays` days counted from the assignment's start date. Each day holds
 /// zero shifts (rest day), one, or several that do not overlap (split shift).
 model ShiftPattern {
-  id          String   @id @default(cuid())
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId   String
-  code        String
-  nameAr      String
-  nameEn      String
+  id        String   @id @default(cuid())
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  code      String
+  nameAr    String
+  nameEn    String
   /// WEEKLY | ROTATION
-  kind        String   @default("WEEKLY")
-  cycleDays   Int      @default(7)
+  kind      String   @default("WEEKLY")
+  cycleDays Int      @default(7)
   /// string[][] — shift-definition ids per day of the cycle.
-  days        Json
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  days      Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   assignments ShiftAssignment[]
 
@@ -1191,3 +1202,96 @@ model ShiftAssignment {
   @@map("shift_assignments")
 }
 
+/// One punch. Staff record them on the employee file (source MANUAL); a
+/// biometric device or an imported file adds them later (DEVICE / IMPORT).
+/// A punch is never edited: a wrong manual one is deleted (audited) and
+/// entered again; device and imported punches cannot be deleted.
+model AttendanceEvent {
+  id            String   @id @default(cuid())
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId    String
+  /// IN | OUT
+  kind          String
+  /// The instant (UTC); staff enter local times, converted with the company time zone.
+  at            DateTime
+  /// MANUAL | DEVICE | IMPORT
+  source        String
+  deviceId      String?
+  importBatchId String?
+  /// Why a manual punch was entered (e.g. "the device was down").
+  note          String?  @db.Text
+  /// Duplicate guard: the same person, kind and minute (or a re-imported file) is one row.
+  fingerprint   String   @unique
+  createdById   String?
+  createdAt     DateTime @default(now())
+
+  @@index([companyId, employeeId, at])
+  @@index([employeeId, at])
+  @@map("attendance_events")
+}
+
+/// A person's day against the schedule in force that day — recalculated from
+/// the punches until payroll locks it. Exceptions (absent, late, early,
+/// missing punch) wait for HR: only CONFIRMED ones may ever be deducted.
+model AttendanceDay {
+  id                String    @id @default(cuid())
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId         String
+  employee          Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId        String
+  /// The local (company time zone) date.
+  date              DateTime  @db.Date
+  /// PRESENT | ABSENT | INCOMPLETE | REST | HOLIDAY | UNSCHEDULED
+  status            String
+  /// Shift codes of the day, e.g. "M" or "N".
+  shiftCodes        String?
+  scheduledMinutes  Int       @default(0)
+  workedMinutes     Int       @default(0)
+  lateMinutes       Int       @default(0)
+  earlyLeaveMinutes Int       @default(0)
+  overtimeMinutes   Int       @default(0)
+  firstIn           DateTime?
+  lastOut           DateTime?
+  /// NONE (nothing to review) | PENDING | CONFIRMED (may be deducted) | EXCUSED
+  review            String    @default("NONE")
+  reviewedById      String?
+  reviewedAt        DateTime?
+  reviewNote        String?   @db.Text
+  /// Set when payroll has used the day — then it is never recalculated.
+  locked            Boolean   @default(false)
+  computedAt        DateTime  @default(now())
+
+  @@unique([employeeId, date])
+  @@index([companyId, date])
+  @@index([companyId, review, date])
+  @@map("attendance_days")
+}
+
+/// Overtime needs approval before payroll may pay it (Art. 107 default:
+/// hourly wage + 50% of the basic hourly wage — applied in payroll).
+model OvertimeRequest {
+  id              String    @id @default(cuid())
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId       String
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId      String
+  date            DateTime  @db.Date
+  minutes         Int
+  /// What the approver allowed (may be less than asked).
+  approvedMinutes Int?
+  reason          String    @db.Text
+  /// PENDING | APPROVED | REJECTED | CANCELLED
+  status          String    @default("PENDING")
+  /// The staff member who entered it; the approver is decidedById.
+  requestedById   String?
+  decidedById     String?
+  decidedAt       DateTime?
+  decisionNote    String?   @db.Text
+  createdAt       DateTime  @default(now())
+
+  @@index([companyId, status, createdAt])
+  @@index([employeeId, date])
+  @@map("overtime_requests")
+}

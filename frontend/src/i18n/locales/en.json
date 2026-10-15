@@ -28,8 +28,6 @@
     "newEmployee": "New employee",
     "lists": "Lists",
     "employeeChanges": "Transfers & promotions",
-    "mySpace": "My space",
-    "groupMine": "My space",
     "groupDashboard": "Dashboard",
     "groupEmployees": "Employees",
     "groupOrganisation": "Organisation",
@@ -40,7 +38,9 @@
     "health": "System health",
     "groupWorkforce": "Workforce",
     "teamSchedule": "Team schedule",
-    "shifts": "Shifts & patterns"
+    "shifts": "Shifts & patterns",
+    "attendance": "Attendance",
+    "overtime": "Overtime approvals"
   },
   "users": {
     "assignments": "Assignments",
@@ -156,9 +156,7 @@
     "whoNeedsYou": "Who needs you",
     "statJoined": "Joined this month",
     "statTracks": "Open file tracks",
-    "upcomingChanges": "Transfers & promotions coming up",
-    "attnNoLogin": "{n} active employees have no login for My space yet",
-    "attnNoLoginOne": "1 active employee has no login for My space yet"
+    "upcomingChanges": "Transfers & promotions coming up"
   },
   "settings": {
     "title": "Settings",
@@ -694,8 +692,6 @@
       "NO_CHANGE": "Nothing would change — choose a different branch, job title or manager.",
       "NOT_SCHEDULED": "Only a change that has not taken effect yet can be cancelled.",
       "BAD_DATE": "Enter a valid effective date.",
-      "ACCOUNT_NOT_ACTIVE": "Your access opens on your first working day and closes when your employment ends. Please contact HR.",
-      "ACCOUNT_EXISTS": "This employee already has a login.",
       "EMAIL_TAKEN": "Another account already signs in with this e-mail — use a different one.",
       "SCHEDULE_OVERLAP": "Another schedule already covers these dates.",
       "USE_TEMPORARY": "For a limited period inside the current schedule, add a temporary schedule instead.",
@@ -709,7 +705,18 @@
       "BAD_CYCLE": "A rotation repeats every 2 to 56 days.",
       "EMPTY_PATTERN": "Put at least one shift in the pattern.",
       "END_BEFORE_START": "The end date is before the start date.",
-      "BAD_PATTERN": "Pick an active pattern."
+      "BAD_PATTERN": "Pick an active pattern.",
+      "DAY_LOCKED": "This day is already in a payroll run and can no longer change.",
+      "NOTHING_TO_REVIEW": "This day has no exception to review.",
+      "FUTURE_DATE": "That day has not happened yet.",
+      "FUTURE_TIME": "That time has not happened yet.",
+      "NEEDS_TIME": "Enter the clock-in time, the clock-out time, or both.",
+      "BAD_TIME": "Enter a valid time.",
+      "DUPLICATE_REQUEST": "There is already a request for this day.",
+      "ALREADY_DECIDED": "This request has already been decided.",
+      "BAD_MINUTES": "Enter a valid number of minutes.",
+      "DUPLICATE_PUNCH": "This punch is already recorded.",
+      "NOT_MANUAL": "Only punches entered by hand can be deleted."
     }
   },
   "login": {
@@ -772,7 +779,8 @@
       "emails": "E-mail",
       "ai": "AI",
       "audit": "Audit",
-      "schedule": "Workforce"
+      "schedule": "Workforce",
+      "attendance": "Attendance"
     },
     "HR": "Human Resources",
     "INSURANCE": "Insurance",
@@ -1424,28 +1432,7 @@
     "photoHint": "JPEG or PNG, up to 5 MB. A square photo looks best.",
     "upload": "Upload picture",
     "adminOnly": "Email and role are managed by an administrator.",
-    "menu": "Account",
-    "employee": {
-      "title": "Self-service login",
-      "none": "This employee has no login yet. With one they can see their details, documents and career history — and later their attendance, leave and payslips.",
-      "create": "Create login",
-      "loginEmail": "Login e-mail",
-      "inviteHint": "E-mail a temporary password. Turn off to see it once and hand it over yourself.",
-      "on": "Active",
-      "off": "Switched off",
-      "lastLogin": "Last sign-in: {date}",
-      "tempPassword": "still on a temporary password",
-      "resetByMail": "Reset password by e-mail",
-      "resetShowBtn": "Reset and show password",
-      "reset": "Reset password",
-      "resetMail": "Send a new temporary password to {email}? The current password stops working.",
-      "resetShow": "Create a new temporary password and show it to you once? The current password stops working.",
-      "disable": "Switch login off",
-      "enable": "Switch login on",
-      "disableConfirm": "The employee will not be able to sign in until the login is switched on again.",
-      "opensWhenActive": "The login works only while the employee is active — it can be prepared now and opens on the first working day.",
-      "handOver": "Hand this temporary password to the employee. It is shown only now; they choose their own at the first sign-in."
-    }
+    "menu": "Account"
   },
   "contractPage": {
     "title": "Your employment contract",
@@ -1558,24 +1545,6 @@
     "pageEmpty": "Nothing here",
     "pageEmptyHint": "Changes are entered from an employee's file → Career history → Transfer / promotion."
   },
-  "mySpace": {
-    "hello": "Hello, {name}",
-    "subtitle": "Your details, documents and career history.",
-    "overview": "My details",
-    "documents": "My documents",
-    "employeeNo": "Employee number",
-    "iban": "IBAN (salary account)",
-    "correctHint": "Something wrong or out of date? Tell HR — they will correct it for you.",
-    "expiryDocs": "ID documents",
-    "formDocs": "Files you sent with the data form",
-    "noDocs": "Nothing here yet.",
-    "expires": "Expires {date}",
-    "expired": "Expired",
-    "daysLeft": "{n} days left",
-    "download": "Download",
-    "downloadFailed": "The file could not be downloaded. Please try again.",
-    "schedule": "My schedule"
-  },
   "registers": {
     "contractsTitle": "Contracts",
     "contractsSubtitle": "Every contract in {company} — status, term and platform reference. Salaries stay on the employee file.",
@@ -1638,7 +1607,6 @@
       "NATIONAL_ID": "National / Iqama number on file",
       "IBAN": "IBAN on file (salary transfer)",
       "MANAGER": "Direct manager set",
-      "LOGIN": "Self-service login created",
       "SCHEDULE": "Work schedule assigned",
       "SALARY": "Salary set"
     }
@@ -1782,5 +1750,94 @@
     "oneWeek": "1 week",
     "twoWeeks": "2 weeks",
     "teamEmpty": "Nobody to show for this filter."
+  },
+  "attendance": {
+    "tab": "Attendance",
+    "daysTitle": "Attendance days",
+    "daysHint": "Each day is judged against the schedule a few hours after its shift ends.",
+    "record": "Record in / out",
+    "recordShort": "Record",
+    "recordHint": "Enter the real times of the day. A clock-out earlier than the clock-in counts as the next morning.",
+    "addOvertime": "Add overtime",
+    "noDays": "No attendance days for this month yet.",
+    "date": "Date",
+    "shift": "Shift",
+    "in": "In",
+    "out": "Out",
+    "workedCol": "Worked",
+    "lateEarly": "Late / early",
+    "overtime": "Overtime",
+    "status": "Status",
+    "review": "Review",
+    "lateN": "late {n} min",
+    "earlyN": "left {n} min early",
+    "statuses": {
+      "PRESENT": "Present",
+      "ABSENT": "Absent",
+      "INCOMPLETE": "Missing punch",
+      "REST": "Rest day",
+      "HOLIDAY": "Holiday",
+      "UNSCHEDULED": "No schedule",
+      "LATE": "Late",
+      "EARLY": "Left early",
+      "OVERTIME": "Overtime"
+    },
+    "reviews": {
+      "NONE": "No exception",
+      "PENDING": "To review",
+      "CONFIRMED": "Confirmed",
+      "EXCUSED": "Excused"
+    },
+    "reviewedBy": "By {name}, {at}",
+    "sources": {
+      "MANUAL": "Entered by hand",
+      "DEVICE": "Device",
+      "IMPORT": "Imported"
+    },
+    "punchesTitle": "Punches",
+    "noPunches": "No punches this month.",
+    "enteredBy": "Entered by {name}",
+    "deletePunch": "Delete punch",
+    "deletePunchConfirm": "Delete this punch? The day is recalculated without it.",
+    "overtimeTitle": "Overtime",
+    "noOvertime": "No overtime this month.",
+    "requestStatuses": {
+      "PENDING": "Waiting",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "CANCELLED": "Withdrawn"
+    },
+    "approvedN": "approved",
+    "decidedBy": "Decided by {name}, {at}",
+    "withdraw": "Withdraw",
+    "withdrawConfirm": "Withdraw this overtime request? It has not been decided yet.",
+    "nextDayHint": "Earlier than the clock-in = the next morning",
+    "reason": "Reason",
+    "send": "Send for approval",
+    "note": "Note (optional)",
+    "overtimeHint": "Overtime is paid only after approval by the branch manager, the company manager or a super admin (default rate: hourly wage + 50% of the basic hourly wage, Labour Law Art. 107).",
+    "hours": "Hours",
+    "minutes": "Minutes",
+    "registerTitle": "Attendance",
+    "registerSubtitle": "Every judged day in {company}. Absences and lateness are only deducted after you confirm them.",
+    "recompute": "Recalculate period",
+    "recomputed": "{n} day(s) updated for {people} people.",
+    "selectedN": "{n} selected",
+    "confirm": "Confirm",
+    "excuse": "Excuse",
+    "registerEmpty": "No attendance days for this filter.",
+    "confirmTitle": "Confirm {n} exception(s)",
+    "excuseTitle": "Excuse {n} exception(s)",
+    "confirmHint": "Confirmed absences, lateness and early leave may be deducted by payroll.",
+    "excuseHint": "Excused exceptions are never deducted.",
+    "overtimePageTitle": "Overtime approvals",
+    "overtimePageSubtitle": "Overtime entered in {company}, with what each day recorded.",
+    "overtimeEmpty": "Nothing here.",
+    "askedFor": "asked for",
+    "recorded": "Recorded",
+    "notJudgedYet": "The day has not been judged yet.",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approveOvertimeHint": "You may approve fewer minutes than asked."
   }
 }

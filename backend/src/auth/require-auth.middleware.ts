@@ -32,7 +32,6 @@ export function requireAuth(auth: AuthService): RequestHandler {
       permissions: user.permissions,
       ...(user.activeCompany ? { companyId: user.activeCompany.id } : {}),
       scope: user.scope,
-      ...(user.employeeId ? { employeeId: user.employeeId } : {}),
     };
     next();
   }), { auth: true });

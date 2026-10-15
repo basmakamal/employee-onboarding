@@ -43,7 +43,6 @@ interface DashboardData {
   /** Transfers / promotions taking effect in the next 30 days. */
   upcomingChanges?: Array<{ batchId: string; category: string; effectiveDate: string; employeeId: string; name: string }>;
   /** Active people without a self-service login. */
-  withoutLogin?: number;
   recentJoiners: Joiner[];
   recent: Array<{
     id: string;
@@ -92,9 +91,6 @@ const attentionSummary = computed(() => {
     c.stalled ? { key: 'stalled', text: one(c.stalled, 'attnStalled'), to: '/employees?filter=onboarding', tone: 'warning' } : null,
     c.expiringDocs ? { key: 'expiring', text: one(c.expiringDocs, 'attnExpiring'), to: '/reports', tone: 'warning' } : null,
     c.custodyWaiting ? { key: 'custody', text: one(c.custodyWaiting, 'attnCustody'), to: '/employees?filter=active', tone: 'info' } : null,
-    data.value?.withoutLogin && auth.can('employees.write')
-      ? { key: 'logins', text: one(data.value.withoutLogin, 'attnNoLogin'), to: '/employees?filter=active', tone: 'info' }
-      : null,
   ].filter((x): x is NonNullable<typeof x> => x !== null);
 });
 

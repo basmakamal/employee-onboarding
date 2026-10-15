@@ -2,7 +2,7 @@
 /**
  * One person's work schedule: the next two weeks day by day, and (for staff)
  * the schedules over time — regular ones in sequence, temporary ones on top
- * — with "Assign schedule". My space shows the same days, read-only.
+ * — with "Assign schedule".
  */
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -24,7 +24,7 @@ interface Assignment {
 }
 interface PatternOption { id: string; code: string; nameAr: string; nameEn: string; active: boolean }
 
-const props = defineProps<{ employeeId: string; canEdit: boolean; self?: boolean }>();
+const props = defineProps<{ employeeId: string; canEdit: boolean }>();
 const emit = defineEmits<{ changed: [] }>();
 const { t, locale } = useI18n();
 const confirm = useConfirm();
@@ -49,15 +49,13 @@ function shift(n: number) {
 async function loadDays() {
   const end = new Date(`${start.value}T00:00:00`);
   end.setDate(end.getDate() + 13);
-  const base = props.self ? '/api/me/schedule' : `/api/employees/${props.employeeId}/schedule`;
   try {
-    days.value = await api.get<Day[]>(`${base}?from=${start.value}&to=${ymd(end)}`);
+    days.value = await api.get<Day[]>(`/api/employees/${props.employeeId}/schedule?from=${start.value}&to=${ymd(end)}`);
   } catch (e) {
     error.value = errorText(e);
   }
 }
 async function loadAssignments() {
-  if (props.self) return;
   try {
     assignments.value = await api.get<Assignment[]>(`/api/employees/${props.employeeId}/schedule-assignments`);
   } catch (e) {
@@ -146,7 +144,7 @@ const inForce = (a: Assignment) => a.startDate.slice(0, 10) <= todayYmd && (!a.e
     </v-card-text>
   </v-card>
 
-  <v-card v-if="!self" :title="$t('schedule.history')" class="mb-4">
+  <v-card :title="$t('schedule.history')" class="mb-4">
     <v-card-text>
       <div v-if="assignments.length === 0" class="text-body-2 text-medium-emphasis">{{ $t('schedule.none') }}</div>
       <div v-for="a in assignments" :key="a.id" class="d-flex align-center flex-wrap ga-2 py-2 arow">

@@ -22,11 +22,12 @@ export const router = createRouter({
     { path: '/trainees', redirect: '/employees' },
     { path: '/trainees/:id', redirect: (to) => `/employees/${to.params['id'] as string}` },
     { path: '/employees', name: 'employees', component: () => import('../pages/EmployeesPage.vue') },
-    { path: '/me', name: 'my-space', component: () => import('../pages/MySpacePage.vue'), meta: { self: true } },
     { path: '/employee-changes', name: 'employee-changes', component: () => import('../pages/EmployeeChangesPage.vue') },
     { path: '/contracts', name: 'contracts', component: () => import('../pages/ContractsPage.vue'), meta: { permission: ['contracts.write', 'employees.read'] } },
     { path: '/documents', name: 'documents', component: () => import('../pages/DocumentsRegisterPage.vue'), meta: { permission: 'documents.read' } },
     { path: '/workforce/shifts', name: 'shifts', component: () => import('../pages/ShiftsPage.vue'), meta: { permission: ['schedule.read', 'schedule.manage'] } },
+    { path: '/workforce/attendance', name: 'attendance', component: () => import('../pages/AttendancePage.vue'), meta: { permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] } },
+    { path: '/workforce/overtime', name: 'overtime', component: () => import('../pages/OvertimePage.vue'), meta: { permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] } },
     { path: '/workforce/schedule', name: 'team-schedule', component: () => import('../pages/TeamSchedulePage.vue'), meta: { permission: ['schedule.read', 'schedule.manage'] } },
     { path: '/system-health', name: 'system-health', component: () => import('../pages/SystemHealthPage.vue'), meta: { global: true, permission: 'settings.manage' } },
     { path: '/audit', name: 'audit', component: () => import('../pages/AuditPage.vue'), meta: { permission: 'audit.read' } },
@@ -154,12 +155,6 @@ router.beforeEach(async (to) => {
   if (auth.user?.mustChangePassword && to.name !== 'change-password') {
     return { name: 'change-password' };
   }
-
-  // An employee's self-service sign-in lives in "My space" only (the server
-  // refuses it everywhere else anyway); staff have no "My space".
-  const selfService = !!auth.user?.employeeId;
-  if (selfService && !to.meta['self'] && to.name !== 'change-password') return { name: 'my-space' };
-  if (!selfService && to.meta['self']) return { name: 'home' };
 
   // One permission, or a list of which any one is enough.
   const permission = to.meta['permission'] as string | string[] | undefined;

@@ -65,6 +65,11 @@ describe('AuthService', () => {
     await expect(auth.login(email, password)).rejects.toThrow('invalid email or password');
   });
 
+  it('employees never sign in: a leftover employee account is refused like a wrong password', async () => {
+    const auth = new AuthService(makeUsers({ role: 'EMPLOYEE' }), SECRETS);
+    await expect(auth.login('hr@example.com', 'Passw0rd!')).rejects.toThrow('invalid email or password');
+  });
+
   it('rejects a deactivated account even with a valid token', async () => {
     const active = new AuthService(makeUsers(), SECRETS);
     const { accessToken } = await active.login('hr@example.com', 'Passw0rd!');
