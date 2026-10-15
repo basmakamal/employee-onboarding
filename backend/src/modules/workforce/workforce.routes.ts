@@ -1,9 +1,9 @@
-import { Router, type Request } from 'express';
+import { Router } from 'express';
 import { z } from 'zod';
 import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import { asyncHandler, pagedQuery, validate, validateQuery } from '../../common/http.js';
 import { actorScope, contextOf, requirePermission } from '../../auth/authz/authorize.js';
-import { ForbiddenError, GuardFailedError } from '../../workflow/errors.js';
+import { GuardFailedError } from '../../workflow/errors.js';
 import type { Actor } from '../../workflow/engine.js';
 import type { ScheduleService } from './schedule.service.js';
 
@@ -149,17 +149,4 @@ export function employeeScheduleRouter(service: ScheduleService): Router {
     res.json(await service.resolve(contextOf(req).companyId, req.params['id'] as string, q.from, q.to));
   }));
   return router;
-}
-
-/** /api/me/schedule — the signed-in employee's own schedule. */
-export function myScheduleHandler(service: ScheduleService) {
-  return [
-    validateQuery(rangeSchema),
-    asyncHandler(async (req: Request, res) => {
-      const employeeId = req.actor?.employeeId;
-      if (!employeeId || !req.actor?.companyId) throw new ForbiddenError('My space is for employee accounts');
-      const q = pagedQuery<z.infer<typeof rangeSchema>>(req);
-      res.json(await service.resolve(req.actor.companyId, employeeId, q.from, q.to));
-    }),
-  ];
 }

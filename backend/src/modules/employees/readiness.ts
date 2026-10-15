@@ -17,7 +17,6 @@ export type ReadinessKey =
   | 'MANAGER'
   | 'NATIONAL_ID'
   | 'IBAN'
-  | 'LOGIN'
   | 'SCHEDULE'
   | 'SALARY';
 
@@ -39,7 +38,6 @@ export interface ReadinessInput {
   nationalId: string | null;
   iban: string | null;
   contract: { status: string } | null;
-  account: { active: boolean } | null;
   /** A work schedule in force today (Phase C). Undefined = not checked. */
   hasSchedule?: boolean;
 }
@@ -54,7 +52,6 @@ export function readinessOf(e: ReadinessInput): { ready: boolean; items: Readine
     { key: 'NATIONAL_ID', ok: !!e.nationalId?.trim(), required: true },
     { key: 'IBAN', ok: !!e.iban?.trim(), required: true },
     { key: 'MANAGER', ok: !!e.managerId, required: false },
-    { key: 'LOGIN', ok: !!e.account?.active, required: false },
     e.hasSchedule === undefined
       ? { key: 'SCHEDULE', ok: false, required: true, soon: true }
       : { key: 'SCHEDULE', ok: e.hasSchedule, required: true },

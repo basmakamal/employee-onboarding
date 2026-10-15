@@ -64,6 +64,8 @@ const GROUPS: NavGroup[] = [
   {
     key: 'nav.groupWorkforce',
     items: [
+      { to: '/workforce/attendance', icon: 'fluent:people-list', key: 'nav.attendance', permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] },
+      { to: '/workforce/overtime', icon: 'fluent:checkmark-circle', key: 'nav.overtime', permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] },
       { to: '/workforce/schedule', icon: 'fluent:calendar', key: 'nav.teamSchedule', permission: ['schedule.read', 'schedule.manage'] },
       { to: '/workforce/shifts', icon: 'fluent:clock-alarm', key: 'nav.shifts', permission: ['schedule.read', 'schedule.manage'] },
       { to: '/calendar', icon: 'fluent:calendar', key: 'nav.calendar', permission: 'settings.manage' },
@@ -98,12 +100,8 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
-/** An employee's self-service sign-in: the shell shows only their own space. */
-const isSelfService = computed(() => !!auth.user?.employeeId);
-const SELF_GROUPS: NavGroup[] = [{ key: 'nav.groupMine', items: [{ to: '/me', icon: 'fluent:person-starburst', key: 'nav.mySpace' }] }];
-
 const groups = computed(() =>
-  (isSelfService.value ? SELF_GROUPS : GROUPS).map((g) => ({
+  GROUPS.map((g) => ({
     ...g,
     items: g.items.filter((i) => !i.permission || auth.can(...(Array.isArray(i.permission) ? i.permission : [i.permission]))),
   })).filter((g) => g.items.length > 0),
@@ -143,15 +141,12 @@ const currentKey = computed(() => {
     .sort((a, b) => b.to.length - a.to.length)[0];
   if (match) return match.key;
   if (route.path.startsWith('/offboardings/')) return 'nav.offboardings';
-  if (route.path === '/me') return 'nav.mySpace';
   return null;
 });
 
 /** Phone bottom bar: the places HR goes most, plus the one big action. */
 const bottomItems = computed(() =>
-  isSelfService.value
-    ? [{ to: '/me', icon: 'fluent:person-starburst', key: 'nav.mySpace', permission: undefined as string | undefined }]
-    : [
+  [
     { to: '/', icon: 'fluent:home', key: 'nav.home', permission: undefined as string | undefined },
     { to: '/employees', icon: 'fluent:people', key: 'nav.people', permission: undefined as string | undefined },
     { to: '/emails', icon: 'fluent:mail', key: 'nav.inbox', permission: 'emails.view' as string | undefined },
@@ -206,7 +201,7 @@ async function logout() {
 }
 
 function onKey(e: KeyboardEvent) {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !isSelfService.value) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
     palette.value = !palette.value;
   }
@@ -252,7 +247,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         </div>
 
         <button
-          v-if="!isSelfService"
           type="button"
           class="shell-search"
           :class="{ 'shell-search--rail': isRail }"
@@ -396,7 +390,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         </v-menu>
 
         <v-btn
-          v-if="display.smAndDown.value && !isSelfService"
+          v-if="display.smAndDown.value"
           icon="search"
           variant="text"
           :aria-label="$t('common.search')"

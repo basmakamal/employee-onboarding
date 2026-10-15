@@ -12,9 +12,9 @@ import { rules } from '../validation/rules';
 import ProcessCard from '../components/ProcessCard.vue';
 import StatusChip from '../components/StatusChip.vue';
 import EmploymentHistory from '../components/EmploymentHistory.vue';
-import EmployeeAccountCard from '../components/EmployeeAccountCard.vue';
 import ReadinessCard from '../components/ReadinessCard.vue';
 import EmployeeSchedule from '../components/EmployeeSchedule.vue';
+import PersonAttendance from '../components/PersonAttendance.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 
@@ -559,7 +559,7 @@ function formActions(status: string): Array<'send' | 'cancel' | 'revise'> {
 }
 
 // ------------------------------------------------------------- tabs
-const tab = ref('overview');
+const tab = ref(typeof route.query.tab === 'string' ? route.query.tab : 'overview');
 /** Bumped after each reload of the file, so the readiness checklist re-checks too. */
 const readinessKey = ref(0);
 
@@ -1610,6 +1610,9 @@ onMounted(load);
       <v-tab v-if="auth.can('schedule.read', 'schedule.manage')" value="schedule" prepend-icon="calendar">
         {{ $t('schedule.tab') }}
       </v-tab>
+      <v-tab v-if="auth.can('attendance.read', 'attendance.manage', 'attendance.approve')" value="attendance" prepend-icon="clock">
+        {{ $t('attendance.tab') }}
+      </v-tab>
     </v-tabs>
 
     <v-window v-model="tab" :touch="false">
@@ -2080,13 +2083,6 @@ onMounted(load);
       <!-- Requests & services + onboarding documents -->
       <v-col cols="12" md="5">
         <ReadinessCard v-if="!['EXPIRED', 'WITHDRAWN', 'INACTIVE'].includes(employee.status)" :employee-id="id" :refresh-key="readinessKey" />
-        <EmployeeAccountCard
-          v-if="!['EXPIRED', 'WITHDRAWN'].includes(employee.status)"
-          :employee-id="id"
-          :employee-status="employee.status"
-          :employee-email="employee.email"
-          :can-edit="auth.can('employees.write')"
-        />
         <v-card v-if="!isPipeline" class="mb-4">
           <v-card-item>
             <v-card-title class="text-subtitle-1 font-weight-bold">
@@ -2225,6 +2221,11 @@ onMounted(load);
       <!-- Work schedule: who works which shifts, day by day -->
       <v-window-item value="schedule">
         <EmployeeSchedule v-if="tab === 'schedule'" :employee-id="id" :can-edit="auth.can('schedule.manage')" @changed="readinessKey += 1" />
+      </v-window-item>
+
+      <!-- Attendance: judged days, punches, corrections and overtime -->
+      <v-window-item value="attendance">
+        <PersonAttendance v-if="tab === 'attendance'" :employee-id="id" :can-record="auth.can('attendance.manage')" :can-request-overtime="auth.can('attendance.manage', 'attendance.approve')" />
       </v-window-item>
 
       <!-- Employment history: dated transfers, promotions, manager and status changes -->

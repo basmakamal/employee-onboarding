@@ -45,6 +45,8 @@ const PAGES: Array<{ to: string; key: string; icon: string; permission?: string 
   { to: '/emails', key: 'nav.emailLog', icon: 'fluent:mail', permission: 'emails.view' },
   { to: '/assistant', key: 'nav.assistant', icon: 'fluent:bot-sparkle', permission: 'ai.use' },
   { to: '/employee-changes', key: 'nav.employeeChanges', icon: 'fluent:history' },
+  { to: '/workforce/attendance', key: 'nav.attendance', icon: 'fluent:people-list', permission: 'attendance.read' },
+  { to: '/workforce/overtime', key: 'nav.overtime', icon: 'fluent:checkmark-circle', permission: 'attendance.read' },
   { to: '/workforce/schedule', key: 'nav.teamSchedule', icon: 'fluent:calendar', permission: 'schedule.read' },
   { to: '/workforce/shifts', key: 'nav.shifts', icon: 'fluent:clock-alarm', permission: 'schedule.read' },
   { to: '/audit', key: 'nav.audit', icon: 'fluent:shield-checkmark', permission: 'audit.read' },

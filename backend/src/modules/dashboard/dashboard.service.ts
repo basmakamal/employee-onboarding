@@ -54,14 +54,13 @@ export class DashboardService {
     const trendStart = new Date(now.getTime() - TREND_WEEKS * 7 * 86_400_000);
 
     const soon = new Date(now.getTime() + 30 * 86_400_000);
-    const [upcomingChanges, withoutLogin] = await Promise.all([
+    const [upcomingChanges] = await Promise.all([
       this.prisma.employmentEvent.findMany({
         where: { status: 'SCHEDULED', effectiveDate: { lte: soon }, employee: emp({}), category: { in: ['ORG_UNIT', 'POSITION', 'MANAGER'] } },
         orderBy: { effectiveDate: 'asc' },
         take: 6,
         select: { batchId: true, category: true, effectiveDate: true, employee: { select: { id: true, firstName: true, lastName: true } } },
       }),
-      this.prisma.employee.count({ where: emp({ status: 'ACTIVE', account: null }) }),
     ]);
 
     const [
@@ -195,8 +194,6 @@ export class DashboardService {
         employeeId: c.employee.id,
         name: `${c.employee.firstName} ${c.employee.lastName}`.trim(),
       })),
-      /** Active people who cannot use My space yet. */
-      withoutLogin,
       onboarding,
       employees,
       processes: {

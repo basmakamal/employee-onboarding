@@ -49,6 +49,9 @@ export const PERMISSIONS = {
   // ── workforce
   'schedule.read': { nameAr: 'عرض جداول العمل', nameEn: 'View work schedules' },
   'schedule.manage': { nameAr: 'إدارة الورديات وجداول العمل', nameEn: 'Manage shifts and work schedules' },
+  'attendance.read': { nameAr: 'عرض الحضور والانصراف', nameEn: 'View attendance' },
+  'attendance.manage': { nameAr: 'تسجيل الحضور ومراجعة المخالفات', nameEn: 'Record attendance and review exceptions' },
+  'attendance.approve': { nameAr: 'اعتماد العمل الإضافي', nameEn: 'Approve overtime' },
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -92,7 +95,7 @@ export const SYSTEM_ROLES: Array<{
     nameAr: 'مدير وحدة تنظيمية',
     nameEn: 'Unit manager (branch / department / team)',
     level: 'UNIT',
-    permissions: ['org.read', 'employees.read', 'documents.read', 'requests.write', 'reports.view', 'audit.read', 'schedule.read'],
+    permissions: ['org.read', 'employees.read', 'documents.read', 'requests.write', 'reports.view', 'audit.read', 'schedule.read', 'attendance.read', 'attendance.approve'],
   },
   {
     code: 'HR',
@@ -103,7 +106,7 @@ export const SYSTEM_ROLES: Array<{
       'org.read', 'employees.read', 'employees.write', 'onboarding.manage', 'contracts.write',
       'documents.read', 'documents.write', 'requests.write', 'processes.criminal',
       'offboarding.manage', 'reports.view', 'reports.export', 'emails.view', 'ai.use',
-      'schedule.read', 'schedule.manage',
+      'schedule.read', 'schedule.manage', 'attendance.read', 'attendance.manage',
     ],
   },
   {
@@ -126,14 +129,5 @@ export const SYSTEM_ROLES: Array<{
     nameEn: 'Finance',
     level: 'COMPANY',
     permissions: ['org.read', 'employees.read', 'settlement.approve', 'reports.view'],
-  },
-  {
-    // A self-service sign-in. It holds NO staff permission: everything it can
-    // see is its own record, through /api/me only (the staff API refuses it).
-    code: 'EMPLOYEE',
-    nameAr: 'موظف (الخدمة الذاتية)',
-    nameEn: 'Employee (self-service)',
-    level: 'COMPANY',
-    permissions: [],
   },
 ];

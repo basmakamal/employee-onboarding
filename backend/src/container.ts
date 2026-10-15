@@ -13,7 +13,7 @@ import { SlaRuleRepository, HolidayRepository } from './workflow/sla-rule.reposi
 import { NotificationRepository } from './notifications/notification.repository.js';
 import { NotificationService } from './notifications/notification.service.js';
 import { ScheduleService } from './modules/workforce/schedule.service.js';
-import { EmployeeAccountService } from './modules/employees/employee-account.service.js';
+import { AttendanceService } from './modules/workforce/attendance.service.js';
 import { EmploymentEventRepository } from './modules/employees/employment-event.repository.js';
 import { EmploymentHistoryService } from './modules/employees/employment-history.service.js';
 import { CompanyResolver } from './modules/companies/company-resolver.js';
@@ -207,8 +207,8 @@ export function buildContainer() {
   const employmentHistory = new EmploymentHistoryService(prisma, new EmploymentEventRepository(prisma), employees, audit);
   // Work schedules: shifts, patterns, effective-dated assignments.
   const scheduleService = new ScheduleService(prisma, audit);
-  // An employee's own self-service sign-in, created by HR.
-  const employeeAccounts = new EmployeeAccountService(prisma, employees, notifications, config.APP_URL, audit);
+  // Attendance: punches, judged days, corrections and overtime.
+  const attendanceService = new AttendanceService(prisma, scheduleService, audit);
   onTransition((event) => employmentHistory.recordStatus(event));
 
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
@@ -226,7 +226,11 @@ export function buildContainer() {
       responsibility: responsibilityService,
       companies: companyResolver,
       // A transfer dated 1 November takes effect on that local day.
-      jobs: [{ name: 'employment-changes', run: (now) => employmentHistory.applyDue(now) }],
+      jobs: [
+        { name: 'employment-changes', run: (now) => employmentHistory.applyDue(now) },
+        // Yesterday's attendance is judged once its shifts have closed (hourly).
+        { name: 'attendance-days', run: (now) => attendanceService.recomputeRecent(now) },
+      ],
     },
     [
       onboardingWatcher(employees, onboardingWorkflow, contracts, linkTokenService),
@@ -331,8 +335,8 @@ export function buildContainer() {
     onboardingService,
     employeeService,
     employmentHistory,
-    employeeAccounts,
     scheduleService,
+    attendanceService,
     assetService,
     offboardingService,
     authService,

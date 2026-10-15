@@ -95,6 +95,7 @@ export const COMPANY_SCOPED_PREFIXES = [
   '/registers',
   '/audit',
   '/workforce',
+  '/attendance',
 ] as const;
 
 /**
@@ -138,26 +139,6 @@ export function auditScope(scope: EmployeeScope | undefined): Prisma.AuditLogWhe
 }
 
 /** Route gate for company-owned data: no selected company → refused. */
-/** The only parts of the staff API a self-service (employee) account may call. */
-const SELF_SERVICE_PREFIXES = ['/me', '/notifications', '/events'];
-
-/**
- * Fence for the staff API: a self-service account (role EMPLOYEE) is refused
- * everywhere except its own data (/me) and its notification bell. Mounted
- * right after authentication, so no staff route — even one that only checks
- * for a signed-in user — can ever answer an employee login.
- */
-export function staffOnly(): RequestHandler {
-  return (req, _res, next) => {
-    const path = req.path;
-    if (req.actor?.role === 'EMPLOYEE' && !SELF_SERVICE_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) {
-      next(new ForbiddenError('this area is for staff — use My space'));
-      return;
-    }
-    next();
-  };
-}
-
 export function requireCompany(): RequestHandler {
   const handler: RequestHandler = (req, _res, next) => {
     if (!req.actor?.companyId) {

@@ -5,7 +5,7 @@ import { createApp } from './app.js';
 import { buildContainer } from './container.js';
 import { startSlaScheduler } from './workflow/sla-scheduler.js';
 import { requireAuth } from './auth/require-auth.middleware.js';
-import { actorScope, COMPANY_SCOPED_PREFIXES, requireCompany, requirePermission, staffOnly } from './auth/authz/authorize.js';
+import { actorScope, COMPANY_SCOPED_PREFIXES, requireCompany, requirePermission } from './auth/authz/authorize.js';
 import { companyRouter } from './modules/companies/company.routes.js';
 import { orgRouter } from './modules/organisation/org.routes.js';
 import { assignmentsRouter, rolesRouter } from './auth/authz.routes.js';
@@ -21,10 +21,10 @@ import { notificationRouter } from './notifications/notification.routes.js';
 import { emailTemplatesRouter, emailTriggersRouter } from './notifications/email-admin.routes.js';
 import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
-import { employeeAccountRouter } from './modules/employees/employee-account.routes.js';
-import { meRouter } from './modules/self-service/me.routes.js';
+import { readinessRouter } from './modules/employees/readiness.routes.js';
 import { auditRouter } from './modules/audit/audit.routes.js';
-import { employeeScheduleRouter, myScheduleHandler, workforceRouter } from './modules/workforce/workforce.routes.js';
+import { employeeScheduleRouter, workforceRouter } from './modules/workforce/workforce.routes.js';
+import { attendanceRouter, employeeAttendanceRouter } from './modules/workforce/attendance.routes.js';
 import { registersRouter } from './modules/registers/registers.routes.js';
 import { employeeScopeGuard } from './modules/employees/employee-scope.guard.js';
 import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
@@ -59,8 +59,6 @@ void container.prisma.company
 // the state machines (roles on transitions) and per-route gates below.
 const staffApi = Router();
 staffApi.use(requireAuth(container.authService));
-// Employee self-service logins may only reach /me and their notification bell.
-staffApi.use(staffOnly());
 // Global administration — the one HR-adjacent surface that works before a
 // company is selected (it is how a super admin gets one).
 staffApi.use('/companies', companyRouter(container.companyService));
@@ -83,13 +81,12 @@ staffApi.use('/employees/:id', employeeScopeGuard(container.repos.employees));
 staffApi.use('/employees', employmentHistoryRouter(container.employmentHistory));
 staffApi.use(
   '/employees',
-  employeeAccountRouter(container.employeeAccounts, (id) =>
+  readinessRouter((id) =>
     container.prisma.employee.findUnique({
       where: { id },
       select: {
         status: true, hireDate: true, orgUnitId: true, positionId: true, managerId: true, nationalId: true, iban: true,
         contract: { select: { status: true } },
-        account: { select: { active: true } },
         companyId: true,
       },
     }).then(async (e) =>
@@ -104,9 +101,9 @@ staffApi.use('/registers', registersRouter(container.prisma));
 // Work schedules: shifts, patterns, the team schedule; one person's schedule under /employees/:id.
 staffApi.use('/workforce', workforceRouter(container.scheduleService, container.prisma));
 staffApi.use('/employees', employeeScheduleRouter(container.scheduleService));
-// An employee's own data, for their self-service sign-in.
-staffApi.get('/me/schedule', ...myScheduleHandler(container.scheduleService));
-staffApi.use('/me', meRouter(container.prisma));
+// Attendance: the register, exception review, corrections and overtime to approve.
+staffApi.use('/attendance', attendanceRouter(container.attendanceService, container.prisma));
+staffApi.use('/employees', employeeAttendanceRouter(container.attendanceService));
 staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
 staffApi.use('/org', orgRouter(container.orgService));

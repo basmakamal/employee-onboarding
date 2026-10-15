@@ -21,8 +21,6 @@ export const USER_LIST_SELECT = {
  * a second round trip.
  */
 export const WITH_ASSIGNMENTS = {
-  /** A self-service account's employee: its company and whether it is still employed. */
-  employee: { select: { id: true, companyId: true, status: true } },
   assignments: {
     select: {
       companyId: true,
@@ -81,7 +79,7 @@ export class UserRepository {
   /** Server-side page of staff accounts (search across name/email). */
   async listPaged(query: { q?: string; page: number; limit: number }) {
     const q = query.q?.trim();
-    // Staff accounts only — employee self-service logins are managed from the employee file.
+    // Staff accounts only — leftover employee accounts (role EMPLOYEE) are switched off and hidden.
     const where = {
       role: { not: 'EMPLOYEE' as const },
       ...(q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }] } : {}),

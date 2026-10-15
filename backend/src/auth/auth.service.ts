@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import type { Role } from '../generated/prisma/enums.js';
 import type { UserRepository } from './user.repository.js';
 import type { RefreshTokenStore } from './refresh-token.store.js';
-import { ForbiddenError, GuardFailedError, UnauthorizedError } from '../workflow/errors.js';
+import { ForbiddenError, UnauthorizedError } from '../workflow/errors.js';
 import { logger } from '../common/logger.js';
 import type { AuditEntry } from '../workflow/audit-log.repository.js';
 import { SYSTEM_ROLES } from './authz/permissions.js';
@@ -60,8 +60,6 @@ export interface PublicUser {
   mustChangePassword: boolean;
   /** A profile picture is stored and can be fetched from /api/auth/me/photo. */
   hasPhoto: boolean;
-  /** Set for a self-service account: the employee this sign-in belongs to (the UI shows "My space"). */
-  employeeId: string | null;
 }
 
 /** What the request middleware needs beyond the public view. */
@@ -98,8 +96,6 @@ interface UserRow {
   mustChangePassword?: boolean;
   photoKey?: string | null;
   activeCompanyId?: string | null;
-  employeeId?: string | null;
-  employee?: { id: string; companyId: string | null; status: string } | null;
   assignments?: Array<{
     companyId: string | null;
     orgUnitId: string | null;
@@ -110,14 +106,11 @@ interface UserRow {
 const LEGACY_BUNDLE = new Map(SYSTEM_ROLES.map((r) => [r.code, r.permissions]));
 
 /**
- * A self-service sign-in works only while its employee is employed: before
- * the start (account prepared in advance) and after the end it is refused.
+ * Employees never sign in: the platform is for staff only. Accounts left over
+ * from the short-lived self-service phase (role EMPLOYEE) are refused.
  */
-function assertSelfServiceOpen(user: UserRow): void {
-  if (user.role !== 'EMPLOYEE') return;
-  if (!user.employee || user.employee.status !== 'ACTIVE' || !user.employee.companyId) {
-    throw new GuardFailedError('ACCOUNT_NOT_ACTIVE', 'your access opens on your first working day and closes when your employment ends');
-  }
+function assertStaff(user: UserRow): void {
+  if (user.role === 'EMPLOYEE') throw new UnauthorizedError('account unavailable');
 }
 
 export class AuthService {
@@ -156,8 +149,7 @@ export class AuthService {
       throw new UnauthorizedError('invalid email or password');
     }
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) throw new UnauthorizedError('invalid email or password');
-    assertSelfServiceOpen(user);
+    if (!ok || user.role === 'EMPLOYEE') throw new UnauthorizedError('invalid email or password');
 
     // Best-effort stamp; a failure here must never block a valid sign-in.
     try {
@@ -254,7 +246,7 @@ export class AuthService {
     }
     const user = await this.users.findById(payload.sub);
     if (!user || !user.active) throw new UnauthorizedError('account unavailable');
-    assertSelfServiceOpen(user);
+    assertStaff(user);
 
     return {
       user: await this.session(user),
@@ -279,7 +271,7 @@ export class AuthService {
     const payload = this.verify(accessToken, 'access');
     const user = await this.users.findById(payload.sub);
     if (!user || !user.active) throw new UnauthorizedError('account unavailable');
-    assertSelfServiceOpen(user);
+    assertStaff(user);
     return this.session(user);
   }
 
@@ -292,13 +284,6 @@ export class AuthService {
    * out between the migration and the mapping.
    */
   private views(user: UserRow): AssignmentView[] {
-    // A self-service account lives in its employee's company and holds no staff permission.
-    if (user.role === 'EMPLOYEE') {
-      const companyId = user.employee?.companyId;
-      return companyId
-        ? [{ roleCode: 'EMPLOYEE', permissions: [], companyId, orgUnitId: null, orgUnitPath: null }]
-        : [];
-    }
     const rows = (user.assignments ?? []).filter((a) => a.role.active);
     if (rows.length > 0) {
       return rows.map((a) => ({
@@ -353,12 +338,7 @@ export class AuthService {
       activeCompany: active,
       mustChangePassword: user.mustChangePassword ?? false,
       hasPhoto: !!user.photoKey,
-      employeeId: user.role === 'EMPLOYEE' ? (user.employeeId ?? null) : null,
-      // Defense in depth: a self-service account's scope matches no one, should any staff query ever run for it.
-      scope:
-        user.role === 'EMPLOYEE'
-          ? { companyId, all: false, orgUnitPaths: [] }
-          : resolveScope(resolved, companyId),
+      scope: resolveScope(resolved, companyId),
     };
   }
 
