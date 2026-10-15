@@ -17,6 +17,7 @@ import EmployeeSchedule from '../components/EmployeeSchedule.vue';
 import PersonAttendance from '../components/PersonAttendance.vue';
 import EmployeeLeave from '../components/EmployeeLeave.vue';
 import EmployeePay from '../components/EmployeePay.vue';
+import EmployeeMoney from '../components/EmployeeMoney.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 
@@ -2233,7 +2234,10 @@ onMounted(load);
 
       <!-- Pay: confidential — only for people with compensation.read -->
       <v-window-item value="pay">
-        <EmployeePay v-if="tab === 'pay'" :employee-id="id" :can-edit="auth.can('compensation.write')" @changed="readinessKey += 1" />
+        <template v-if="tab === 'pay'">
+          <EmployeePay :employee-id="id" :can-edit="auth.can('compensation.write')" @changed="readinessKey += 1" />
+          <EmployeeMoney :employee-id="id" :can-edit="auth.can('compensation.write')" />
+        </template>
       </v-window-item>
 
       <!-- Leave: balances, requests and the balance history -->

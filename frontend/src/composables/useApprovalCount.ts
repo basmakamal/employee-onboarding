@@ -6,7 +6,7 @@
 import { ref } from 'vue';
 import { api } from '../api/client';
 
-const count = ref({ leave: 0, overtime: 0, total: 0 });
+const count = ref({ leave: 0, overtime: 0, money: 0, total: 0 });
 let timer: ReturnType<typeof setInterval> | undefined;
 
 async function refresh() {
@@ -29,7 +29,7 @@ export function useApprovalCount() {
     stop() {
       clearInterval(timer);
       timer = undefined;
-      count.value = { leave: 0, overtime: 0, total: 0 };
+      count.value = { leave: 0, overtime: 0, money: 0, total: 0 };
     },
   };
 }

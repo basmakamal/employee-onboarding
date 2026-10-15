@@ -48,6 +48,7 @@ const PAGES: Array<{ to: string; key: string; icon: string; permission?: string 
   { to: '/workforce/attendance', key: 'nav.attendance', icon: 'fluent:people-list', permission: 'attendance.read' },
   { to: '/approvals', key: 'nav.approvals', icon: 'fluent:checkmark-circle', permission: 'leave.approve' },
   { to: '/workforce/overtime', key: 'nav.overtime', icon: 'fluent:clock-alarm', permission: 'attendance.read' },
+  { to: '/payroll/money', key: 'nav.money', icon: 'fluent:toolbox', permission: 'compensation.read' },
   { to: '/payroll/setup', key: 'nav.payrollSetup', icon: 'fluent:receipt', permission: 'compensation.read' },
   { to: '/workforce/leave', key: 'nav.leave', icon: 'fluent:receipt', permission: 'leave.read' },
   { to: '/workforce/leave-types', key: 'nav.leaveTypes', icon: 'fluent:text-bullet-list-square', permission: 'leave.read' },

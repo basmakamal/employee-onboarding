@@ -2,7 +2,8 @@
 /**
  * Approvals: everything waiting for the signed-in approver (branch manager,
  * company manager, super admin) in one queue — leave and overtime together,
- * oldest first — and what they decided lately. Approve or reject one by one
+ * oldest first, plus advances, loans and one-off payments for whoever may
+ * approve money — and what they decided lately. Approve or reject one by one
  * with a note, or approve several at once; every decision records who made
  * it. Leave approval re-checks the balance, so a bulk approval reports the
  * requests that could not go through instead of stopping.
@@ -39,7 +40,15 @@ interface OvertimeItem extends Base {
   kind: 'OVERTIME';
   overtime: { date: string; minutes: number; approvedMinutes: number | null; day: { status: string; firstIn: string | null; lastOut: string | null; workedMinutes: number; overtimeMinutes: number } | null };
 }
-type Item = LeaveItem | OvertimeItem;
+interface LoanItem extends Base {
+  kind: 'LOAN';
+  loan: { kind: 'ADVANCE' | 'LOAN'; amount: number; instalments: number; startMonth: string; monthly: number };
+}
+interface PaymentItem extends Base {
+  kind: 'PAYMENT';
+  payment: { kind: 'EARNING' | 'DEDUCTION'; category: string; amount: number; month: string };
+}
+type Item = LeaveItem | OvertimeItem | LoanItem | PaymentItem;
 
 const { t } = useI18n();
 const companyName = useActiveCompanyName();
@@ -48,14 +57,20 @@ const f = useAttendanceFormat();
 const nameOf = (x: { nameAr: string; nameEn: string }) => (f.ar.value ? x.nameAr : x.nameEn);
 
 const view = ref<'WAITING' | 'DECIDED'>('WAITING');
-const kind = ref<'ALL' | 'LEAVE' | 'OVERTIME'>('ALL');
+const kind = ref<'ALL' | 'LEAVE' | 'OVERTIME' | 'LOAN' | 'PAYMENT'>('ALL');
 const items = ref<Item[]>([]);
-const kinds = ref({ leave: false, overtime: false });
+const kinds = ref({ leave: false, overtime: false, money: false });
 const tz = ref('Asia/Riyadh');
 const loading = ref(false);
 const error = ref('');
 const selected = ref<string[]>([]);
 const keyOf = (i: Item) => `${i.kind}:${i.id}`;
+const KIND_COLOR: Record<Item['kind'], string> = { LEAVE: 'primary', OVERTIME: 'secondary', LOAN: 'warning', PAYMENT: 'success' };
+const TAB_OF: Record<Item['kind'], string> = { LEAVE: 'leave', OVERTIME: 'attendance', LOAN: 'pay', PAYMENT: 'pay' };
+const kindLabel = (i: Item) =>
+  i.kind === 'LEAVE' ? t('leave.tab') : i.kind === 'OVERTIME' ? t('attendance.overtime') : i.kind === 'LOAN' ? t(`money.kinds.${i.loan.kind}`) : t(`money.paymentKinds.${i.payment.kind}`);
+const money = (n: number) => n.toLocaleString(f.ar.value ? 'ar-SA' : 'en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString(f.ar.value ? 'ar-SA-u-ca-gregory' : 'en-GB', { timeZone: 'UTC', month: 'long', year: 'numeric' });
 
 async function load() {
   loading.value = true;
@@ -63,7 +78,7 @@ async function load() {
   try {
     const params = new URLSearchParams({ view: view.value });
     if (kind.value !== 'ALL') params.set('kind', kind.value);
-    const data = await api.get<{ items: Item[]; kinds: { leave: boolean; overtime: boolean }; timezone: string }>(`/api/approvals?${params}`);
+    const data = await api.get<{ items: Item[]; kinds: { leave: boolean; overtime: boolean; money: boolean }; timezone: string }>(`/api/approvals?${params}`);
     items.value = data.items;
     kinds.value = data.kinds;
     tz.value = data.timezone;
@@ -102,9 +117,10 @@ function open(item: Item, approve: boolean) {
 }
 function decide(item: Item, approve: boolean, note: string, minutes?: number) {
   const body = { approve, ...(note.trim() ? { note: note.trim() } : {}), ...(minutes !== undefined ? { approvedMinutes: minutes } : {}) };
-  return item.kind === 'LEAVE'
-    ? api.post(`/api/leave/requests/${item.id}/decision`, body)
-    : api.post(`/api/attendance/overtime/${item.id}/decision`, body);
+  if (item.kind === 'LEAVE') return api.post(`/api/leave/requests/${item.id}/decision`, body);
+  if (item.kind === 'OVERTIME') return api.post(`/api/attendance/overtime/${item.id}/decision`, body);
+  if (item.kind === 'LOAN') return api.post(`/api/payroll/loans/${item.id}/decision`, body);
+  return api.post(`/api/payroll/payments/${item.id}/decision`, body);
 }
 function save() {
   return form.submit(async () => {
@@ -153,10 +169,12 @@ async function approveSelected() {
         </v-btn>
         <v-btn value="DECIDED" prepend-icon="check-check">{{ $t('approvals.decided') }}</v-btn>
       </v-btn-toggle>
-      <v-chip-group v-if="kinds.leave && kinds.overtime" v-model="kind" mandatory selected-class="text-primary" class="ms-1">
+      <v-chip-group v-if="[kinds.leave, kinds.overtime, kinds.money].filter(Boolean).length > 1" v-model="kind" mandatory selected-class="text-primary" class="ms-1">
         <v-chip value="ALL" variant="outlined" size="small">{{ $t('approvals.all') }}</v-chip>
         <v-chip value="LEAVE" variant="outlined" size="small">{{ $t('leave.pageTitle') }}<template v-if="approvals.count.value.leave"> · {{ approvals.count.value.leave }}</template></v-chip>
         <v-chip value="OVERTIME" variant="outlined" size="small">{{ $t('attendance.overtimeTitle') }}<template v-if="approvals.count.value.overtime"> · {{ approvals.count.value.overtime }}</template></v-chip>
+        <v-chip v-if="kinds.money" value="LOAN" variant="outlined" size="small">{{ $t('money.loans') }}</v-chip>
+        <v-chip v-if="kinds.money" value="PAYMENT" variant="outlined" size="small">{{ $t('money.payments') }}</v-chip>
       </v-chip-group>
     </div>
 
@@ -188,10 +206,8 @@ async function approveSelected() {
         <v-checkbox-btn v-if="view === 'WAITING'" v-model="selected" :value="keyOf(item)" class="mt-n2" />
         <div class="flex-grow-1 min-w-0">
           <div class="d-flex flex-wrap align-center ga-2">
-            <v-chip size="x-small" variant="flat" :color="item.kind === 'LEAVE' ? 'primary' : 'secondary'">
-              {{ item.kind === 'LEAVE' ? $t('leave.tab') : $t('attendance.overtime') }}
-            </v-chip>
-            <router-link :to="`/employees/${item.employee.id}?tab=${item.kind === 'LEAVE' ? 'leave' : 'attendance'}`" class="text-body-1 font-weight-bold text-decoration-none">
+            <v-chip size="x-small" variant="flat" :color="KIND_COLOR[item.kind]">{{ kindLabel(item) }}</v-chip>
+            <router-link :to="`/employees/${item.employee.id}?tab=${TAB_OF[item.kind]}`" class="text-body-1 font-weight-bold text-decoration-none">
               {{ item.employee.firstName }} {{ item.employee.lastName }}
             </router-link>
             <span class="text-caption text-medium-emphasis">{{ item.employee.orgUnit ? nameOf(item.employee.orgUnit) : item.employee.employeeNo }}</span>
@@ -209,6 +225,23 @@ async function approveSelected() {
             <div class="text-caption text-medium-emphasis">{{ pay(item.leave.pay) }}</div>
             <div v-if="item.leave.balance !== null" class="evidence mt-2 text-caption">
               {{ $t('leave.balanceNow', { n: item.leave.balance }) }} → <b>{{ $t('leave.balanceAfter', { n: Math.round((item.leave.balance - item.leave.days) * 100) / 100 }) }}</b>
+            </div>
+          </template>
+
+          <!-- Loan / advance -->
+          <template v-else-if="item.kind === 'LOAN'">
+            <div class="text-body-2 mt-1">
+              <b dir="ltr">{{ money(item.loan.amount) }}</b>
+              <template v-if="item.loan.kind === 'LOAN'"> · {{ $t('money.overN', { n: item.loan.instalments }) }} · <span dir="ltr">{{ money(item.loan.monthly) }}</span> {{ $t('money.perMonth') }}</template>
+              · {{ $t('money.fromMonth', { month: monthLabel(item.loan.startMonth) }) }}
+            </div>
+          </template>
+
+          <!-- One-off payment -->
+          <template v-else-if="item.kind === 'PAYMENT'">
+            <div class="text-body-2 mt-1">
+              <v-icon :icon="item.payment.kind === 'EARNING' ? 'plus' : 'minus'" :color="item.payment.kind === 'EARNING' ? 'success' : 'error'" size="16" />
+              <b>{{ $t(`money.categories.${item.payment.category}`) }}</b> · <b dir="ltr">{{ money(item.payment.amount) }}</b> · {{ monthLabel(item.payment.month) }}
             </div>
           </template>
 
@@ -253,7 +286,8 @@ async function approveSelected() {
               <v-col cols="6"><v-text-field v-model.number="dialog.mins" type="number" min="0" max="59" step="5" :label="$t('attendance.minutes')" :error-messages="form.errorsFor('approvedMinutes')" /></v-col>
             </v-row>
           </template>
-          <p v-else-if="dialog.approve" class="text-body-2 text-medium-emphasis mb-3">{{ $t('leave.approveHint') }}</p>
+          <p v-else-if="dialog.approve && dialog.item?.kind === 'LEAVE'" class="text-body-2 text-medium-emphasis mb-3">{{ $t('leave.approveHint') }}</p>
+          <p v-else-if="dialog.approve && dialog.item?.kind === 'LOAN'" class="text-body-2 text-medium-emphasis mb-3">{{ $t('money.approveLoanHint') }}</p>
           <v-textarea v-model="dialog.note" :label="$t('attendance.note')" rows="2" auto-grow />
         </v-card-text>
         <v-card-actions>

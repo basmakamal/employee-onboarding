@@ -43,6 +43,8 @@ export interface PolicyInput {
   gosiSaudiEmployerPct?: number | null | undefined;
   gosiNonSaudiEmployerPct?: number | null | undefined;
   gosiWageCap?: number | null | undefined;
+  loanInstalmentMaxPct?: number | null | undefined;
+  deductionsMaxPct?: number | null | undefined;
   roundingDecimals: number;
   note?: string | undefined;
 }
@@ -192,6 +194,8 @@ export class CompensationService {
       gosiSaudiEmployerPct: input.gosiSaudiEmployerPct ?? null,
       gosiNonSaudiEmployerPct: input.gosiNonSaudiEmployerPct ?? null,
       gosiWageCap: input.gosiWageCap ?? null,
+      loanInstalmentMaxPct: input.loanInstalmentMaxPct === undefined ? 10 : input.loanInstalmentMaxPct,
+      deductionsMaxPct: input.deductionsMaxPct === undefined ? 50 : input.deductionsMaxPct,
       roundingDecimals: input.roundingDecimals,
       note: input.note?.trim() || null,
     };
@@ -253,6 +257,19 @@ export class CompensationService {
       include: { lines: true },
       orderBy: { effectiveFrom: 'desc' },
     });
+  }
+
+  /** The monthly gross (all earnings) in force on a date — null when no pay is set. */
+  async grossOn(companyId: string, employeeId: string, date: string): Promise<number | null> {
+    const v = await this.inForce(employeeId, date);
+    if (!v) return null;
+    const defs = (await this.listComponents(companyId)).map(toDef);
+    return resolvePackage(v.lines.map((l) => ({ componentId: l.componentId, amount: num(l.amount), percent: num(l.percent) })), defs).earnings;
+  }
+
+  /** The company's local date today. */
+  todayOf(companyId: string) {
+    return this.today(companyId);
   }
 
   /** Is there pay with a basic salary in force today? (readiness) */

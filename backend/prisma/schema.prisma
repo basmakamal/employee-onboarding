@@ -236,6 +236,8 @@ model Company {
   payComponents    PayComponent[]
   compensations    EmployeeCompensation[]
   payrollPolicies  PayrollPolicy[]
+  loans            EmployeeLoan[]
+  oneTimePayments  OneTimePayment[]
   auditLogs        AuditLog[]
   notifications    Notification[]
   assignments      UserAssignment[]
@@ -485,6 +487,8 @@ model Employee {
   leaveLedger      LeaveLedgerEntry[]
   /// Pay over time (effective-dated versions; only payroll/HR permissions see it).
   compensations    EmployeeCompensation[]
+  loans            EmployeeLoan[]
+  oneTimePayments  OneTimePayment[]
   auditLogs        AuditLog[]               @relation("EmployeeAudit")
 
   /// (status, statusChangedAt) serves both the status filters and the SLA
@@ -1523,6 +1527,10 @@ model PayrollPolicy {
   gosiNonSaudiEmployerPct Decimal? @db.Decimal(5, 2)
   /// Most wage GOSI is calculated on (empty = no cap).
   gosiWageCap             Decimal? @db.Decimal(12, 2)
+  /// Art. 92: a loan instalment may take at most this share of the wage (empty = no limit).
+  loanInstalmentMaxPct    Decimal? @default(10) @db.Decimal(5, 2)
+  /// Art. 92: all deductions of a month together at most this share of the wage.
+  deductionsMaxPct        Decimal? @default(50) @db.Decimal(5, 2)
   /// Amounts are rounded to this many decimals.
   roundingDecimals        Int      @default(2)
   note                    String?  @db.Text
@@ -1531,4 +1539,86 @@ model PayrollPolicy {
 
   @@unique([companyId, effectiveFrom])
   @@map("payroll_policies")
+}
+
+/// An advance (one instalment) or a loan, repaid from salary month by month.
+/// Entered by HR / payroll, approved by an approver (recorded); the schedule
+/// is created on approval and payroll marks instalments DEDUCTED.
+model EmployeeLoan {
+  id              String    @id @default(cuid())
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId       String
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId      String
+  /// ADVANCE | LOAN
+  kind            String
+  amount          Decimal   @db.Decimal(12, 2)
+  instalmentCount Int
+  /// The payroll month of the first instalment, "YYYY-MM".
+  startMonth      String
+  reason          String    @db.Text
+  /// PENDING | APPROVED (being repaid) | SETTLED | REJECTED | CANCELLED
+  status          String    @default("PENDING")
+  requestedById   String?
+  decidedById     String?
+  decidedAt       DateTime?
+  decisionNote    String?   @db.Text
+  closedById      String?
+  closedAt        DateTime?
+  createdAt       DateTime  @default(now())
+
+  instalments LoanInstalment[]
+
+  @@index([companyId, status, createdAt])
+  @@index([employeeId, status])
+  @@map("employee_loans")
+}
+
+model LoanInstalment {
+  id           String       @id @default(cuid())
+  loan         EmployeeLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loanId       String
+  seq          Int
+  /// The payroll month it is deducted in, "YYYY-MM".
+  month        String
+  amount       Decimal      @db.Decimal(12, 2)
+  /// DUE | DEDUCTED (by payroll) | PAID_CASH | POSTPONED (moved — a new instalment replaces it)
+  status       String       @default("DUE")
+  payrollRunId String?
+  settledAt    DateTime?
+  note         String?      @db.Text
+
+  @@unique([loanId, seq])
+  @@index([month, status])
+  @@map("loan_instalments")
+}
+
+/// A one-off earning (bonus, commission, arrears) or deduction (penalty,
+/// damage) for one payroll month, approved before payroll may use it.
+model OneTimePayment {
+  id            String    @id @default(cuid())
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId    String
+  /// EARNING | DEDUCTION
+  kind          String
+  /// BONUS | COMMISSION | ARREARS | OTHER_EARNING | PENALTY | DAMAGE | OTHER_DEDUCTION
+  category      String
+  amount        Decimal   @db.Decimal(12, 2)
+  /// The payroll month, "YYYY-MM".
+  month         String
+  reason        String    @db.Text
+  /// PENDING | APPROVED | REJECTED | CANCELLED | PAID
+  status        String    @default("PENDING")
+  requestedById String?
+  decidedById   String?
+  decidedAt     DateTime?
+  decisionNote  String?   @db.Text
+  payrollRunId  String?
+  createdAt     DateTime  @default(now())
+
+  @@index([companyId, status, month])
+  @@index([employeeId, month])
+  @@map("one_time_payments")
 }

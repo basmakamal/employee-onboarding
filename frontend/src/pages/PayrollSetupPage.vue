@@ -46,6 +46,8 @@ interface Policy {
   gosiSaudiEmployerPct: string | null;
   gosiNonSaudiEmployerPct: string | null;
   gosiWageCap: string | null;
+  loanInstalmentMaxPct: string | null;
+  deductionsMaxPct: string | null;
   roundingDecimals: number;
   note: string | null;
 }
@@ -111,7 +113,7 @@ async function removeComponent(c: Component) {
 
 // ─────────────────────────────────────── rules
 const pDialog = ref(false);
-const pDraft = ref({ effectiveFrom: today, cutoffDay: 25, payDay: 27, proration: 'WORKING_DAYS', rateDaysPerMonth: 30, hoursPerDay: 8, overtimePremiumPct: 50, gosiSaudiEmployeePct: '' as string | number, gosiSaudiEmployerPct: '' as string | number, gosiNonSaudiEmployerPct: '' as string | number, gosiWageCap: '' as string | number, roundingDecimals: 2, note: '' });
+const pDraft = ref({ effectiveFrom: today, cutoffDay: 25, payDay: 27, proration: 'WORKING_DAYS', rateDaysPerMonth: 30, hoursPerDay: 8, overtimePremiumPct: 50, gosiSaudiEmployeePct: '' as string | number, gosiSaudiEmployerPct: '' as string | number, gosiNonSaudiEmployerPct: '' as string | number, gosiWageCap: '' as string | number, loanInstalmentMaxPct: 10 as string | number, deductionsMaxPct: 50 as string | number, roundingDecimals: 2, note: '' });
 const pForm = useForm();
 const opt = (v: string | number | null) => (v === '' || v == null ? null : Number(v));
 function openRules() {
@@ -129,6 +131,8 @@ function openRules() {
     gosiSaudiEmployerPct: p?.gosiSaudiEmployerPct ?? '',
     gosiNonSaudiEmployerPct: p?.gosiNonSaudiEmployerPct ?? '',
     gosiWageCap: p?.gosiWageCap ?? '',
+    loanInstalmentMaxPct: p ? (p.loanInstalmentMaxPct ?? '') : 10,
+    deductionsMaxPct: p ? (p.deductionsMaxPct ?? '') : 50,
     roundingDecimals: p?.roundingDecimals ?? 2,
     note: '',
   };
@@ -149,6 +153,8 @@ function saveRules() {
       gosiSaudiEmployerPct: opt(d.gosiSaudiEmployerPct),
       gosiNonSaudiEmployerPct: opt(d.gosiNonSaudiEmployerPct),
       gosiWageCap: opt(d.gosiWageCap),
+      loanInstalmentMaxPct: opt(d.loanInstalmentMaxPct),
+      deductionsMaxPct: opt(d.deductionsMaxPct),
       roundingDecimals: Number(d.roundingDecimals),
       ...(d.note.trim() ? { note: d.note.trim() } : {}),
     });
@@ -233,6 +239,8 @@ const pct = (v: string | null) => (v == null ? t('paySetup.notSet') : `${Number(
               <dt>{{ $t('paySetup.gosiSaudiEmployee') }}</dt><dd>{{ pct(currentPolicy.gosiSaudiEmployeePct) }}</dd>
               <dt>{{ $t('paySetup.gosiSaudiEmployer') }}</dt><dd>{{ pct(currentPolicy.gosiSaudiEmployerPct) }}</dd>
               <dt>{{ $t('paySetup.gosiNonSaudiEmployer') }}</dt><dd>{{ pct(currentPolicy.gosiNonSaudiEmployerPct) }}</dd>
+              <dt>{{ $t('paySetup.loanMax') }}</dt><dd>{{ currentPolicy.loanInstalmentMaxPct == null ? $t('paySetup.noCap') : $t('paySetup.ofWage', { n: Number(currentPolicy.loanInstalmentMaxPct) }) }}</dd>
+              <dt>{{ $t('paySetup.deductionsMax') }}</dt><dd>{{ currentPolicy.deductionsMaxPct == null ? $t('paySetup.noCap') : $t('paySetup.ofWage', { n: Number(currentPolicy.deductionsMaxPct) }) }}</dd>
               <dt>{{ $t('paySetup.gosiCap') }}</dt><dd dir="ltr">{{ currentPolicy.gosiWageCap ? Number(currentPolicy.gosiWageCap).toLocaleString() : $t('paySetup.noCap') }}</dd>
             </dl>
           </v-card-text>
@@ -314,6 +322,12 @@ const pct = (v: string | null) => (v == null ? t('paySetup.notSet') : `${Number(
               <v-col cols="6" sm="3"><v-text-field v-model="pDraft.gosiSaudiEmployerPct" type="number" step="0.25" suffix="%" :label="$t('paySetup.gosiSaudiEmployer')" /></v-col>
               <v-col cols="6" sm="3"><v-text-field v-model="pDraft.gosiNonSaudiEmployerPct" type="number" step="0.25" suffix="%" :label="$t('paySetup.gosiNonSaudiEmployer')" /></v-col>
               <v-col cols="6" sm="3"><v-text-field v-model="pDraft.gosiWageCap" type="number" :label="$t('paySetup.gosiCap')" /></v-col>
+            </v-row>
+            <div class="text-subtitle-2 mt-2 mb-1">{{ $t('paySetup.limits') }}</div>
+            <p class="text-caption text-medium-emphasis mb-2">{{ $t('paySetup.limitsHint') }}</p>
+            <v-row dense>
+              <v-col cols="6"><v-text-field v-model="pDraft.loanInstalmentMaxPct" type="number" suffix="%" :label="$t('paySetup.loanMax')" /></v-col>
+              <v-col cols="6"><v-text-field v-model="pDraft.deductionsMaxPct" type="number" suffix="%" :label="$t('paySetup.deductionsMax')" /></v-col>
             </v-row>
             <v-text-field v-model="pDraft.note" :label="$t('pay.reason')" />
           </v-form>

@@ -8,7 +8,7 @@ import type { Actor } from '../../workflow/engine.js';
 const querySchema = z.object({
   /** WAITING: everything the actor may decide · DECIDED: what the actor decided lately. */
   view: z.enum(['WAITING', 'DECIDED']).default('WAITING'),
-  kind: z.enum(['LEAVE', 'OVERTIME']).optional(),
+  kind: z.enum(['LEAVE', 'OVERTIME', 'LOAN', 'PAYMENT']).optional(),
 });
 
 const EMPLOYEE = { select: { id: true, firstName: true, lastName: true, employeeNo: true, orgUnit: { select: { nameAr: true, nameEn: true } } } } as const;
@@ -17,7 +17,8 @@ const CAP = 200;
 
 /**
  * /api/approvals — one inbox for the branch manager, the company manager and
- * the super admin: every leave and overtime request waiting for them (within
+ * the super admin: every leave, overtime, loan / advance and one-off payment
+ * waiting for them (within
  * their scope), oldest first, and what they decided lately. Deciding uses the
  * leave / overtime endpoints, which record the approver.
  */
@@ -26,21 +27,24 @@ export function approvalsRouter(db: PrismaClient): Router {
   const kindsFor = (actor: Actor | undefined) => ({
     leave: can(actor, 'leave.approve'),
     overtime: can(actor, 'attendance.approve'),
+    money: can(actor, 'pay.approve'),
   });
 
-  router.get('/count', requirePermission('leave.approve', 'attendance.approve'), asyncHandler(async (req, res) => {
+  router.get('/count', requirePermission('leave.approve', 'attendance.approve', 'pay.approve'), asyncHandler(async (req, res) => {
     const { companyId } = contextOf(req);
     const scope = actorScope(req.actor);
     const kinds = kindsFor(req.actor);
     const where = { companyId, status: 'PENDING', ...(scope ? { employee: scope } : {}) };
-    const [leave, overtime] = await Promise.all([
+    const [leave, overtime, loans, payments] = await Promise.all([
       kinds.leave ? db.leaveRequest.count({ where }) : 0,
       kinds.overtime ? db.overtimeRequest.count({ where }) : 0,
+      kinds.money ? db.employeeLoan.count({ where }) : 0,
+      kinds.money ? db.oneTimePayment.count({ where }) : 0,
     ]);
-    res.json({ leave, overtime, total: leave + overtime });
+    res.json({ leave, overtime, money: loans + payments, total: leave + overtime + loans + payments });
   }));
 
-  router.get('/', requirePermission('leave.approve', 'attendance.approve'), validateQuery(querySchema), asyncHandler(async (req, res) => {
+  router.get('/', requirePermission('leave.approve', 'attendance.approve', 'pay.approve'), validateQuery(querySchema), asyncHandler(async (req, res) => {
     const { companyId } = contextOf(req);
     const q = pagedQuery<z.infer<typeof querySchema>>(req);
     const scope = actorScope(req.actor);
@@ -53,8 +57,9 @@ export function approvalsRouter(db: PrismaClient): Router {
     const order: Prisma.SortOrder = q.view === 'WAITING' ? 'asc' : 'desc';
     const take = q.view === 'WAITING' ? CAP : 50;
 
-    const [leave, overtime] = await Promise.all([
-      kinds.leave && q.kind !== 'OVERTIME'
+    const wants = (k: string) => !q.kind || q.kind === k;
+    const [leave, overtime, loans, payments] = await Promise.all([
+      kinds.leave && wants('LEAVE')
         ? db.leaveRequest.findMany({
             where: filter,
             include: { employee: EMPLOYEE, leaveType: { select: { code: true, nameAr: true, nameEn: true, color: true, balanceMode: true } } },
@@ -62,8 +67,14 @@ export function approvalsRouter(db: PrismaClient): Router {
             take,
           })
         : [],
-      kinds.overtime && q.kind !== 'LEAVE'
+      kinds.overtime && wants('OVERTIME')
         ? db.overtimeRequest.findMany({ where: filter, include: { employee: EMPLOYEE }, orderBy: q.view === 'WAITING' ? { createdAt: order } : { decidedAt: order }, take })
+        : [],
+      kinds.money && wants('LOAN')
+        ? db.employeeLoan.findMany({ where: filter, include: { employee: EMPLOYEE }, orderBy: q.view === 'WAITING' ? { createdAt: order } : { decidedAt: order }, take })
+        : [],
+      kinds.money && wants('PAYMENT')
+        ? db.oneTimePayment.findMany({ where: filter, include: { employee: EMPLOYEE }, orderBy: q.view === 'WAITING' ? { createdAt: order } : { decidedAt: order }, take })
         : [],
     ]);
 
@@ -90,7 +101,7 @@ export function approvalsRouter(db: PrismaClient): Router {
           select: { employeeId: true, date: true, status: true, firstIn: true, lastOut: true, workedMinutes: true, overtimeMinutes: true },
         })
       : [];
-    const ids = [...leave, ...overtime].flatMap((r) => [r.requestedById, r.decidedById]).filter((x): x is string => !!x);
+    const ids = [...leave, ...overtime, ...loans, ...payments].flatMap((r) => [r.requestedById, r.decidedById]).filter((x): x is string => !!x);
     const users = ids.length ? await db.user.findMany({ where: { id: { in: [...new Set(ids)] } }, select: { id: true, name: true } }) : [];
     const name = (id: string | null) => users.find((u) => u.id === id)?.name ?? null;
     const company = await db.company.findUnique({ where: { id: companyId }, select: { timezone: true } });
@@ -134,6 +145,32 @@ export function approvalsRouter(db: PrismaClient): Router {
           approvedMinutes: o.approvedMinutes,
           day: days.find((d) => d.employeeId === o.employeeId && d.date.getTime() === o.date.getTime()) ?? null,
         },
+      })),
+      ...loans.map((l) => ({
+        kind: 'LOAN' as const,
+        id: l.id,
+        employee: l.employee,
+        createdAt: l.createdAt,
+        status: l.status,
+        requestedBy: name(l.requestedById),
+        decidedBy: name(l.decidedById),
+        decidedAt: l.decidedAt,
+        decisionNote: l.decisionNote,
+        reason: l.reason,
+        loan: { kind: l.kind, amount: Number(l.amount), instalments: l.instalmentCount, startMonth: l.startMonth, monthly: Math.round((Number(l.amount) / l.instalmentCount) * 100) / 100 },
+      })),
+      ...payments.map((p) => ({
+        kind: 'PAYMENT' as const,
+        id: p.id,
+        employee: p.employee,
+        createdAt: p.createdAt,
+        status: p.status,
+        requestedBy: name(p.requestedById),
+        decidedBy: name(p.decidedById),
+        decidedAt: p.decidedAt,
+        decisionNote: p.decisionNote,
+        reason: p.reason,
+        payment: { kind: p.kind, category: p.category, amount: Number(p.amount), month: p.month },
       })),
     ].sort((a, b) =>
       q.view === 'WAITING'
