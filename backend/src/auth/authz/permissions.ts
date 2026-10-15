@@ -55,6 +55,11 @@ export const PERMISSIONS = {
   'leave.read': { nameAr: 'عرض الإجازات والأرصدة', nameEn: 'View leave and balances' },
   'leave.manage': { nameAr: 'إدخال الإجازات وإدارة أنواعها والأرصدة', nameEn: 'Enter leave, manage leave types and balances' },
   'leave.approve': { nameAr: 'اعتماد الإجازات', nameEn: 'Approve leave' },
+
+  // ── compensation & payroll (salary is confidential: unit managers never get these)
+  'compensation.read': { nameAr: 'عرض الرواتب', nameEn: 'View employee pay' },
+  'compensation.write': { nameAr: 'تعديل الرواتب', nameEn: 'Change employee pay' },
+  'payroll.manage': { nameAr: 'إعدادات الرواتب ومكوناتها', nameEn: 'Manage pay components and payroll settings' },
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -110,7 +115,15 @@ export const SYSTEM_ROLES: Array<{
       'documents.read', 'documents.write', 'requests.write', 'processes.criminal',
       'offboarding.manage', 'reports.view', 'reports.export', 'emails.view', 'ai.use',
       'schedule.read', 'schedule.manage', 'attendance.read', 'attendance.manage', 'leave.read', 'leave.manage',
+      'compensation.read', 'compensation.write',
     ],
+  },
+  {
+    code: 'PAYROLL_OFFICER',
+    nameAr: 'مسؤول الرواتب',
+    nameEn: 'Payroll officer',
+    level: 'COMPANY',
+    permissions: ['org.read', 'employees.read', 'attendance.read', 'leave.read', 'compensation.read', 'compensation.write', 'payroll.manage', 'reports.view'],
   },
   {
     code: 'INSURANCE',

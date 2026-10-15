@@ -86,6 +86,10 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
+    key: 'nav.groupPayroll',
+    items: [{ to: '/payroll/setup', icon: 'fluent:receipt', key: 'nav.payrollSetup', permission: ['payroll.manage', 'compensation.read'] }],
+  },
+  {
     key: 'nav.groupOrganisation',
     items: [{ to: '/organisation', icon: 'fluent:people-community', key: 'nav.organisation', permission: 'org.read' }],
   },

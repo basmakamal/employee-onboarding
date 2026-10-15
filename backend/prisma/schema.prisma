@@ -233,10 +233,13 @@ model Company {
   leaveTypes       LeaveType[]
   leaveRequests    LeaveRequest[]
   leaveLedger      LeaveLedgerEntry[]
+  payComponents    PayComponent[]
+  compensations    EmployeeCompensation[]
+  payrollPolicies  PayrollPolicy[]
   auditLogs        AuditLog[]
   notifications    Notification[]
   assignments      UserAssignment[]
-  activeFor        User[]             @relation("ActiveCompany")
+  activeFor        User[]                 @relation("ActiveCompany")
 
   @@map("companies")
 }
@@ -480,6 +483,8 @@ model Employee {
   overtimeRequests OvertimeRequest[]
   leaveRequests    LeaveRequest[]
   leaveLedger      LeaveLedgerEntry[]
+  /// Pay over time (effective-dated versions; only payroll/HR permissions see it).
+  compensations    EmployeeCompensation[]
   auditLogs        AuditLog[]               @relation("EmployeeAudit")
 
   /// (status, statusChangedAt) serves both the status filters and the SLA
@@ -1416,4 +1421,114 @@ model LeaveLedgerEntry {
   @@unique([employeeId, leaveTypeId, kind, periodKey])
   @@index([employeeId, leaveTypeId, date])
   @@map("leave_ledger")
+}
+
+/// An earning or deduction that can appear on a payslip, per company.
+/// Amounts live on each employee's compensation, not here.
+model PayComponent {
+  id             String   @id @default(cuid())
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId      String
+  code           String
+  nameAr         String
+  nameEn         String
+  /// EARNING | DEDUCTION
+  kind           String   @default("EARNING")
+  /// FIXED (an amount per employee) | PERCENT_OF_BASIC (a percent per employee, defaultPercent pre-filled)
+  method         String   @default("FIXED")
+  defaultPercent Decimal? @db.Decimal(5, 2)
+  /// Part of the wage GOSI contributions are calculated on (basic + housing in Saudi Arabia).
+  gosiBase       Boolean  @default(false)
+  /// Reduced for a partial month (joiners, leavers, unpaid days) — by working days.
+  prorated       Boolean  @default(true)
+  /// Part of the wage the hourly rate is worked out from (overtime, absence).
+  hourlyBase     Boolean  @default(true)
+  sortOrder      Int      @default(100)
+  /// Seeded — can be edited and switched off, not deleted.
+  system         Boolean  @default(false)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  lines EmployeeCompensationLine[]
+
+  @@unique([companyId, code])
+  @@map("pay_components")
+}
+
+/// One version of someone's pay, in force from effectiveFrom until the next
+/// version starts. Versions are never edited once in force — a change is a
+/// new version (a future one may still be corrected or removed).
+model EmployeeCompensation {
+  id            String   @id @default(cuid())
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId    String
+  effectiveFrom DateTime @db.Date
+  currency      String   @default("SAR")
+  reason        String?  @db.Text
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedById   String?
+  updatedAt     DateTime @updatedAt
+
+  lines EmployeeCompensationLine[]
+
+  @@unique([employeeId, effectiveFrom])
+  @@index([companyId, effectiveFrom])
+  @@map("employee_compensations")
+}
+
+model EmployeeCompensationLine {
+  id             String               @id @default(cuid())
+  compensation   EmployeeCompensation @relation(fields: [compensationId], references: [id], onDelete: Cascade)
+  compensationId String
+  component      PayComponent         @relation(fields: [componentId], references: [id])
+  componentId    String
+  /// FIXED components: the monthly amount.
+  amount         Decimal?             @db.Decimal(12, 2)
+  /// PERCENT_OF_BASIC components: the percent of the basic salary.
+  percent        Decimal?             @db.Decimal(5, 2)
+
+  @@unique([compensationId, componentId])
+  @@map("employee_compensation_lines")
+}
+
+/// How payroll works for a company, versioned by effective date so a past
+/// month is always recalculated with the rules of its time. Nothing here is
+/// hard-coded in the engine; GOSI rates stay empty until HR enters them.
+model PayrollPolicy {
+  id                      String   @id @default(cuid())
+  company                 Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId               String
+  effectiveFrom           DateTime @db.Date
+  /// MONTHLY
+  frequency               String   @default("MONTHLY")
+  /// Attendance up to this day of the month counts in this month's payroll.
+  cutoffDay               Int      @default(25)
+  /// The day salaries are paid.
+  payDay                  Int      @default(27)
+  currency                String   @default("SAR")
+  /// WORKING_DAYS (decided) | CALENDAR_DAYS | THIRTY_DAYS
+  proration               String   @default("WORKING_DAYS")
+  /// Hourly rate = monthly hourly-base wage ÷ (rateDaysPerMonth × hoursPerDay).
+  rateDaysPerMonth        Int      @default(30)
+  hoursPerDay             Decimal  @default(8) @db.Decimal(4, 2)
+  /// Art. 107: hourly wage + this percent of the basic hourly wage.
+  overtimePremiumPct      Decimal  @default(50) @db.Decimal(5, 2)
+  /// GOSI — left empty until HR confirms the rates.
+  gosiSaudiEmployeePct    Decimal? @db.Decimal(5, 2)
+  gosiSaudiEmployerPct    Decimal? @db.Decimal(5, 2)
+  gosiNonSaudiEmployerPct Decimal? @db.Decimal(5, 2)
+  /// Most wage GOSI is calculated on (empty = no cap).
+  gosiWageCap             Decimal? @db.Decimal(12, 2)
+  /// Amounts are rounded to this many decimals.
+  roundingDecimals        Int      @default(2)
+  note                    String?  @db.Text
+  createdById             String?
+  createdAt               DateTime @default(now())
+
+  @@unique([companyId, effectiveFrom])
+  @@map("payroll_policies")
 }
