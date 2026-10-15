@@ -14,6 +14,8 @@ export interface OutboundMessage {
   html?: string;
   /** The company the message belongs to — it leaves through that company's mail server. */
   companyId?: string | null;
+  /** Files to attach, by storage key (read at send time, so a queued job stays small). */
+  attachments?: Array<{ filename: string; storageKey: string; contentType?: string }>;
 }
 
 export interface Notifier {

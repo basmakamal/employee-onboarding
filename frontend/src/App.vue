@@ -89,6 +89,7 @@ const GROUPS: NavGroup[] = [
     key: 'nav.groupPayroll',
     items: [
       { to: '/payroll/runs', icon: 'fluent:data-trending', key: 'nav.payrollRuns', permission: ['payroll.prepare', 'payroll.approve'] },
+      { to: '/payroll/payslips', icon: 'fluent:mail-multiple', key: 'nav.payslips', permission: ['payroll.prepare', 'payroll.approve', 'payroll.manage'] },
       { to: '/payroll/money', icon: 'fluent:toolbox', key: 'nav.money', permission: ['compensation.read', 'pay.approve'] },
       { to: '/payroll/setup', icon: 'fluent:receipt', key: 'nav.payrollSetup', permission: ['payroll.manage', 'compensation.read'] },
     ],

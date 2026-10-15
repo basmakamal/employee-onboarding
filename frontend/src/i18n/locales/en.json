@@ -47,7 +47,8 @@
     "groupPayroll": "Payroll",
     "payrollSetup": "Payroll setup",
     "money": "Loans and payments",
-    "payrollRuns": "Payroll runs"
+    "payrollRuns": "Payroll runs",
+    "payslips": "Payslips"
   },
   "users": {
     "assignments": "Assignments",
@@ -768,7 +769,10 @@
       "SAME_PERSON": "The person who calculated a payroll cannot approve it.",
       "RUN_BLOCKED": "Resolve the blocking warnings first.",
       "RUN_STALE": "Something changed since the calculation — recalculate, review and approve again.",
-      "REASON_REQUIRED": "Give a reason."
+      "REASON_REQUIRED": "Give a reason.",
+      "NOT_APPROVED": "Payslips exist once the payroll run is approved.",
+      "LINE_HELD": "This person was held out of the run — no payslip.",
+      "EMPLOYEE_REQUIRED": "Pick the employee."
     }
   },
   "login": {
@@ -2243,5 +2247,36 @@
     "openFile": "Open the employee file",
     "engine": "Calculation rules {v}",
     "approveHint": "Approving pays {n} employee(s) a total net of {net}. The attendance days of the period are locked, loan instalments and one-off payments are marked paid."
+  },
+  "payslips": {
+    "title": "Payslips",
+    "counts": "{sent} sent · {pending} not sent yet · {noEmail} without an e-mail address",
+    "sendAll": "Send to everyone not sent yet",
+    "sendUnit": "Send to a department",
+    "sendOne": "Send to {name}",
+    "send": "Send",
+    "resend": "Send again",
+    "resendAll": "Also send again to people who already received it",
+    "sendHint": "Each person receives an e-mail with their payslip attached as a PDF (the e-mail itself shows no amounts). Sending happens in the background.",
+    "sending": "{n} payslip(s) on their way ({skipped} already sent were skipped).",
+    "statuses": {
+      "SENT": "Sent",
+      "QUEUED": "Sending",
+      "FAILED": "Failed",
+      "NO_EMAIL": "No e-mail address"
+    },
+    "notSent": "Not sent yet",
+    "auto": "automatic",
+    "none": "No payslips yet — they appear once a payroll run is approved.",
+    "sentOn": "E-mailed {date} to",
+    "pageTitle": "Payslips",
+    "pageSubtitle": "Sending payslips in {company} — automatically each month or by hand.",
+    "autoTitle": "Automatic sending",
+    "autoHint": "On the chosen day each month, the month's approved payroll is e-mailed to everyone who has not received their payslip yet. If the payroll is approved after that day, it goes out within the hour.",
+    "autoOn": "Send automatically",
+    "sendDay": "Day of the month",
+    "saved": "Saved",
+    "lastAuto": "Last sent automatically: {month}",
+    "noRuns": "No approved payroll yet."
   }
 }

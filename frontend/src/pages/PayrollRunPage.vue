@@ -11,6 +11,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api/client';
 import PageHeader from '../components/PageHeader.vue';
 import FormErrorAlert from '../components/FormErrorAlert.vue';
+import RunPayslips from '../components/RunPayslips.vue';
 import { useForm } from '../composables/useForm';
 import { useConfirm } from '../composables/useConfirm';
 import { useAuthStore } from '../stores/auth';
@@ -243,6 +244,9 @@ const FIX_LINK: Record<string, string> = { EXCEPTIONS_PENDING: '/workforce/atten
         </v-table>
       </v-card>
       <p class="text-caption text-medium-emphasis mt-2">{{ $t('payroll.engine', { v: run.engineVersion }) }}</p>
+
+      <!-- Payslips, once approved -->
+      <RunPayslips v-if="run.status === 'APPROVED' || run.status === 'PAID'" :run-id="run.id" :month="run.month" :can-send="auth.can('payroll.prepare', 'payroll.approve')" />
     </template>
 
     <v-dialog v-model="approveDialog.show" max-width="460">

@@ -18,6 +18,7 @@ import PersonAttendance from '../components/PersonAttendance.vue';
 import EmployeeLeave from '../components/EmployeeLeave.vue';
 import EmployeePay from '../components/EmployeePay.vue';
 import EmployeeMoney from '../components/EmployeeMoney.vue';
+import EmployeePayslips from '../components/EmployeePayslips.vue';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 
@@ -2269,6 +2270,7 @@ onMounted(load);
         <template v-if="tab === 'pay'">
           <EmployeePay :employee-id="id" :can-edit="auth.can('compensation.write')" @changed="readinessKey += 1" />
           <EmployeeMoney :employee-id="id" :can-edit="auth.can('compensation.write')" />
+          <EmployeePayslips :employee-id="id" :employee-no="employee?.employeeNo ?? null" />
         </template>
       </v-window-item>
 
