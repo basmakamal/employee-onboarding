@@ -1187,7 +1187,8 @@
     "emergencyContactPhone": "رقم جوال شخص التواصل",
     "project": "اسم المشروع / الشركة",
     "preferredLanguage": "لغة الرسائل",
-    "preferredLanguageHint": "تُرسَل كل رسائل هذا الشخص بهذه اللغة. اختياره في نموذج البيانات يحدّثها."
+    "preferredLanguageHint": "تُرسَل كل رسائل هذا الشخص بهذه اللغة. اختياره في نموذج البيانات يحدّثها.",
+    "showIban": "إظهار"
   },
   "onboarding": {
     "title": "التعيين",

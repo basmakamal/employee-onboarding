@@ -4,6 +4,7 @@ import { compact } from '../../common/http.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { EmployeeStatus, EmploymentType } from '../../generated/prisma/enums.js';
 import { employeeCompanyWhere, type CompanyFilter } from '../../workflow/company-filter.js';
+import { fieldCrypto } from '../../common/field-crypto.js';
 
 /** The onboarding pipeline statuses (everything before ACTIVE/INACTIVE). */
 export const PIPELINE_STATUSES = [
@@ -313,6 +314,8 @@ export class EmployeeRepository {
     for (const [key, value] of Object.entries(fields)) {
       if (value !== undefined) data[key] = value;
     }
+    // Bank details are stored encrypted (when a key is configured).
+    if (typeof data['iban'] === 'string') data['iban'] = fieldCrypto().encrypt(data['iban']);
     return this.db.employee.update({ where: { id }, data });
   }
 

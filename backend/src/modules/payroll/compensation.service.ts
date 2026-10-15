@@ -4,6 +4,7 @@ import type { AuditLogRepository } from '../../workflow/audit-log.repository.js'
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
 import { localDay } from '../employees/employment-history.service.js';
 import { hourlyRates, resolvePackage, type ComponentDef, type LineInput } from './compensation-calc.js';
+import { fieldCrypto } from '../../common/field-crypto.js';
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const dayValue = (d: string) => new Date(`${d}T00:00:00.000Z`);
@@ -265,6 +266,18 @@ export class CompensationService {
     if (!v) return null;
     const defs = (await this.listComponents(companyId)).map(toDef);
     return resolvePackage(v.lines.map((l) => ({ componentId: l.componentId, amount: num(l.amount), percent: num(l.percent) })), defs).earnings;
+  }
+
+  /**
+   * The full IBAN, for paying salaries. Only people with compensation.read
+   * get here, and every look is written to the audit trail (without the number).
+   */
+  async revealIban(companyId: string, employeeId: string, actor: Actor) {
+    const e = await this.db.employee.findFirst({ where: { id: employeeId, companyId }, select: { iban: true } });
+    if (!e) throw new NotFoundError('employee', employeeId);
+    const iban = fieldCrypto().decrypt(e.iban);
+    await this.log(companyId, actor, 'EMPLOYEE', employeeId, 'IBAN_VIEWED', { present: !!iban }, employeeId);
+    return { iban };
   }
 
   /** The company's local date today. */

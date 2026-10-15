@@ -34,6 +34,7 @@ import { employeeScopeGuard } from './modules/employees/employee-scope.guard.js'
 import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
 import { listsRouter } from './modules/lists/lists.routes.js';
 import { asyncHandler } from './common/http.js';
+import { encryptExistingIbans } from './common/encrypt-existing.js';
 import { statfsSync } from 'node:fs';
 import { closeQueues, getMailQueue, getSharedRedis, redisEnabled } from './common/queue.js';
 import { uploadRoot } from './common/storage.js';
@@ -47,6 +48,11 @@ const container = buildContainer();
 void container.listService
   .ensureDefaults()
   .catch((err: unknown) => logger.error({ err }, 'list values could not be seeded'));
+
+// Bank details: encrypt IBANs stored before the key was set (idempotent).
+void encryptExistingIbans(container.prisma)
+  .then((n) => n > 0 && logger.info(`encrypted ${n} stored IBAN(s)`))
+  .catch((err: unknown) => logger.error({ err }, 'stored IBANs could not be encrypted'));
 
 // Employment history starts with an opening entry per employee (written once).
 void container.employmentHistory

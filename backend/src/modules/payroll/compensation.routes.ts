@@ -76,6 +76,10 @@ export function payrollSetupRouter(service: CompensationService): Router {
 /** /api/employees/:id/compensation — the Pay tab of the employee file (behind the /employees/:id scope guard). */
 export function employeeCompensationRouter(service: CompensationService): Router {
   const router = Router();
+  /** The full bank account number (masked everywhere else) — audited. */
+  router.get('/:id/iban', requirePermission('compensation.read'), asyncHandler(async (req, res) => {
+    res.json(await service.revealIban(contextOf(req).companyId, req.params['id'] as string, actorOf(req)));
+  }));
   router.get('/:id/compensation', requirePermission('compensation.read'), asyncHandler(async (req, res) => {
     res.json(await service.forEmployee(contextOf(req).companyId, req.params['id'] as string));
   }));

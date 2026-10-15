@@ -17,6 +17,7 @@ import { REQUIRED_DOCUMENT_TYPES, type DataFormInput } from './data-form.schema.
 import { languageFromLocale, localeOf } from '../../notifications/locale.js';
 import { contractParams } from '../../notifications/contract-params.js';
 import type { TemplateParams } from '../../notifications/templates.js';
+import { fieldCrypto } from '../../common/field-crypto.js';
 
 /** What a signed link may see of the record — no ids, no internals. */
 /**
@@ -41,7 +42,8 @@ function publicEmployee(e: Employee) {
     nationality: e.nationality,
     maritalStatus: e.maritalStatus,
     splAddress: e.splAddress,
-    iban: e.iban,
+    // The employee's own form: shown in full, so they can check it.
+    iban: fieldCrypto().decrypt(e.iban),
     qualification: e.qualification,
     major: e.major,
     emergencyContactName: e.emergencyContactName,

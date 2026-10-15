@@ -1187,7 +1187,8 @@
     "emergencyContactPhone": "Emergency Contact Number",
     "project": "Project / Company",
     "preferredLanguage": "Email language",
-    "preferredLanguageHint": "Every email this person receives is written in this language. Their choice on the data form updates it."
+    "preferredLanguageHint": "Every email this person receives is written in this language. Their choice on the data form updates it.",
+    "showIban": "Show"
   },
   "onboarding": {
     "title": "Onboarding",

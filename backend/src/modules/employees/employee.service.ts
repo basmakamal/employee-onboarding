@@ -28,6 +28,7 @@ import type {
 } from '../../generated/prisma/enums.js';
 import type { EmploymentEventRepository } from './employment-event.repository.js';
 import type { EmploymentHistoryService } from './employment-history.service.js';
+import { fieldCrypto, maskIban } from '../../common/field-crypto.js';
 
 export type ProcessKind = 'gosi' | 'medical' | 'criminal';
 
@@ -390,6 +391,8 @@ export class EmployeeService {
 
     return {
       ...rest,
+      // Bank details: only the last digits here; the full number via GET /:id/iban (pay permission, audited).
+      iban: maskIban(fieldCrypto().decrypt(rest.iban)),
       auditLogs: timeline.items,
       /** Everything on the timeline — the page above holds only the newest 20. */
       auditTotal: timeline.total,
