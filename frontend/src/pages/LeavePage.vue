@@ -15,6 +15,7 @@ import FormErrorAlert from '../components/FormErrorAlert.vue';
 import { useActiveCompanyName } from '../composables/useActiveCompany';
 import { useOrgOptions } from '../composables/useOrgOptions';
 import { useForm } from '../composables/useForm';
+import { useApprovalCount } from '../composables/useApprovalCount';
 import { useAuthStore } from '../stores/auth';
 import { errorText } from '../validation/errors';
 import { REQUEST_COLOR, useAttendanceFormat } from '../composables/useAttendanceFormat';
@@ -109,7 +110,7 @@ function saveDecision() {
     if (!d.row) return;
     await api.post(`/api/leave/requests/${d.row.id}/decision`, { approve: d.approve, ...(d.note.trim() ? { note: d.note.trim() } : {}) });
     d.show = false;
-    await load();
+    await Promise.all([load(), useApprovalCount().refresh()]);
   });
 }
 </script>

@@ -5,7 +5,7 @@
  * a bottom navigation bar on phones, the command palette (Ctrl+K) and the
  * single confirmation dialog every page shares.
  */
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
 import { usePreferencesStore } from './stores/preferences';
@@ -16,9 +16,18 @@ import ConfirmDialog from './components/ConfirmDialog.vue';
 import CommandPalette from './components/CommandPalette.vue';
 import ProfileDialog from './components/ProfileDialog.vue';
 import { useMyAvatar } from './composables/useMyAvatar';
+import { useApprovalCount } from './composables/useApprovalCount';
 
 const prefs = usePreferencesStore();
 const auth = useAuthStore();
+// Requests waiting for this approver — the badge on "Approvals".
+const approvals = useApprovalCount();
+const badgeOf = (badge: 'approvals') => (badge === 'approvals' ? approvals.count.value.total : 0);
+watch(
+  () => [auth.user?.id, auth.user?.activeCompany?.id, auth.can('leave.approve', 'attendance.approve')] as const,
+  ([user, company, approver]) => (user && company && approver ? approvals.start() : approvals.stop()),
+  { immediate: true },
+);
 const route = useRoute();
 const router = useRouter();
 const display = useDisplay();
@@ -39,7 +48,7 @@ const isBare = computed(() =>
 const isRail = computed(() => display.mdAndUp.value && rail.value);
 
 /** `permission`: one code, or a list of which any one shows the entry. */
-interface NavItem { to: string; icon: string; key: string; permission?: string | string[] }
+interface NavItem { to: string; icon: string; key: string; permission?: string | string[]; badge?: 'approvals' }
 interface NavGroup { key: string; items: NavItem[] }
 
 // An entry without a permission is for everyone; otherwise the session's
@@ -49,7 +58,10 @@ interface NavGroup { key: string; items: NavItem[] }
 const GROUPS: NavGroup[] = [
   {
     key: 'nav.groupDashboard',
-    items: [{ to: '/', icon: 'fluent:home', key: 'nav.home' }],
+    items: [
+      { to: '/', icon: 'fluent:home', key: 'nav.home' },
+      { to: '/approvals', icon: 'fluent:checkmark-circle', key: 'nav.approvals', permission: ['leave.approve', 'attendance.approve'], badge: 'approvals' },
+    ],
   },
   {
     key: 'nav.groupEmployees',
@@ -65,7 +77,7 @@ const GROUPS: NavGroup[] = [
     key: 'nav.groupWorkforce',
     items: [
       { to: '/workforce/attendance', icon: 'fluent:people-list', key: 'nav.attendance', permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] },
-      { to: '/workforce/overtime', icon: 'fluent:checkmark-circle', key: 'nav.overtime', permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] },
+      { to: '/workforce/overtime', icon: 'fluent:clock-alarm', key: 'nav.overtime', permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] },
       { to: '/workforce/leave', icon: 'fluent:receipt', key: 'nav.leave', permission: ['leave.read', 'leave.manage', 'leave.approve'] },
       { to: '/workforce/leave-types', icon: 'fluent:text-bullet-list-square', key: 'nav.leaveTypes', permission: ['leave.read', 'leave.manage', 'leave.approve'] },
       { to: '/workforce/schedule', icon: 'fluent:calendar', key: 'nav.teamSchedule', permission: ['schedule.read', 'schedule.manage'] },
@@ -292,7 +304,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
                   rounded="lg"
                   class="shell-nav__item"
                   @click="!display.mdAndUp.value && (drawer = false)"
-                />
+                >
+                  <template v-if="item.badge && badgeOf(item.badge)" #append>
+                    <v-badge :content="badgeOf(item.badge)" color="warning" :inline="!isRail" :dot="isRail" />
+                  </template>
+                </v-list-item>
               </template>
             </v-tooltip>
           </template>

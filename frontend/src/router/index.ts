@@ -28,6 +28,7 @@ export const router = createRouter({
     { path: '/workforce/shifts', name: 'shifts', component: () => import('../pages/ShiftsPage.vue'), meta: { permission: ['schedule.read', 'schedule.manage'] } },
     { path: '/workforce/attendance', name: 'attendance', component: () => import('../pages/AttendancePage.vue'), meta: { permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] } },
     { path: '/workforce/overtime', name: 'overtime', component: () => import('../pages/OvertimePage.vue'), meta: { permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] } },
+    { path: '/approvals', name: 'approvals', component: () => import('../pages/ApprovalsPage.vue'), meta: { permission: ['leave.approve', 'attendance.approve'] } },
     { path: '/workforce/leave', name: 'leave', component: () => import('../pages/LeavePage.vue'), meta: { permission: ['leave.read', 'leave.manage', 'leave.approve'] } },
     { path: '/workforce/leave-types', name: 'leave-types', component: () => import('../pages/LeaveTypesPage.vue'), meta: { permission: ['leave.read', 'leave.manage', 'leave.approve'] } },
     { path: '/workforce/schedule', name: 'team-schedule', component: () => import('../pages/TeamSchedulePage.vue'), meta: { permission: ['schedule.read', 'schedule.manage'] } },
