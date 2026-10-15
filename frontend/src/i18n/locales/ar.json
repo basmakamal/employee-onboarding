@@ -45,7 +45,8 @@
     "leaveTypes": "أنواع الإجازات",
     "approvals": "الموافقات",
     "groupPayroll": "الرواتب",
-    "payrollSetup": "إعدادات الرواتب"
+    "payrollSetup": "إعدادات الرواتب",
+    "money": "السلف والمدفوعات"
   },
   "users": {
     "assignments": "الإسنادات",
@@ -753,7 +754,15 @@
       "PAST_DATE": "اختر اليوم أو تاريخًا لاحقًا.",
       "COMPONENT_IN_USE": "يُصرف لموظفين بهذا المكوّن.",
       "SYSTEM_COMPONENT": "لا يمكن حذف مكوّن مدمج، يمكن تعطيله فقط.",
-      "BAD_DAY": "أدخل يومًا من 1 إلى 28."
+      "BAD_DAY": "أدخل يومًا من 1 إلى 28.",
+      "LOAN_OVER_LIMIT": "القسط الشهري أعلى من النسبة المسموحة من الأجر — وزّعه على أشهر أكثر.",
+      "NO_PAY": "أدخل راتب الموظف أولًا.",
+      "BAD_MONTH": "اختر شهرًا.",
+      "PAST_MONTH": "اختر هذا الشهر أو شهرًا لاحقًا.",
+      "BAD_INSTALMENTS": "من 1 إلى 60 قسطًا شهريًا.",
+      "REPAYMENT_STARTED": "بدأ السداد — سجّل المتبقي كمسدّد خارج الرواتب بدلًا من ذلك.",
+      "NOT_DUE": "يمكن تأجيل القسط المستحق فقط.",
+      "BAD_CATEGORY": "اختر بند الدفعة."
     }
   },
   "login": {
@@ -820,7 +829,8 @@
       "attendance": "الحضور",
       "leave": "الإجازات",
       "compensation": "الرواتب",
-      "payroll": "مسيّر الرواتب"
+      "payroll": "مسيّر الرواتب",
+      "pay": "اعتماد المبالغ"
     },
     "HR": "الموارد البشرية",
     "INSURANCE": "التأمينات",
@@ -2084,6 +2094,86 @@
     "gosiCap": "الحد الأعلى للأجر",
     "notSet": "غير محددة",
     "noCap": "بلا حد",
-    "gosiMissing": "نسب التأمينات لم تُحدد بعد — أدخلها في قواعد الرواتب قبل أول مسيّر."
+    "gosiMissing": "نسب التأمينات لم تُحدد بعد — أدخلها في قواعد الرواتب قبل أول مسيّر.",
+    "limits": "حدود الاستقطاع (المادة 92)",
+    "limitsHint": "لا يتجاوز قسط القرض هذه النسبة من الأجر، ولا تتجاوز استقطاعات الشهر مجتمعة النسبة الثانية. فارغ = بلا حد.",
+    "loanMax": "أقصى قسط للقرض",
+    "deductionsMax": "أقصى مجموع للاستقطاعات",
+    "ofWage": "{n}٪ من الأجر"
+  },
+  "money": {
+    "loans": "السلف والقروض",
+    "payments": "مدفوعات لمرة واحدة",
+    "newLoan": "سلفة أو قرض جديد",
+    "noLoans": "لا توجد سلف أو قروض.",
+    "noPayments": "لا توجد مدفوعات لمرة واحدة.",
+    "addEarning": "إضافة مكافأة",
+    "addDeduction": "إضافة استقطاع",
+    "kinds": {
+      "ADVANCE": "سلفة راتب",
+      "LOAN": "قرض"
+    },
+    "paymentKinds": {
+      "EARNING": "مكافأة / استحقاق",
+      "DEDUCTION": "استقطاع"
+    },
+    "overN": "على {n} أشهر",
+    "fromMonth": "من {month}",
+    "perMonth": "شهريًا",
+    "loanStatuses": {
+      "PENDING": "بانتظار القرار",
+      "APPROVED": "قيد السداد",
+      "SETTLED": "مسدّد",
+      "REJECTED": "مرفوض",
+      "CANCELLED": "ملغى"
+    },
+    "paymentStatuses": {
+      "PENDING": "بانتظار القرار",
+      "APPROVED": "معتمد",
+      "REJECTED": "مرفوض",
+      "CANCELLED": "ملغى",
+      "PAID": "مصروف"
+    },
+    "instStatuses": {
+      "DUE": "مستحق",
+      "DEDUCTED": "مستقطع",
+      "PAID_CASH": "سُدّد خارج الرواتب",
+      "POSTPONED": "مؤجل"
+    },
+    "repaidOutstanding": "سُدّد {repaid}، المتبقي {left}",
+    "decidedByName": "قرّره {name}",
+    "schedule": "جدول السداد",
+    "hideSchedule": "إخفاء",
+    "settle": "سُدّد خارج الرواتب",
+    "cancelLoan": "إلغاء",
+    "cancelLoanConfirm": "إلغاء هذه السلفة أو القرض؟ لم يُسدّد منه شيء بعد.",
+    "postpone": "تأجيل هذا الشهر",
+    "postponeConfirm": "تأجيل {month}؟ ينتقل القسط إلى ما بعد آخر قسط.",
+    "settleHint": "المتبقي {left} سُدّد خارج الرواتب (نقدًا أو تحويلًا). يُغلق القرض.",
+    "settleNote": "طريقة السداد",
+    "amount": "المبلغ",
+    "instalments": "عدد الأقساط الشهرية",
+    "firstMonth": "شهر أول قسط",
+    "monthly": "{n} شهريًا × {count}",
+    "limitLine": "الحد {pct}٪ من الأجر: {limit} شهريًا — أقساط هذا الشهر: {total}",
+    "overLimit": "أعلى من الحد — وزّعه على أشهر أكثر.",
+    "category": "البند",
+    "payrollMonth": "شهر الرواتب",
+    "cancelPayment": "إلغاء",
+    "cancelPaymentConfirm": "إلغاء هذه الدفعة؟ لم تُصرف بعد.",
+    "categories": {
+      "BONUS": "مكافأة",
+      "COMMISSION": "عمولة",
+      "ARREARS": "فروقات مستحقة",
+      "OTHER_EARNING": "استحقاق آخر",
+      "PENALTY": "جزاء",
+      "DAMAGE": "تلف / فقد",
+      "OTHER_DEDUCTION": "استقطاع آخر"
+    },
+    "approveLoanHint": "يُنشأ جدول السداد ويُستقطع شهريًا من الراتب.",
+    "pageTitle": "السلف والمدفوعات",
+    "pageSubtitle": "السلف والقروض والمدفوعات لمرة واحدة في {company}.",
+    "outstanding": "المتبقي",
+    "empty": "لا شيء هنا."
   }
 }

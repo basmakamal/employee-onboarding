@@ -34,6 +34,8 @@ const policySchema = z.object({
   gosiSaudiEmployerPct: pct.nullable().optional(),
   gosiNonSaudiEmployerPct: pct.nullable().optional(),
   gosiWageCap: z.number().min(0).max(10_000_000).nullable().optional(),
+  loanInstalmentMaxPct: pct.nullable().optional(),
+  deductionsMaxPct: pct.nullable().optional(),
   roundingDecimals: z.number().int().min(0).max(2).default(2),
   note: z.string().trim().max(1000).optional(),
 });

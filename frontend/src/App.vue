@@ -24,7 +24,7 @@ const auth = useAuthStore();
 const approvals = useApprovalCount();
 const badgeOf = (badge: 'approvals') => (badge === 'approvals' ? approvals.count.value.total : 0);
 watch(
-  () => [auth.user?.id, auth.user?.activeCompany?.id, auth.can('leave.approve', 'attendance.approve')] as const,
+  () => [auth.user?.id, auth.user?.activeCompany?.id, auth.can('leave.approve', 'attendance.approve', 'pay.approve')] as const,
   ([user, company, approver]) => (user && company && approver ? approvals.start() : approvals.stop()),
   { immediate: true },
 );
@@ -60,7 +60,7 @@ const GROUPS: NavGroup[] = [
     key: 'nav.groupDashboard',
     items: [
       { to: '/', icon: 'fluent:home', key: 'nav.home' },
-      { to: '/approvals', icon: 'fluent:checkmark-circle', key: 'nav.approvals', permission: ['leave.approve', 'attendance.approve'], badge: 'approvals' },
+      { to: '/approvals', icon: 'fluent:checkmark-circle', key: 'nav.approvals', permission: ['leave.approve', 'attendance.approve', 'pay.approve'], badge: 'approvals' },
     ],
   },
   {
@@ -87,7 +87,10 @@ const GROUPS: NavGroup[] = [
   },
   {
     key: 'nav.groupPayroll',
-    items: [{ to: '/payroll/setup', icon: 'fluent:receipt', key: 'nav.payrollSetup', permission: ['payroll.manage', 'compensation.read'] }],
+    items: [
+      { to: '/payroll/money', icon: 'fluent:toolbox', key: 'nav.money', permission: ['compensation.read', 'pay.approve'] },
+      { to: '/payroll/setup', icon: 'fluent:receipt', key: 'nav.payrollSetup', permission: ['payroll.manage', 'compensation.read'] },
+    ],
   },
   {
     key: 'nav.groupOrganisation',

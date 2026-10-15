@@ -16,6 +16,7 @@ import { ScheduleService } from './modules/workforce/schedule.service.js';
 import { AttendanceService } from './modules/workforce/attendance.service.js';
 import { LeaveService } from './modules/workforce/leave.service.js';
 import { CompensationService } from './modules/payroll/compensation.service.js';
+import { LoanService } from './modules/payroll/loan.service.js';
 import { EmploymentEventRepository } from './modules/employees/employment-event.repository.js';
 import { EmploymentHistoryService } from './modules/employees/employment-history.service.js';
 import { CompanyResolver } from './modules/companies/company-resolver.js';
@@ -215,6 +216,8 @@ export function buildContainer() {
   const leaveService = new LeaveService(prisma, scheduleService, settingsService, audit, attendanceService);
   // Pay: components, payroll policy (versioned) and each employee's pay over time.
   const compensationService = new CompensationService(prisma, audit);
+  // Advances, loans and one-off payments, approved before payroll uses them.
+  const loanService = new LoanService(prisma, compensationService, audit);
   onTransition((event) => employmentHistory.recordStatus(event));
 
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
@@ -347,6 +350,7 @@ export function buildContainer() {
     attendanceService,
     leaveService,
     compensationService,
+    loanService,
     assetService,
     offboardingService,
     authService,

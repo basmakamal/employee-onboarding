@@ -60,6 +60,7 @@ export const PERMISSIONS = {
   'compensation.read': { nameAr: 'عرض الرواتب', nameEn: 'View employee pay' },
   'compensation.write': { nameAr: 'تعديل الرواتب', nameEn: 'Change employee pay' },
   'payroll.manage': { nameAr: 'إعدادات الرواتب ومكوناتها', nameEn: 'Manage pay components and payroll settings' },
+  'pay.approve': { nameAr: 'اعتماد السلف والمكافآت والاستقطاعات', nameEn: 'Approve advances, loans, bonuses and deductions' },
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -103,7 +104,7 @@ export const SYSTEM_ROLES: Array<{
     nameAr: 'مدير وحدة تنظيمية',
     nameEn: 'Unit manager (branch / department / team)',
     level: 'UNIT',
-    permissions: ['org.read', 'employees.read', 'documents.read', 'requests.write', 'reports.view', 'audit.read', 'schedule.read', 'attendance.read', 'attendance.approve', 'leave.read', 'leave.approve'],
+    permissions: ['org.read', 'employees.read', 'documents.read', 'requests.write', 'reports.view', 'audit.read', 'schedule.read', 'attendance.read', 'attendance.approve', 'leave.read', 'leave.approve', 'pay.approve'],
   },
   {
     code: 'HR',

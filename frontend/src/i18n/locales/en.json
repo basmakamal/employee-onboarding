@@ -45,7 +45,8 @@
     "leaveTypes": "Leave types",
     "approvals": "Approvals",
     "groupPayroll": "Payroll",
-    "payrollSetup": "Payroll setup"
+    "payrollSetup": "Payroll setup",
+    "money": "Loans and payments"
   },
   "users": {
     "assignments": "Assignments",
@@ -753,7 +754,15 @@
       "PAST_DATE": "Choose today or a later date.",
       "COMPONENT_IN_USE": "People are paid with this component.",
       "SYSTEM_COMPONENT": "A built-in component can be switched off, not deleted.",
-      "BAD_DAY": "Enter a day from 1 to 28."
+      "BAD_DAY": "Enter a day from 1 to 28.",
+      "LOAN_OVER_LIMIT": "The monthly repayment is above the share of the wage allowed — spread it over more months.",
+      "NO_PAY": "Enter this employee's pay first.",
+      "BAD_MONTH": "Pick a month.",
+      "PAST_MONTH": "Choose this month or a later one.",
+      "BAD_INSTALMENTS": "From 1 to 60 monthly instalments.",
+      "REPAYMENT_STARTED": "Repayment has started — record the rest as repaid outside payroll instead.",
+      "NOT_DUE": "Only an instalment still due can move.",
+      "BAD_CATEGORY": "Pick what the payment is for."
     }
   },
   "login": {
@@ -820,7 +829,8 @@
       "attendance": "Attendance",
       "leave": "Leave",
       "compensation": "Pay",
-      "payroll": "Payroll"
+      "payroll": "Payroll",
+      "pay": "Pay approvals"
     },
     "HR": "Human Resources",
     "INSURANCE": "Insurance",
@@ -2083,6 +2093,86 @@
     "gosiCap": "Wage cap",
     "notSet": "not set",
     "noCap": "no cap",
-    "gosiMissing": "GOSI rates are not set yet — enter them under Payroll rules before the first payroll."
+    "gosiMissing": "GOSI rates are not set yet — enter them under Payroll rules before the first payroll.",
+    "limits": "Deduction limits (Art. 92)",
+    "limitsHint": "A loan instalment may take at most this share of the wage; all deductions of a month together at most the second. Empty = no limit.",
+    "loanMax": "Loan instalment at most",
+    "deductionsMax": "All deductions at most",
+    "ofWage": "{n}% of the wage"
+  },
+  "money": {
+    "loans": "Advances and loans",
+    "payments": "One-off payments",
+    "newLoan": "New advance or loan",
+    "noLoans": "No advances or loans.",
+    "noPayments": "No one-off payments.",
+    "addEarning": "Add bonus",
+    "addDeduction": "Add deduction",
+    "kinds": {
+      "ADVANCE": "Salary advance",
+      "LOAN": "Loan"
+    },
+    "paymentKinds": {
+      "EARNING": "Bonus / earning",
+      "DEDUCTION": "Deduction"
+    },
+    "overN": "over {n} months",
+    "fromMonth": "from {month}",
+    "perMonth": "a month",
+    "loanStatuses": {
+      "PENDING": "Waiting",
+      "APPROVED": "Being repaid",
+      "SETTLED": "Settled",
+      "REJECTED": "Rejected",
+      "CANCELLED": "Cancelled"
+    },
+    "paymentStatuses": {
+      "PENDING": "Waiting",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "CANCELLED": "Cancelled",
+      "PAID": "Paid"
+    },
+    "instStatuses": {
+      "DUE": "Due",
+      "DEDUCTED": "Deducted",
+      "PAID_CASH": "Paid outside payroll",
+      "POSTPONED": "Moved"
+    },
+    "repaidOutstanding": "repaid {repaid}, {left} left",
+    "decidedByName": "decided by {name}",
+    "schedule": "Schedule",
+    "hideSchedule": "Hide",
+    "settle": "Repaid outside payroll",
+    "cancelLoan": "Cancel",
+    "cancelLoanConfirm": "Cancel this advance or loan? Nothing has been repaid yet.",
+    "postpone": "Skip this month",
+    "postponeConfirm": "Skip {month}? The instalment moves after the last one.",
+    "settleHint": "The remaining {left} were repaid outside payroll (cash or transfer). The loan is closed.",
+    "settleNote": "How it was repaid",
+    "amount": "Amount",
+    "instalments": "Monthly instalments",
+    "firstMonth": "First instalment month",
+    "monthly": "{n} a month × {count}",
+    "limitLine": "Limit {pct}% of the wage: {limit} a month — this month's repayments: {total}",
+    "overLimit": "Above the limit — spread it over more months.",
+    "category": "For",
+    "payrollMonth": "Payroll month",
+    "cancelPayment": "Cancel",
+    "cancelPaymentConfirm": "Cancel this payment? It has not been paid yet.",
+    "categories": {
+      "BONUS": "Bonus",
+      "COMMISSION": "Commission",
+      "ARREARS": "Arrears",
+      "OTHER_EARNING": "Other earning",
+      "PENALTY": "Penalty",
+      "DAMAGE": "Damage / loss",
+      "OTHER_DEDUCTION": "Other deduction"
+    },
+    "approveLoanHint": "The repayment schedule is created and payroll deducts it month by month.",
+    "pageTitle": "Loans and payments",
+    "pageSubtitle": "Advances, loans and one-off payments in {company}.",
+    "outstanding": "Outstanding",
+    "empty": "Nothing here."
   }
 }
