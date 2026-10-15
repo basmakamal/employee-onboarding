@@ -46,7 +46,8 @@
     "approvals": "Approvals",
     "groupPayroll": "Payroll",
     "payrollSetup": "Payroll setup",
-    "money": "Loans and payments"
+    "money": "Loans and payments",
+    "payrollRuns": "Payroll runs"
   },
   "users": {
     "assignments": "Assignments",
@@ -762,7 +763,12 @@
       "BAD_INSTALMENTS": "From 1 to 60 monthly instalments.",
       "REPAYMENT_STARTED": "Repayment has started — record the rest as repaid outside payroll instead.",
       "NOT_DUE": "Only an instalment still due can move.",
-      "BAD_CATEGORY": "Pick what the payment is for."
+      "BAD_CATEGORY": "Pick what the payment is for.",
+      "RUN_CLOSED": "This payroll run can no longer change.",
+      "SAME_PERSON": "The person who calculated a payroll cannot approve it.",
+      "RUN_BLOCKED": "Resolve the blocking warnings first.",
+      "RUN_STALE": "Something changed since the calculation — recalculate, review and approve again.",
+      "REASON_REQUIRED": "Give a reason."
     }
   },
   "login": {
@@ -2175,5 +2181,67 @@
     "pageSubtitle": "Advances, loans and one-off payments in {company}.",
     "outstanding": "Outstanding",
     "empty": "Nothing here."
+  },
+  "payroll": {
+    "title": "Payroll runs",
+    "subtitle": "Monthly payroll of {company}.",
+    "calculate": "Calculate a month",
+    "empty": "No payroll yet.",
+    "calculateHint": "Calculates every active employee from their pay, the attendance HR confirmed, approved leave and overtime, loans and one-off payments. You can recalculate until the run is approved.",
+    "month": "Month",
+    "people": "Employees",
+    "gross": "Gross",
+    "deductions": "Deductions",
+    "net": "Net",
+    "employerCost": "Employer GOSI",
+    "who": "By",
+    "statuses": {
+      "CALCULATED": "Waiting for approval",
+      "APPROVED": "Approved",
+      "PAID": "Paid",
+      "CANCELLED": "Cancelled"
+    },
+    "calculatedBy": "Calculated by {name}",
+    "approvedBy": "Approved by {name}",
+    "runTitle": "Payroll — {month}",
+    "period": "Attendance {from} – {to}",
+    "recalculate": "Recalculate",
+    "approve": "Approve",
+    "cancelRun": "Cancel run",
+    "markPaid": "Mark as paid",
+    "cancelConfirm": "Cancel this run? Nothing has been paid; you can calculate the month again.",
+    "markPaidConfirm": "Mark the salaries of this run as transferred?",
+    "calculatedByAt": "Calculated by {name}, {at}",
+    "approvedByAt": "approved by {name}, {at}",
+    "paidByAt": "marked paid by {name}, {at}",
+    "notYours": "You calculated this run — someone else has to approve it.",
+    "warnings": {
+      "EXCEPTIONS_PENDING": "{n} attendance exception(s) in the period are not reviewed yet — confirm or excuse them first.",
+      "NO_PAY": "{n} employee(s) have no pay entered — enter it on their Pay tab, or hold them.",
+      "NEGATIVE_NET": "{n} employee(s) would receive less than nothing — check their deductions, or hold them.",
+      "GOSI_RATES_MISSING": "GOSI rates are not set — no GOSI was deducted for {n} employee(s).",
+      "DEDUCTIONS_OVER_LIMIT": "{n} employee(s) have loans and penalties above the Art. 92 limit — postpone an instalment if needed."
+    },
+    "lineWarnings": {
+      "NO_PAY": "No pay",
+      "NEGATIVE_NET": "Negative",
+      "GOSI_RATES_MISSING": "No GOSI rate",
+      "DEDUCTIONS_OVER_LIMIT": "Above Art. 92"
+    },
+    "fix": "Fix",
+    "onlyIssues": "Only changes and warnings",
+    "vsLast": "vs last month",
+    "new": "new",
+    "hold": "Hold",
+    "release": "Release",
+    "held": "Held",
+    "heldBecause": "Held: {reason}",
+    "holdHint": "A held employee is left out of this payment — nothing of theirs is marked paid. Release them before approval to include them.",
+    "paidDays": "Paid days: {days}",
+    "rates": "day {daily} · hour {hourly} · overtime hour {ot}",
+    "employerNote": "paid by the company, not deducted",
+    "openFile": "Open the employee file",
+    "engine": "Calculation rules {v}",
+    "approveHint": "Approving pays {n} employee(s) a total net of {net}. The attendance days of the period are locked, loan instalments and one-off payments are marked paid."
   }
 }

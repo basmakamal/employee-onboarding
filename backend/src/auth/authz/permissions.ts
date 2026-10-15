@@ -60,6 +60,8 @@ export const PERMISSIONS = {
   'compensation.read': { nameAr: 'عرض الرواتب', nameEn: 'View employee pay' },
   'compensation.write': { nameAr: 'تعديل الرواتب', nameEn: 'Change employee pay' },
   'payroll.manage': { nameAr: 'إعدادات الرواتب ومكوناتها', nameEn: 'Manage pay components and payroll settings' },
+  'payroll.prepare': { nameAr: 'إعداد مسيّر الرواتب', nameEn: 'Prepare payroll runs' },
+  'payroll.approve': { nameAr: 'اعتماد مسيّر الرواتب', nameEn: 'Approve payroll runs' },
   'pay.approve': { nameAr: 'اعتماد السلف والمكافآت والاستقطاعات', nameEn: 'Approve advances, loans, bonuses and deductions' },
 } as const;
 
@@ -116,7 +118,7 @@ export const SYSTEM_ROLES: Array<{
       'documents.read', 'documents.write', 'requests.write', 'processes.criminal',
       'offboarding.manage', 'reports.view', 'reports.export', 'emails.view', 'ai.use',
       'schedule.read', 'schedule.manage', 'attendance.read', 'attendance.manage', 'leave.read', 'leave.manage',
-      'compensation.read', 'compensation.write',
+      'compensation.read', 'compensation.write', 'payroll.prepare',
     ],
   },
   {
@@ -124,7 +126,7 @@ export const SYSTEM_ROLES: Array<{
     nameAr: 'مسؤول الرواتب',
     nameEn: 'Payroll officer',
     level: 'COMPANY',
-    permissions: ['org.read', 'employees.read', 'attendance.read', 'leave.read', 'compensation.read', 'compensation.write', 'payroll.manage', 'reports.view'],
+    permissions: ['org.read', 'employees.read', 'attendance.read', 'leave.read', 'compensation.read', 'compensation.write', 'payroll.manage', 'payroll.prepare', 'reports.view'],
   },
   {
     code: 'INSURANCE',

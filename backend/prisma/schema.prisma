@@ -238,6 +238,7 @@ model Company {
   payrollPolicies  PayrollPolicy[]
   loans            EmployeeLoan[]
   oneTimePayments  OneTimePayment[]
+  payrollRuns      PayrollRun[]
   auditLogs        AuditLog[]
   notifications    Notification[]
   assignments      UserAssignment[]
@@ -489,6 +490,7 @@ model Employee {
   compensations    EmployeeCompensation[]
   loans            EmployeeLoan[]
   oneTimePayments  OneTimePayment[]
+  payrollLines     PayrollLine[]
   auditLogs        AuditLog[]               @relation("EmployeeAudit")
 
   /// (status, statusChangedAt) serves both the status filters and the SLA
@@ -1621,4 +1623,100 @@ model OneTimePayment {
   @@index([companyId, status, month])
   @@index([employeeId, month])
   @@map("one_time_payments")
+}
+
+/// One month of payroll for a company. Calculated (and recalculated) until
+/// approved; approval locks the attendance days it used and marks the loan
+/// instalments and one-off payments it paid. Whoever calculated a run can
+/// never approve it. At most one run per month is not cancelled.
+model PayrollRun {
+  id             String    @id @default(cuid())
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId      String
+  /// "YYYY-MM"
+  month          String
+  /// 1, 2, … — a new run for the same month after a cancelled one.
+  version        Int       @default(1)
+  /// CALCULATED | APPROVED | PAID | CANCELLED
+  status         String    @default("CALCULATED")
+  /// The attendance period the run read (cut-off to cut-off), inclusive.
+  periodFrom     DateTime  @db.Date
+  periodTo       DateTime  @db.Date
+  policyId       String?
+  /// Version of the calculation rules in this code, kept with every run.
+  engineVersion  String
+  employees      Int       @default(0)
+  gross          Decimal   @default(0) @db.Decimal(14, 2)
+  deductions     Decimal   @default(0) @db.Decimal(14, 2)
+  net            Decimal   @default(0) @db.Decimal(14, 2)
+  employerCost   Decimal   @default(0) @db.Decimal(14, 2)
+  /// Run-level problems: [{ code, blocking, count, … }].
+  warnings       Json?
+  calculatedById String?
+  calculatedAt   DateTime?
+  approvedById   String?
+  approvedAt     DateTime?
+  paidById       String?
+  paidAt         DateTime?
+  cancelledById  String?
+  cancelledAt    DateTime?
+  note           String?   @db.Text
+  createdAt      DateTime  @default(now())
+
+  lines PayrollLine[]
+
+  @@unique([companyId, month, version])
+  @@index([companyId, status])
+  @@map("payroll_runs")
+}
+
+/// One employee in a run: the totals, the inputs it was calculated from
+/// (a snapshot — later changes never alter a past line) and its items.
+model PayrollLine {
+  id           String     @id @default(cuid())
+  run          PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId        String
+  employee     Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId   String
+  gross        Decimal    @db.Decimal(12, 2)
+  deductions   Decimal    @db.Decimal(12, 2)
+  net          Decimal    @db.Decimal(12, 2)
+  /// GOSI the employer pays on top (not deducted).
+  employerCost Decimal    @default(0) @db.Decimal(12, 2)
+  /// Net of the previous approved run, for the month-to-month comparison.
+  previousNet  Decimal?   @db.Decimal(12, 2)
+  /// Left out of this run's payment (e.g. pending a decision) — nothing is marked paid for it.
+  held         Boolean    @default(false)
+  heldReason   String?    @db.Text
+  /// Days, rates, versions the line was worked out from.
+  inputs       Json
+  warnings     Json?
+
+  items PayrollLineItem[]
+
+  @@unique([runId, employeeId])
+  @@index([employeeId])
+  @@map("payroll_lines")
+}
+
+model PayrollLineItem {
+  id        String      @id @default(cuid())
+  line      PayrollLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  lineId    String
+  /// EARNING | DEDUCTION | EMPLOYER (cost, not on the payslip total)
+  kind      String
+  /// COMPONENT | OVERTIME | ABSENCE | LATE | LEAVE | LOAN | PAYMENT | GOSI
+  source    String
+  sourceId  String?
+  code      String
+  labelAr   String
+  labelEn   String
+  /// e.g. days, hours or minutes the amount stands for.
+  quantity  Decimal?    @db.Decimal(10, 2)
+  rate      Decimal?    @db.Decimal(12, 4)
+  amount    Decimal     @db.Decimal(12, 2)
+  sortOrder Int         @default(100)
+
+  @@index([lineId])
+  @@map("payroll_line_items")
 }

@@ -29,6 +29,7 @@ import { employeeLeaveRouter, leaveRouter } from './modules/workforce/leave.rout
 import { approvalsRouter } from './modules/workforce/approvals.routes.js';
 import { employeeCompensationRouter, payrollSetupRouter } from './modules/payroll/compensation.routes.js';
 import { employeeLoanRouter, loanRouter } from './modules/payroll/loan.routes.js';
+import { payrollRunRouter } from './modules/payroll/payroll.routes.js';
 import { registersRouter } from './modules/registers/registers.routes.js';
 import { employeeScopeGuard } from './modules/employees/employee-scope.guard.js';
 import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
@@ -129,6 +130,7 @@ staffApi.use('/approvals', approvalsRouter(container.prisma));
 staffApi.use('/payroll', payrollSetupRouter(container.compensationService));
 staffApi.use('/employees', employeeCompensationRouter(container.compensationService));
 staffApi.use('/payroll', loanRouter(container.loanService));
+staffApi.use('/payroll', payrollRunRouter(container.payrollService));
 staffApi.use('/employees', employeeLoanRouter(container.loanService));
 staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
