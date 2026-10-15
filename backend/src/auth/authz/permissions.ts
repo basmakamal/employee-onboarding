@@ -52,6 +52,9 @@ export const PERMISSIONS = {
   'attendance.read': { nameAr: 'عرض الحضور والانصراف', nameEn: 'View attendance' },
   'attendance.manage': { nameAr: 'تسجيل الحضور ومراجعة المخالفات', nameEn: 'Record attendance and review exceptions' },
   'attendance.approve': { nameAr: 'اعتماد العمل الإضافي', nameEn: 'Approve overtime' },
+  'leave.read': { nameAr: 'عرض الإجازات والأرصدة', nameEn: 'View leave and balances' },
+  'leave.manage': { nameAr: 'إدخال الإجازات وإدارة أنواعها والأرصدة', nameEn: 'Enter leave, manage leave types and balances' },
+  'leave.approve': { nameAr: 'اعتماد الإجازات', nameEn: 'Approve leave' },
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -95,7 +98,7 @@ export const SYSTEM_ROLES: Array<{
     nameAr: 'مدير وحدة تنظيمية',
     nameEn: 'Unit manager (branch / department / team)',
     level: 'UNIT',
-    permissions: ['org.read', 'employees.read', 'documents.read', 'requests.write', 'reports.view', 'audit.read', 'schedule.read', 'attendance.read', 'attendance.approve'],
+    permissions: ['org.read', 'employees.read', 'documents.read', 'requests.write', 'reports.view', 'audit.read', 'schedule.read', 'attendance.read', 'attendance.approve', 'leave.read', 'leave.approve'],
   },
   {
     code: 'HR',
@@ -106,7 +109,7 @@ export const SYSTEM_ROLES: Array<{
       'org.read', 'employees.read', 'employees.write', 'onboarding.manage', 'contracts.write',
       'documents.read', 'documents.write', 'requests.write', 'processes.criminal',
       'offboarding.manage', 'reports.view', 'reports.export', 'emails.view', 'ai.use',
-      'schedule.read', 'schedule.manage', 'attendance.read', 'attendance.manage',
+      'schedule.read', 'schedule.manage', 'attendance.read', 'attendance.manage', 'leave.read', 'leave.manage',
     ],
   },
   {

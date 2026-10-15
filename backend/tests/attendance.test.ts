@@ -108,6 +108,7 @@ describe('staff recording punches', () => {
     employee: { findFirst: vi.fn().mockResolvedValue({ id: 'e1' }) },
     attendanceDay: { findUnique: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]), upsert: vi.fn() },
     attendanceEvent: { create: vi.fn().mockResolvedValue({}), findMany: vi.fn().mockResolvedValue([]) },
+    leaveRequest: { findMany: vi.fn().mockResolvedValue([]) },
     $transaction: vi.fn(),
   });
   const withTx = (d: ReturnType<typeof db>) => {
@@ -154,6 +155,7 @@ describe('re-judging a reviewed day', () => {
   const reviewed = { employeeId: 'e1', date: new Date('2026-11-01T00:00:00Z'), locked: false, status: 'PRESENT', workedMinutes: 420, lateMinutes: 30, earlyLeaveMinutes: 0, overtimeMinutes: 0, review: 'CONFIRMED', shiftCodes: 'M' };
   const db = (events: unknown[], existing: unknown[]) => ({
     attendanceEvent: { findMany: vi.fn().mockResolvedValue(events) },
+    leaveRequest: { findMany: vi.fn().mockResolvedValue([]) },
     attendanceDay: { findMany: vi.fn().mockResolvedValue(existing), upsert: vi.fn().mockResolvedValue({}) },
   });
 

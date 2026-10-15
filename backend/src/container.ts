@@ -14,6 +14,7 @@ import { NotificationRepository } from './notifications/notification.repository.
 import { NotificationService } from './notifications/notification.service.js';
 import { ScheduleService } from './modules/workforce/schedule.service.js';
 import { AttendanceService } from './modules/workforce/attendance.service.js';
+import { LeaveService } from './modules/workforce/leave.service.js';
 import { EmploymentEventRepository } from './modules/employees/employment-event.repository.js';
 import { EmploymentHistoryService } from './modules/employees/employment-history.service.js';
 import { CompanyResolver } from './modules/companies/company-resolver.js';
@@ -209,6 +210,8 @@ export function buildContainer() {
   const scheduleService = new ScheduleService(prisma, audit);
   // Attendance: punches, judged days, corrections and overtime.
   const attendanceService = new AttendanceService(prisma, scheduleService, audit);
+  // Leave: types (Saudi defaults), requests, ledger balances; approved leave marks attendance days.
+  const leaveService = new LeaveService(prisma, scheduleService, settingsService, audit, attendanceService);
   onTransition((event) => employmentHistory.recordStatus(event));
 
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
@@ -230,6 +233,8 @@ export function buildContainer() {
         { name: 'employment-changes', run: (now) => employmentHistory.applyDue(now) },
         // Yesterday's attendance is judged once its shifts have closed (hourly).
         { name: 'attendance-days', run: (now) => attendanceService.recomputeRecent(now) },
+        // Monthly leave accrual and the year-end carry-forward cap.
+        { name: 'leave-accrual', run: (now) => leaveService.accrue(now) },
       ],
     },
     [
@@ -337,6 +342,7 @@ export function buildContainer() {
     employmentHistory,
     scheduleService,
     attendanceService,
+    leaveService,
     assetService,
     offboardingService,
     authService,

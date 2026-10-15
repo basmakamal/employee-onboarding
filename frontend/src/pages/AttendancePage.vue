@@ -77,7 +77,7 @@ watch(q, () => {
 });
 watch([from, to, unit, status, review], () => ((page.value = 1), void load()));
 
-const STATUSES = ['PRESENT', 'ABSENT', 'INCOMPLETE', 'LATE', 'EARLY', 'OVERTIME', 'REST', 'HOLIDAY', 'UNSCHEDULED'];
+const STATUSES = ['PRESENT', 'ABSENT', 'INCOMPLETE', 'LATE', 'EARLY', 'OVERTIME', 'LEAVE', 'REST', 'HOLIDAY', 'UNSCHEDULED'];
 const REVIEWS = ['PENDING', 'CONFIRMED', 'EXCUSED', 'NONE'];
 const headers = computed(() => [
   { title: t('fields.name'), key: 'employee', sortable: false },

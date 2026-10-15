@@ -16,7 +16,7 @@ export interface Punch {
   at: Date;
 }
 
-export type DayStatus = 'PRESENT' | 'ABSENT' | 'INCOMPLETE' | 'REST' | 'HOLIDAY' | 'UNSCHEDULED';
+export type DayStatus = 'PRESENT' | 'ABSENT' | 'INCOMPLETE' | 'REST' | 'HOLIDAY' | 'UNSCHEDULED' | 'LEAVE';
 
 export interface DayResult {
   status: DayStatus;
@@ -220,4 +220,18 @@ export function judgeDay(day: ScheduleDay, punches: Punch[], timeZone: string): 
     overtimeMinutes: overtime,
     exception: incomplete || late > 0 || early > 0,
   };
+}
+
+/**
+ * An approved leave on a working day. A full day is LEAVE — never absent,
+ * late or early, and no overtime. A half day is still expected at work for
+ * the other half: no punches stays an absence, but lateness and leaving
+ * early are not held against the person. Rest days and holidays stay as
+ * they are.
+ */
+export function withLeave(r: DayResult, halfDay: boolean): DayResult {
+  if (r.scheduledMinutes === 0) return r;
+  if (!halfDay) return { ...r, status: 'LEAVE', lateMinutes: 0, earlyLeaveMinutes: 0, overtimeMinutes: 0, exception: false };
+  if (r.status === 'ABSENT') return r;
+  return { ...r, lateMinutes: 0, earlyLeaveMinutes: 0, exception: r.status === 'INCOMPLETE' };
 }

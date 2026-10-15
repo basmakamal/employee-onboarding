@@ -10,6 +10,7 @@ export interface AttendanceDayRow {
   id: string;
   date: string;
   status: string;
+  leaveCode: string | null;
   shiftCodes: string | null;
   scheduledMinutes: number;
   workedMinutes: number;
@@ -32,6 +33,7 @@ export const STATUS_COLOR: Record<string, string> = {
   REST: 'grey',
   HOLIDAY: 'info',
   UNSCHEDULED: 'grey',
+  LEAVE: 'info',
 };
 export const REVIEW_COLOR: Record<string, string> = { PENDING: 'warning', CONFIRMED: 'error', EXCUSED: 'success' };
 export const REQUEST_COLOR: Record<string, string> = { PENDING: 'warning', APPROVED: 'success', REJECTED: 'error', CANCELLED: 'grey' };

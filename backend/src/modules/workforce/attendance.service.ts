@@ -5,7 +5,7 @@ import type { EmployeeScope } from '../../auth/authz/authorize.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
 import { localDay } from '../employees/employment-history.service.js';
 import type { ScheduleService } from './schedule.service.js';
-import { addDays, assignPunches, isFinished, judgeDay, zonedInstant, type DayResult, type PunchKind } from './attendance-calc.js';
+import { addDays, assignPunches, isFinished, judgeDay, withLeave, zonedInstant, type DayResult, type PunchKind } from './attendance-calc.js';
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -101,6 +101,11 @@ export class AttendanceService {
       where: { employeeId: { in: employeeIds }, date: { gte: dayValue(from), lte: dayValue(to) } },
     });
     const existingOf = new Map(existing.map((d) => [`${d.employeeId}:${dayOf(d.date)}`, d]));
+    // Approved leave turns a working day into LEAVE (or excuses half of it).
+    const leaves = await this.db.leaveRequest.findMany({
+      where: { employeeId: { in: employeeIds }, status: 'APPROVED', startDate: { lte: dayValue(to) }, endDate: { gte: dayValue(from) } },
+      select: { employeeId: true, startDate: true, endDate: true, halfDay: true, leaveType: { select: { code: true } } },
+    });
 
     let written = 0;
     for (const employeeId of employeeIds) {
@@ -114,12 +119,16 @@ export class AttendanceService {
         if (prev?.locked) continue;
         // No schedule and no punches: nothing to record.
         if (!day.assignmentId && !day.holiday && punches.length === 0 && !prev) continue;
-        const result = judgeDay(day, punches, tz);
+        const leave = leaves.find((l) => l.employeeId === employeeId && dayOf(l.startDate) <= day.date && dayOf(l.endDate) >= day.date);
+        const judged = judgeDay(day, punches, tz);
+        const result = leave ? withLeave(judged, leave.halfDay) : judged;
+        const leaveCode = leave && judged.scheduledMinutes > 0 ? leave.leaveType.code : null;
         const review = !result.exception ? 'NONE' : prev && SAME(prev, result) && prev.review !== 'NONE' ? prev.review : 'PENDING';
-        if (prev && SAME(prev, result) && prev.review === review && prev.shiftCodes === result.shiftCodes) continue;
+        if (prev && SAME(prev, result) && prev.review === review && prev.shiftCodes === result.shiftCodes && (prev.leaveCode ?? null) === leaveCode) continue;
         const data = {
           status: result.status,
           shiftCodes: result.shiftCodes,
+          leaveCode,
           scheduledMinutes: result.scheduledMinutes,
           workedMinutes: result.workedMinutes,
           lateMinutes: result.lateMinutes,
