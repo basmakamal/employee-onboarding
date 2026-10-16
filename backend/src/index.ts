@@ -31,6 +31,7 @@ import { employeeCompensationRouter, payrollSetupRouter } from './modules/payrol
 import { employeeLoanRouter, loanRouter } from './modules/payroll/loan.routes.js';
 import { payrollRunRouter } from './modules/payroll/payroll.routes.js';
 import { employeePayslipRouter, payslipRouter } from './modules/payroll/payslip.routes.js';
+import { workforceReportsRouter } from './modules/reports/workforce-reports.routes.js';
 import { registersRouter } from './modules/registers/registers.routes.js';
 import { employeeScopeGuard } from './modules/employees/employee-scope.guard.js';
 import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
@@ -134,6 +135,8 @@ staffApi.use('/payroll', loanRouter(container.loanService));
 staffApi.use('/payroll', payrollRunRouter(container.payrollService));
 staffApi.use('/payroll', payslipRouter(container.payslipService));
 staffApi.use('/employees', employeePayslipRouter(container.payslipService));
+// Attendance, leave and payroll reports.
+staffApi.use('/hr-reports', workforceReportsRouter(container.workforceReports));
 staffApi.use('/employees', employeeLoanRouter(container.loanService));
 staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));

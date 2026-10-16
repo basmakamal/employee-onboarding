@@ -101,6 +101,10 @@ export class AttendanceService {
       where: { employeeId: { in: employeeIds }, date: { gte: dayValue(from), lte: dayValue(to) } },
     });
     const existingOf = new Map(existing.map((d) => [`${d.employeeId}:${dayOf(d.date)}`, d]));
+    // Days before someone joined are never judged (a schedule may start earlier).
+    const hiredOn = new Map(
+      (await this.db.employee.findMany({ where: { id: { in: employeeIds } }, select: { id: true, hireDate: true } })).map((e) => [e.id, e.hireDate ? dayOf(e.hireDate) : null]),
+    );
     // Approved leave turns a working day into LEAVE (or excuses half of it).
     const leaves = await this.db.leaveRequest.findMany({
       where: { employeeId: { in: employeeIds }, status: 'APPROVED', startDate: { lte: dayValue(to) }, endDate: { gte: dayValue(from) } },
@@ -117,6 +121,15 @@ export class AttendanceService {
         const punches = byDay.get(day.date) ?? [];
         const prev = existingOf.get(`${employeeId}:${day.date}`);
         if (prev?.locked) continue;
+        const hired = hiredOn.get(employeeId);
+        if (hired && day.date < hired) {
+          // A day judged before the hire date was known is taken back.
+          if (prev) {
+            await this.db.attendanceDay.delete({ where: { id: prev.id } });
+            written += 1;
+          }
+          continue;
+        }
         // No schedule and no punches: nothing to record.
         if (!day.assignmentId && !day.holiday && punches.length === 0 && !prev) continue;
         const leave = leaves.find((l) => l.employeeId === employeeId && dayOf(l.startDate) <= day.date && dayOf(l.endDate) >= day.date);
