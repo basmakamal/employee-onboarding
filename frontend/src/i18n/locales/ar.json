@@ -360,7 +360,8 @@
     "new": "جديد",
     "back": "رجوع",
     "viewAll": "عرض الكل",
-    "view": "عرض"
+    "view": "عرض",
+    "delete": "حذف"
   },
   "contract": {
     "salary": "الراتب",
@@ -1981,7 +1982,6 @@
     "daysPerYear": "أيام في السنة",
     "seniorDays": "أيام بعد الأقدمية",
     "seniorAfter": "بعد سنوات",
-    "carryForwardMax": "الحد الأقصى للترحيل",
     "carryMax": "أقصى ترحيل",
     "carryHint": "فارغ = يُرحَّل كل الرصيد",
     "maxPerRequest": "أقصى أيام للطلب",

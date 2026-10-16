@@ -93,19 +93,19 @@ describe('which day a punch belongs to', () => {
 
 const ACTOR = { type: 'USER' as const, id: 'u-mgr' };
 
-function service(db: Record<string, unknown>, resolve: ScheduleDay[] = []) {
+function service(db: Record<string, unknown>, resolve: ScheduleDay[] = [], audit: object = { append: vi.fn(), appendMany: vi.fn() }) {
   const base = { company: { findUnique: vi.fn().mockResolvedValue({ timezone: TZ }) }, ...db };
   const schedule = {
     resolve: vi.fn().mockResolvedValue(resolve),
     resolveMany: vi.fn().mockResolvedValue(new Map([['e1', resolve]])),
   };
-  return new AttendanceService(base as never, schedule as never, { append: vi.fn() } as never);
+  return new AttendanceService(base as never, schedule as never, audit as never);
 }
 
 describe('staff recording punches', () => {
   const now = at('2026-11-02', '12:00');
   const db = () => ({
-    attendanceDay: { findUnique: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]), upsert: vi.fn() },
+    attendanceDay: { findUnique: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]), update: vi.fn(), createMany: vi.fn() },
     attendanceEvent: { create: vi.fn().mockResolvedValue({}), findMany: vi.fn().mockResolvedValue([]) },
     leaveRequest: { findMany: vi.fn().mockResolvedValue([]) },
     employee: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue({ id: 'e1' }) },
@@ -157,19 +157,30 @@ describe('re-judging a reviewed day', () => {
     attendanceEvent: { findMany: vi.fn().mockResolvedValue(events) },
     leaveRequest: { findMany: vi.fn().mockResolvedValue([]) },
     employee: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue({ id: 'e1' }) },
-    attendanceDay: { findMany: vi.fn().mockResolvedValue(existing), upsert: vi.fn().mockResolvedValue({}) },
+    attendanceDay: { findMany: vi.fn().mockResolvedValue(existing), update: vi.fn().mockResolvedValue({}), createMany: vi.fn().mockResolvedValue({ count: 0 }) },
   });
 
   it('keeps HR’s decision when nothing changed', async () => {
     const d = db(late, [reviewed]);
     expect(await service(d, [day]).recompute('co', ['e1'], '2026-11-01', '2026-11-01', now)).toBe(0);
-    expect(d.attendanceDay.upsert).not.toHaveBeenCalled();
+    expect(d.attendanceDay.update).not.toHaveBeenCalled();
+    expect(d.attendanceDay.createMany).not.toHaveBeenCalled();
+  });
+
+  it('a day judged for the first time is inserted with the others in one batch', async () => {
+    const d = db(late, []);
+    expect(await service(d, [day]).recompute('co', ['e1'], '2026-11-01', '2026-11-01', now)).toBe(1);
+    expect(d.attendanceDay.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ companyId: 'co', employeeId: 'e1', status: 'PRESENT', lateMinutes: 30, review: 'PENDING' })],
+      skipDuplicates: true,
+    });
+    expect(d.attendanceDay.update).not.toHaveBeenCalled();
   });
 
   it('asks again when an approved correction changed the day', async () => {
-    const d = db([{ employeeId: 'e1', kind: 'IN', at: at('2026-11-01', '08:00') }, ...late], [{ ...reviewed, lateMinutes: 45 }]);
+    const d = db([{ employeeId: 'e1', kind: 'IN', at: at('2026-11-01', '08:00') }, ...late], [{ ...reviewed, id: 'day-1', lateMinutes: 45 }]);
     await service(d, [day]).recompute('co', ['e1'], '2026-11-01', '2026-11-01', now);
-    expect(d.attendanceDay.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: expect.objectContaining({ review: 'NONE', lateMinutes: 0 }) }));
+    expect(d.attendanceDay.update).toHaveBeenCalledWith({ where: { id: 'day-1' }, data: expect.objectContaining({ review: 'NONE', lateMinutes: 0 }) });
   });
 
   it('a day before the hire date is never judged — one judged earlier is taken back', async () => {
@@ -177,13 +188,39 @@ describe('re-judging a reviewed day', () => {
     (d as Record<string, unknown>)['employee'] = { findMany: vi.fn().mockResolvedValue([{ id: 'e1', hireDate: new Date('2026-11-02T00:00:00Z') }]) };
     (d.attendanceDay as Record<string, unknown>)['delete'] = vi.fn().mockResolvedValue({});
     await service(d, [day]).recompute('co', ['e1'], '2026-11-01', '2026-11-01', now);
-    expect(d.attendanceDay.upsert).not.toHaveBeenCalled();
+    expect(d.attendanceDay.update).not.toHaveBeenCalled();
+    expect(d.attendanceDay.createMany).not.toHaveBeenCalled();
     expect((d.attendanceDay as unknown as { delete: ReturnType<typeof vi.fn> }).delete).toHaveBeenCalledWith({ where: { id: 'day-1' } });
   });
 
   it('never touches a day payroll has locked', async () => {
     const d = db(late, [{ ...reviewed, locked: true, lateMinutes: 99 }]);
     expect(await service(d, [day]).recompute('co', ['e1'], '2026-11-01', '2026-11-01', now)).toBe(0);
+  });
+});
+
+describe('HR reviewing flagged days', () => {
+  const flagged = (id: string) => ({ id, employeeId: `e-${id}`, date: new Date('2026-11-01T00:00:00Z'), locked: false, review: 'PENDING', status: 'ABSENT', lateMinutes: 0, earlyLeaveMinutes: 0 });
+
+  it('a selection is decided in one update, each day still in the audit trail', async () => {
+    const d: Record<string, unknown> & { attendanceDay: { findMany: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> } } = { attendanceDay: { findMany: vi.fn().mockResolvedValue([flagged('1'), flagged('2')]), updateMany: vi.fn().mockResolvedValue({ count: 2 }) }, $transaction: (fn: (tx: unknown) => unknown) => fn(d) };
+    const audit = { append: vi.fn(), appendMany: vi.fn() };
+    expect(await service(d, [], audit).review('co', ['1', '2'], 'CONFIRMED', 'no call', ACTOR, undefined)).toBe(2);
+    expect(d.attendanceDay.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['1', '2'] }, locked: false, review: { not: 'NONE' } },
+      data: expect.objectContaining({ review: 'CONFIRMED', reviewedById: 'u-mgr', reviewNote: 'no call' }),
+    });
+    expect(audit.appendMany.mock.calls[0]![0]).toEqual([
+      expect.objectContaining({ action: 'ATTENDANCE_CONFIRMED', employeeId: 'e-1', companyId: 'co' }),
+      expect.objectContaining({ action: 'ATTENDANCE_CONFIRMED', employeeId: 'e-2' }),
+    ]);
+  });
+
+  it('a day payroll locked in the meantime stops the action, and nothing is logged', async () => {
+    const d: Record<string, unknown> & { attendanceDay: { findMany: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> } } = { attendanceDay: { findMany: vi.fn().mockResolvedValue([flagged('1'), flagged('2')]), updateMany: vi.fn().mockResolvedValue({ count: 1 }) }, $transaction: (fn: (tx: unknown) => unknown) => fn(d) };
+    const audit = { append: vi.fn(), appendMany: vi.fn() };
+    await expect(service(d, [], audit).review('co', ['1', '2'], 'EXCUSED', undefined, ACTOR, undefined)).rejects.toMatchObject({ code: 'DAY_LOCKED' });
+    expect(audit.appendMany).not.toHaveBeenCalled();
   });
 });
 

@@ -42,6 +42,19 @@ export class AuditLogRepository {
     });
   }
 
+  /** Many entries at once (a bulk action) — one insert, the same stamps as `append`. */
+  appendMany(entries: AuditEntry[]) {
+    if (entries.length === 0) return Promise.resolve({ count: 0 });
+    const ctx = currentContext();
+    return this.db.auditLog.createMany({
+      data: entries.map((entry) => ({
+        ...entry,
+        source: entry.source ?? ctx?.source ?? (entry.actorType === 'SYSTEM' ? 'SYSTEM' : null),
+        requestId: ctx?.requestId ?? null,
+      })),
+    });
+  }
+
   listByEntity(entity: string, entityId: string) {
     return this.db.auditLog.findMany({
       where: { entity, entityId },

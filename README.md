@@ -450,8 +450,27 @@ cd frontend && npm run typecheck && npm run build
 Tests need **no database** — repositories are replaced with in-memory fakes, and
 the state machines are tested in isolation (`tests/machines.test.ts`,
 `tests/engine.test.ts`). GitHub Actions (`.github/workflows/ci.yml`) runs
-`prisma generate → lint → typecheck → test` for the backend and `build` for the
-frontend on every push and pull request to `develop`, `staging` and `main`.
+`prisma generate → lint → typecheck → test` for the backend and
+`check:i18n → build` for the frontend on every push and pull request to
+`develop`, `staging` and `main`.
+
+### Before a release
+
+| Check | What it proves |
+|---|---|
+| `cd frontend && npm run check:i18n` | every text key the screens use exists in Arabic **and** English (no raw `payroll.x.y` on screen) |
+| `tests/permission-matrix.test.ts` | every workforce / payroll / report route is called as each built-in role: refused (403) without the permission, before anything else runs; plus the business rules — salaries stay with HR, payroll and the managers; only a company manager or the super admin approves a run; requests are approved by managers |
+| `tests/company-isolation.test.ts` | an id from another company never finds or changes anything (decisions, runs, payslips, IBANs) |
+| `scripts/perf-check.ts` | month-end speed with realistic volumes — **only on a throw-away database whose name ends in `_perf`** (the script refuses anything else) |
+
+```bash
+# speed check: a separate database, migrated and seeded, then filled with 1,000 people
+cd backend
+export DATABASE_URL="mysql://root:…@127.0.0.1:3306/employee_onboarding_perf"
+npx prisma migrate reset --force        # creates / empties the _perf database
+npx prisma db seed                      # roles and the admin / HR test users
+npx tsx scripts/perf-check.ts 1000
+```
 
 ---
 

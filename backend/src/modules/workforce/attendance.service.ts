@@ -111,11 +111,22 @@ export class AttendanceService {
       select: { employeeId: true, startDate: true, endDate: true, halfDay: true, leaveType: { select: { code: true } } },
     });
 
+    // Grouped once per person: a month for a thousand people is tens of thousands of rows.
+    const eventsOf = new Map<string, Array<{ kind: PunchKind; at: Date }>>();
+    for (const e of events) {
+      const list = eventsOf.get(e.employeeId) ?? [];
+      list.push({ kind: e.kind as PunchKind, at: e.at });
+      eventsOf.set(e.employeeId, list);
+    }
+    const leavesOf = new Map<string, typeof leaves>();
+    for (const l of leaves) leavesOf.set(l.employeeId, [...(leavesOf.get(l.employeeId) ?? []), l]);
+
+    // New days are inserted in batches; only the days that changed are updated one by one.
+    const creates: Prisma.AttendanceDayCreateManyInput[] = [];
     let written = 0;
     for (const employeeId of employeeIds) {
       const days = schedules.get(employeeId) ?? [];
-      const mine = events.filter((e) => e.employeeId === employeeId).map((e) => ({ kind: e.kind as PunchKind, at: e.at }));
-      const byDay = assignPunches(days, mine, tz);
+      const byDay = assignPunches(days, eventsOf.get(employeeId) ?? [], tz);
       for (const day of days) {
         if (day.date < from || day.date > to || !isFinished(day, tz, now)) continue;
         const punches = byDay.get(day.date) ?? [];
@@ -132,7 +143,7 @@ export class AttendanceService {
         }
         // No schedule and no punches: nothing to record.
         if (!day.assignmentId && !day.holiday && punches.length === 0 && !prev) continue;
-        const leave = leaves.find((l) => l.employeeId === employeeId && dayOf(l.startDate) <= day.date && dayOf(l.endDate) >= day.date);
+        const leave = leavesOf.get(employeeId)?.find((l) => dayOf(l.startDate) <= day.date && dayOf(l.endDate) >= day.date);
         const judged = judgeDay(day, punches, tz);
         const result = leave ? withLeave(judged, leave.halfDay) : judged;
         const leaveCode = leave && judged.scheduledMinutes > 0 ? leave.leaveType.code : null;
@@ -153,13 +164,14 @@ export class AttendanceService {
           ...(review !== prev?.review ? { reviewedById: null, reviewedAt: null, reviewNote: null } : {}),
           computedAt: now,
         };
-        await this.db.attendanceDay.upsert({
-          where: { employeeId_date: { employeeId, date: dayValue(day.date) } },
-          create: { companyId, employeeId, date: dayValue(day.date), ...data },
-          update: data,
-        });
+        if (prev) await this.db.attendanceDay.update({ where: { id: prev.id }, data });
+        else creates.push({ companyId, employeeId, date: dayValue(day.date), ...data });
         written += 1;
       }
+    }
+    // A day another recompute inserted meanwhile is kept (skipDuplicates) — it was judged from the same punches.
+    for (let i = 0; i < creates.length; i += 500) {
+      await this.db.attendanceDay.createMany({ data: creates.slice(i, i + 500), skipDuplicates: true });
     }
     return written;
   }
@@ -247,16 +259,26 @@ export class AttendanceService {
       if (d.locked) throw new GuardFailedError('DAY_LOCKED', `${dayOf(d.date)} is already in a payroll run`);
       if (d.review === 'NONE') throw new GuardFailedError('NOTHING_TO_REVIEW', `${dayOf(d.date)} has no exception to review`);
     }
-    const now = new Date();
-    for (const d of days) {
-      await this.db.attendanceDay.update({
-        where: { id: d.id },
-        data: { review: decision, reviewedById: actor.id ?? null, reviewedAt: now, reviewNote: note?.trim() || null },
+    // One guarded update for the whole selection: a day payroll locked meanwhile undoes it all.
+    await this.db.$transaction(async (tx) => {
+      const moved = await tx.attendanceDay.updateMany({
+        where: { id: { in: days.map((d) => d.id) }, locked: false, review: { not: 'NONE' } },
+        data: { review: decision, reviewedById: actor.id ?? null, reviewedAt: new Date(), reviewNote: note?.trim() || null },
       });
-      await this.log(companyId, actor, d.employeeId, decision === 'CONFIRMED' ? 'ATTENDANCE_CONFIRMED' : 'ATTENDANCE_EXCUSED', {
-        date: dayOf(d.date), status: d.status, late: d.lateMinutes, early: d.earlyLeaveMinutes,
-      });
-    }
+      if (moved.count !== days.length) throw new GuardFailedError('DAY_LOCKED', 'some of these days were just put in a payroll run — reload and try again');
+    });
+    await this.audit.appendMany(
+      days.map((d) => ({
+        entity: 'EMPLOYEE',
+        entityId: d.employeeId,
+        action: decision === 'CONFIRMED' ? 'ATTENDANCE_CONFIRMED' : 'ATTENDANCE_EXCUSED',
+        actorType: actor.type,
+        ...(actor.id ? { actorId: actor.id } : {}),
+        employeeId: d.employeeId,
+        companyId,
+        metadata: { date: dayOf(d.date), status: d.status, late: d.lateMinutes, early: d.earlyLeaveMinutes },
+      })),
+    );
     return days.length;
   }
 
