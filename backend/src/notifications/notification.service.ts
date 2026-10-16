@@ -155,6 +155,43 @@ export class NotificationService {
     });
   }
 
+  /**
+   * E-mail a document to an external person (a payslip to an employee) and
+   * return the log row, so the caller can follow the delivery. The file is
+   * attached at send time from storage.
+   */
+  async sendDocument(
+    email: string,
+    templateKey: string,
+    params: TemplateParams,
+    attachment: { filename: string; storageKey: string; contentType?: string },
+    ref?: EntityRef,
+    locale: Locale = 'ar',
+  ): Promise<{ id: string }> {
+    const companyId = await this.companyFor(ref);
+    const message = await this.render(templateKey, locale, params, companyId);
+    const row = await this.notifications.create({
+      channel: 'EMAIL',
+      recipientEmail: email,
+      locale,
+      subject: message.subject,
+      body: message.text,
+      templateKey: message.templateKey ?? templateKey,
+      templateVersion: message.templateVersion ?? null,
+      companyId,
+      ...this.refFields(ref),
+    });
+    await this.deliver(row.id, {
+      to: email,
+      subject: message.subject,
+      text: message.text,
+      companyId,
+      attachments: [attachment],
+      ...(message.html ? { html: message.html } : {}),
+    });
+    return { id: row.id };
+  }
+
   /** Notify every active HR user: email + in-app bell entry. */
   notifyHr(
     templateKey: string,

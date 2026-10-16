@@ -239,6 +239,8 @@ model Company {
   loans            EmployeeLoan[]
   oneTimePayments  OneTimePayment[]
   payrollRuns      PayrollRun[]
+  payslips         Payslip[]
+  payslipSetting   PayslipSetting?
   auditLogs        AuditLog[]
   notifications    Notification[]
   assignments      UserAssignment[]
@@ -491,6 +493,7 @@ model Employee {
   loans            EmployeeLoan[]
   oneTimePayments  OneTimePayment[]
   payrollLines     PayrollLine[]
+  payslips         Payslip[]
   auditLogs        AuditLog[]               @relation("EmployeeAudit")
 
   /// (status, statusChangedAt) serves both the status filters and the SLA
@@ -1692,7 +1695,8 @@ model PayrollLine {
   inputs       Json
   warnings     Json?
 
-  items PayrollLineItem[]
+  items   PayrollLineItem[]
+  payslip Payslip?
 
   @@unique([runId, employeeId])
   @@index([employeeId])
@@ -1719,4 +1723,69 @@ model PayrollLineItem {
 
   @@index([lineId])
   @@map("payroll_line_items")
+}
+
+/// The PDF of one employee's line in an approved run, stored privately with
+/// a content hash. Generated once (on first download or send) and never
+/// rewritten — the line it shows is frozen too.
+model Payslip {
+  id            String      @id @default(cuid())
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String
+  line          PayrollLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  lineId        String      @unique
+  runId         String
+  employee      Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId    String
+  month         String
+  storageKey    String
+  sha256        String
+  sizeBytes     Int
+  generatedById String?
+  generatedAt   DateTime    @default(now())
+
+  deliveries PayslipDelivery[]
+
+  @@index([runId])
+  @@index([employeeId, month])
+  @@map("payslips")
+}
+
+/// One attempt to e-mail a payslip. The delivery key makes a send happen
+/// once — sending a run again skips everyone already sent, unless a resend
+/// is asked for explicitly.
+model PayslipDelivery {
+  id             String    @id @default(cuid())
+  payslip        Payslip   @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  payslipId      String
+  email          String?
+  /// QUEUED | SENT | FAILED | NO_EMAIL
+  status         String    @default("QUEUED")
+  /// MANUAL | SCHEDULED
+  trigger        String    @default("MANUAL")
+  deliveryKey    String    @unique
+  notificationId String?
+  requestedById  String?
+  error          String?   @db.Text
+  createdAt      DateTime  @default(now())
+  sentAt         DateTime?
+
+  @@index([payslipId])
+  @@map("payslip_deliveries")
+}
+
+/// Sending payslips automatically: on this day of the month, the approved
+/// run of the month is e-mailed to everyone not sent yet.
+model PayslipSetting {
+  id            String   @id @default(cuid())
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String   @unique
+  autoSend      Boolean  @default(false)
+  sendDay       Int      @default(27)
+  /// The last month sent automatically ("YYYY-MM") — the job runs once a month.
+  lastAutoMonth String?
+  updatedById   String?
+  updatedAt     DateTime @updatedAt
+
+  @@map("payslip_settings")
 }

@@ -6,6 +6,7 @@ import { config } from '../../common/config.js';
 import { logger } from '../../common/logger.js';
 import { decryptString, encryptString } from '../../common/crypto.js';
 import { GuardFailedError } from '../../workflow/errors.js';
+import { storagePath } from '../../common/storage.js';
 
 export const mailSettingsSchema = z.object({
   provider: z.enum(['console', 'gmail', 'microsoft', 'custom']).default('console'),
@@ -240,7 +241,7 @@ export class DynamicNotifier implements Notifier {
     const transport = await this.settings.buildTransport(message.companyId ?? null);
     if (!transport) {
       logger.info(
-        { to: message.to, subject: message.subject, companyId: message.companyId },
+        { to: message.to, subject: message.subject, companyId: message.companyId, attachments: message.attachments?.map((x) => x.filename) },
         `[email:console] ${message.text.slice(0, 120)}`,
       );
       return;
@@ -253,6 +254,9 @@ export class DynamicNotifier implements Notifier {
       // block HTML still get a readable message.
       text: message.text,
       ...(message.html ? { html: message.html } : {}),
+      ...(message.attachments?.length
+        ? { attachments: message.attachments.map((a) => ({ filename: a.filename, path: storagePath(a.storageKey), ...(a.contentType ? { contentType: a.contentType } : {}) })) }
+        : {}),
     });
   }
 }

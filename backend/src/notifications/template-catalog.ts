@@ -18,6 +18,7 @@ export const PLACEHOLDERS: Record<string, PlaceholderMeta> = {
   department: { ar: 'الإدارة', en: 'Department', sample: { ar: 'تقنية المعلومات', en: 'IT' } },
   jobTitle: { ar: 'المسمى الوظيفي', en: 'Job title', sample: { ar: 'مهندس برمجيات', en: 'Software Engineer' } },
   status: { ar: 'الحالة', en: 'Status', sample: { ar: 'AWAITING_FORM', en: 'AWAITING_FORM' } },
+  payMonth: { ar: 'شهر الراتب', en: 'Pay month', sample: { ar: 'أكتوبر 2026', en: 'October 2026' } },
   daysWaiting: { ar: 'الأيام منذ آخر تغيير', en: 'Days waiting', sample: { ar: '3', en: '3' } },
   daysLeft: { ar: 'الأيام المتبقية', en: 'Days left', sample: { ar: '14', en: '14' } },
   docType: { ar: 'نوع المستند', en: 'Document type', sample: { ar: 'IQAMA', en: 'IQAMA' } },
@@ -82,6 +83,11 @@ export const TEMPLATE_CATALOG: Record<string, TemplateMeta> = {
   'employee.form_invite': {
     audience: 'employee', nameAr: 'دعوة استكمال بيانات التوظيف', nameEn: 'Employment details invite',
     placeholders: [...EMP, 'linkUrl'], hasCta: true,
+  },
+  /** The monthly payslip — the PDF is attached; the e-mail itself carries no amounts. */
+  'employee.payslip': {
+    audience: 'employee', nameAr: 'قسيمة الراتب الشهرية', nameEn: 'Monthly payslip',
+    placeholders: [...EMP, 'payMonth'], hasCta: false,
   },
   'employee.form_reminder': {
     audience: 'employee', nameAr: 'تذكير باستكمال البيانات', nameEn: 'Employment details reminder',

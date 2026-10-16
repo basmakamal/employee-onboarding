@@ -19,6 +19,7 @@ import { LeaveService } from './modules/workforce/leave.service.js';
 import { CompensationService } from './modules/payroll/compensation.service.js';
 import { LoanService } from './modules/payroll/loan.service.js';
 import { PayrollService } from './modules/payroll/payroll.service.js';
+import { PayslipService } from './modules/payroll/payslip.service.js';
 import { EmploymentEventRepository } from './modules/employees/employment-event.repository.js';
 import { EmploymentHistoryService } from './modules/employees/employment-history.service.js';
 import { CompanyResolver } from './modules/companies/company-resolver.js';
@@ -224,6 +225,8 @@ export function buildContainer() {
   const loanService = new LoanService(prisma, compensationService, audit);
   // Payroll runs: the month calculated from everything decided elsewhere.
   const payrollService = new PayrollService(prisma, compensationService, scheduleService, settingsService, audit);
+  // Payslips: PDFs of approved runs, e-mailed by hand or on the chosen day.
+  const payslipService = new PayslipService(prisma, compensationService, notifications, audit);
   onTransition((event) => employmentHistory.recordStatus(event));
 
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
@@ -247,6 +250,8 @@ export function buildContainer() {
         { name: 'attendance-days', run: (now) => attendanceService.recomputeRecent(now) },
         // Monthly leave accrual and the year-end carry-forward cap.
         { name: 'leave-accrual', run: (now) => leaveService.accrue(now) },
+        // Payslips e-mailed automatically on each company's chosen day.
+        { name: 'payslip-auto-send', run: (now) => payslipService.autoSend(now) },
       ],
     },
     [
@@ -358,6 +363,7 @@ export function buildContainer() {
     compensationService,
     loanService,
     payrollService,
+    payslipService,
     assetService,
     offboardingService,
     authService,
