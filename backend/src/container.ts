@@ -20,6 +20,7 @@ import { CompensationService } from './modules/payroll/compensation.service.js';
 import { LoanService } from './modules/payroll/loan.service.js';
 import { PayrollService } from './modules/payroll/payroll.service.js';
 import { PayslipService } from './modules/payroll/payslip.service.js';
+import { WorkforceReportsService } from './modules/reports/workforce-reports.service.js';
 import { EmploymentEventRepository } from './modules/employees/employment-event.repository.js';
 import { EmploymentHistoryService } from './modules/employees/employment-history.service.js';
 import { CompanyResolver } from './modules/companies/company-resolver.js';
@@ -227,6 +228,8 @@ export function buildContainer() {
   const payrollService = new PayrollService(prisma, compensationService, scheduleService, settingsService, audit);
   // Payslips: PDFs of approved runs, e-mailed by hand or on the chosen day.
   const payslipService = new PayslipService(prisma, compensationService, notifications, audit);
+  // Attendance, leave and payroll reports (screen + Excel).
+  const workforceReports = new WorkforceReportsService(prisma, audit);
   onTransition((event) => employmentHistory.recordStatus(event));
 
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
@@ -364,6 +367,7 @@ export function buildContainer() {
     loanService,
     payrollService,
     payslipService,
+    workforceReports,
     assetService,
     offboardingService,
     authService,

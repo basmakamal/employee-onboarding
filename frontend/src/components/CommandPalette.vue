@@ -42,6 +42,7 @@ const PAGES: Array<{ to: string; key: string; icon: string; permission?: string 
   { to: '/', key: 'nav.home', icon: 'fluent:home' },
   { to: '/employees', key: 'nav.employees', icon: 'fluent:people' },
   { to: '/reports', key: 'nav.reports', icon: 'fluent:data-trending', permission: 'reports.view' },
+  { to: '/hr-reports', key: 'nav.hrReports', icon: 'fluent:text-bullet-list-square', permission: 'attendance.read' },
   { to: '/emails', key: 'nav.emailLog', icon: 'fluent:mail', permission: 'emails.view' },
   { to: '/assistant', key: 'nav.assistant', icon: 'fluent:bot-sparkle', permission: 'ai.use' },
   { to: '/employee-changes', key: 'nav.employeeChanges', icon: 'fluent:history' },

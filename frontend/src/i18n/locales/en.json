@@ -48,7 +48,8 @@
     "payrollSetup": "Payroll setup",
     "money": "Loans and payments",
     "payrollRuns": "Payroll runs",
-    "payslips": "Payslips"
+    "payslips": "Payslips",
+    "hrReports": "Workforce & payroll reports"
   },
   "users": {
     "assignments": "Assignments",
@@ -2293,5 +2294,35 @@
     "saved": "Saved",
     "lastAuto": "Last sent automatically: {month}",
     "noRuns": "No approved payroll yet."
+  },
+  "hrReports": {
+    "title": "Workforce & payroll reports",
+    "subtitle": "Attendance, leave and payroll of {company} — on screen and in Excel.",
+    "attendance": "Attendance",
+    "leave": "Leave",
+    "payroll": "Payroll",
+    "empty": "Nothing for this filter.",
+    "workingDays": "Working days",
+    "lateDays": "Late days",
+    "late": "Late",
+    "early": "Left early",
+    "otRecorded": "Overtime recorded",
+    "otApproved": "Overtime approved",
+    "year": "Year",
+    "balance": "balance",
+    "taken": "taken",
+    "register": "Payroll register",
+    "variance": "Comparison",
+    "bank": "Bank transfer list",
+    "bankHint": "The bank transfer list holds full IBANs — every download is recorded in the audit trail.",
+    "varianceTitle": "{month} compared with the month before",
+    "varianceSub": "{prev}: net {before} for {pe} people → now {now} for {ne}",
+    "noPrevious": "No earlier approved month to compare with.",
+    "difference": "Difference",
+    "changed": "Changed items",
+    "statuses": {
+      "NEW": "new",
+      "MISSING": "not paid this month"
+    }
   }
 }

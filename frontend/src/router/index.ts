@@ -31,6 +31,7 @@ export const router = createRouter({
     { path: '/approvals', name: 'approvals', component: () => import('../pages/ApprovalsPage.vue'), meta: { permission: ['leave.approve', 'attendance.approve', 'pay.approve'] } },
     { path: '/payroll/runs', name: 'payroll-runs', component: () => import('../pages/PayrollRunsPage.vue'), meta: { permission: ['payroll.prepare', 'payroll.approve'] } },
     { path: '/payroll/runs/:id', name: 'payroll-run', component: () => import('../pages/PayrollRunPage.vue'), meta: { permission: ['payroll.prepare', 'payroll.approve'] } },
+    { path: '/hr-reports', name: 'hr-reports', component: () => import('../pages/WorkforceReportsPage.vue'), meta: { permission: ['attendance.read', 'attendance.manage', 'attendance.approve', 'leave.read', 'leave.manage', 'leave.approve', 'payroll.prepare', 'payroll.approve', 'compensation.read'] } },
     { path: '/payroll/payslips', name: 'payslips', component: () => import('../pages/PayslipsPage.vue'), meta: { permission: ['payroll.prepare', 'payroll.approve', 'payroll.manage'] } },
     { path: '/payroll/money', name: 'payroll-money', component: () => import('../pages/LoansPage.vue'), meta: { permission: ['compensation.read', 'pay.approve'] } },
     { path: '/payroll/setup', name: 'payroll-setup', component: () => import('../pages/PayrollSetupPage.vue'), meta: { permission: ['payroll.manage', 'compensation.read'] } },

@@ -103,6 +103,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/emails', icon: 'fluent:mail', key: 'nav.emailLog', permission: 'emails.view' },
       { to: '/reports', icon: 'fluent:data-trending', key: 'nav.reports', permission: 'reports.view' },
+      { to: '/hr-reports', icon: 'fluent:text-bullet-list-square', key: 'nav.hrReports', permission: ['attendance.read', 'attendance.manage', 'attendance.approve', 'leave.read', 'leave.manage', 'leave.approve', 'payroll.prepare', 'payroll.approve', 'compensation.read'] },
       { to: '/assistant', icon: 'fluent:bot-sparkle', key: 'nav.assistant', permission: 'ai.use' },
     ],
   },

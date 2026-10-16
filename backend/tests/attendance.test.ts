@@ -105,10 +105,10 @@ function service(db: Record<string, unknown>, resolve: ScheduleDay[] = []) {
 describe('staff recording punches', () => {
   const now = at('2026-11-02', '12:00');
   const db = () => ({
-    employee: { findFirst: vi.fn().mockResolvedValue({ id: 'e1' }) },
     attendanceDay: { findUnique: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]), upsert: vi.fn() },
     attendanceEvent: { create: vi.fn().mockResolvedValue({}), findMany: vi.fn().mockResolvedValue([]) },
     leaveRequest: { findMany: vi.fn().mockResolvedValue([]) },
+    employee: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue({ id: 'e1' }) },
     $transaction: vi.fn(),
   });
   const withTx = (d: ReturnType<typeof db>) => {
@@ -156,6 +156,7 @@ describe('re-judging a reviewed day', () => {
   const db = (events: unknown[], existing: unknown[]) => ({
     attendanceEvent: { findMany: vi.fn().mockResolvedValue(events) },
     leaveRequest: { findMany: vi.fn().mockResolvedValue([]) },
+    employee: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue({ id: 'e1' }) },
     attendanceDay: { findMany: vi.fn().mockResolvedValue(existing), upsert: vi.fn().mockResolvedValue({}) },
   });
 
@@ -169,6 +170,15 @@ describe('re-judging a reviewed day', () => {
     const d = db([{ employeeId: 'e1', kind: 'IN', at: at('2026-11-01', '08:00') }, ...late], [{ ...reviewed, lateMinutes: 45 }]);
     await service(d, [day]).recompute('co', ['e1'], '2026-11-01', '2026-11-01', now);
     expect(d.attendanceDay.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: expect.objectContaining({ review: 'NONE', lateMinutes: 0 }) }));
+  });
+
+  it('a day before the hire date is never judged — one judged earlier is taken back', async () => {
+    const d = db(late, [{ ...reviewed, id: 'day-1', review: 'PENDING', status: 'ABSENT' }]);
+    (d as Record<string, unknown>)['employee'] = { findMany: vi.fn().mockResolvedValue([{ id: 'e1', hireDate: new Date('2026-11-02T00:00:00Z') }]) };
+    (d.attendanceDay as Record<string, unknown>)['delete'] = vi.fn().mockResolvedValue({});
+    await service(d, [day]).recompute('co', ['e1'], '2026-11-01', '2026-11-01', now);
+    expect(d.attendanceDay.upsert).not.toHaveBeenCalled();
+    expect((d.attendanceDay as unknown as { delete: ReturnType<typeof vi.fn> }).delete).toHaveBeenCalledWith({ where: { id: 'day-1' } });
   });
 
   it('never touches a day payroll has locked', async () => {
