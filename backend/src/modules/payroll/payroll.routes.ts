@@ -38,6 +38,10 @@ export function payrollRunRouter(service: PayrollService): Router {
   router.post('/runs/:id/approve', requirePermission('payroll.approve'), validate(z.object({ note: z.string().trim().max(1000).optional() })), asyncHandler(async (req, res) => {
     res.json(await service.approve(contextOf(req).companyId, id(req), (req.body as { note?: string }).note, actorOf(req)));
   }));
+  /** Undo an approval before payment — with a reason; never once payslips went out. */
+  router.post('/runs/:id/reopen', requirePermission('payroll.approve'), validate(z.object({ reason: z.string().trim().min(3).max(1000) })), asyncHandler(async (req, res) => {
+    res.json(await service.reopen(contextOf(req).companyId, id(req), (req.body as { reason: string }).reason, actorOf(req)));
+  }));
   router.post('/runs/:id/paid', requirePermission('payroll.approve', 'payroll.prepare'), asyncHandler(async (req, res) => {
     res.json(await service.markPaid(contextOf(req).companyId, id(req), actorOf(req)));
   }));

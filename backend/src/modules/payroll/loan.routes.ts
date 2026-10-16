@@ -20,6 +20,7 @@ const paymentSchema = z.object({
   amount,
   month,
   reason: z.string().trim().min(3).max(1000),
+  correctsRunId: z.string().min(1).optional(),
 });
 const decisionSchema = z.object({ approve: z.boolean(), note: z.string().trim().max(1000).optional() });
 const registerSchema = z.object({

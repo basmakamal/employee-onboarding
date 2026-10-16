@@ -10,8 +10,8 @@ const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const num = (d: Prisma.Decimal | number | null | undefined) => (d == null ? 0 : Number(d));
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-export const EARNING_CATEGORIES = ['BONUS', 'COMMISSION', 'ARREARS', 'OTHER_EARNING'] as const;
-export const DEDUCTION_CATEGORIES = ['PENALTY', 'DAMAGE', 'OTHER_DEDUCTION'] as const;
+export const EARNING_CATEGORIES = ['BONUS', 'COMMISSION', 'ARREARS', 'OTHER_EARNING', 'CORRECTION'] as const;
+export const DEDUCTION_CATEGORIES = ['PENALTY', 'DAMAGE', 'OTHER_DEDUCTION', 'CORRECTION'] as const;
 
 export interface LoanInput {
   kind: 'ADVANCE' | 'LOAN';
@@ -26,6 +26,8 @@ export interface PaymentInput {
   amount: number;
   month: string;
   reason: string;
+  /** A correction of an approved month (category CORRECTION): the run it corrects. */
+  correctsRunId?: string | undefined;
 }
 
 /**
@@ -188,8 +190,21 @@ export class LoanService {
     if (!MONTH_RE.test(input.month)) throw new GuardFailedError('BAD_MONTH', 'pick the payroll month', 'month');
     if (input.month < (await this.thisMonth(companyId))) throw new GuardFailedError('PAST_MONTH', 'this month or a later one', 'month');
     if (!(input.amount > 0) || input.amount > 1_000_000) throw new GuardFailedError('BAD_AMOUNT', 'enter the amount', 'amount');
+    // A correction belongs to an approved month this person was paid in, and is paid in a later one.
+    if ((input.category === 'CORRECTION') !== !!input.correctsRunId) throw new GuardFailedError('BAD_CATEGORY', 'a correction names the payroll month it corrects', 'category');
+    if (input.correctsRunId) {
+      const corrected = await this.db.payrollRun.findFirst({
+        where: { id: input.correctsRunId, companyId, status: { in: ['APPROVED', 'PAID'] }, lines: { some: { employeeId } } },
+        select: { month: true },
+      });
+      if (!corrected) throw new GuardFailedError('BAD_RUN', 'pick an approved payroll month this employee was in', 'correctsRunId');
+      if (input.month <= corrected.month) throw new GuardFailedError('BAD_MONTH', 'a correction is paid in a later month', 'month');
+    }
     const row = await this.db.oneTimePayment.create({
-      data: { companyId, employeeId, kind: input.kind, category: input.category, amount: input.amount, month: input.month, reason: input.reason.trim(), requestedById: actor.id ?? null },
+      data: {
+        companyId, employeeId, kind: input.kind, category: input.category, amount: input.amount, month: input.month, reason: input.reason.trim(),
+        correctsRunId: input.correctsRunId ?? null, requestedById: actor.id ?? null,
+      },
     });
     await this.log(companyId, actor, employeeId, 'PAYMENT_REQUESTED', { kind: input.kind, category: input.category, month: input.month });
     return row;
