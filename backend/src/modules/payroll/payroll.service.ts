@@ -9,6 +9,7 @@ import type { CompensationService } from './compensation.service.js';
 import { resolvePackage, type ComponentDef } from './compensation-calc.js';
 import { calculate, ENGINE_VERSION, type EngineInput, type EngineWarning, type Proration, type Segment } from './payroll-engine.js';
 import { addMonths } from './loan-calc.js';
+import { removeStoredFiles } from '../../common/storage.js';
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const dayValue = (d: string) => new Date(`${d}T00:00:00.000Z`);
@@ -25,7 +26,10 @@ const PAYMENT_LABELS: Record<string, [string, string]> = {
   PENALTY: ['جزاء', 'Penalty'],
   DAMAGE: ['تلف / فقد', 'Damage / loss'],
   OTHER_DEDUCTION: ['استقطاع آخر', 'Other deduction'],
+  CORRECTION: ['تصحيح', 'Correction'],
 };
+const monthAr = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+const monthEn = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', month: 'long', year: 'numeric' });
 
 export interface RunWarning {
   code: 'EXCEPTIONS_PENDING' | 'GOSI_RATES_MISSING' | 'NO_PAY' | 'NEGATIVE_NET' | 'DEDUCTIONS_OVER_LIMIT';
@@ -86,9 +90,17 @@ export class PayrollService {
       },
     });
     if (!run) throw new NotFoundError('payroll run', id);
-    const names = await this.names([run.calculatedById, run.approvedById, run.paidById, run.cancelledById]);
+    const names = await this.names([run.calculatedById, run.approvedById, run.paidById, run.cancelledById, run.reopenedById]);
+    // The month before, for the comparison of totals.
+    const previous = await this.db.payrollRun.findFirst({
+      where: { companyId, month: { lt: run.month }, status: { in: ['APPROVED', 'PAID'] } },
+      orderBy: [{ month: 'desc' }, { version: 'desc' }],
+      select: { id: true, month: true, employees: true, gross: true, deductions: true, net: true },
+    });
     return {
       ...this.shapeRun(run, names),
+      reopenedBy: names(run.reopenedById),
+      previous: previous ? { ...previous, gross: num(previous.gross), deductions: num(previous.deductions), net: num(previous.net) } : null,
       lines: run.lines.map((l) => ({
         id: l.id,
         employee: l.employee,
@@ -211,6 +223,11 @@ export class PayrollService {
       this.db.payrollRun.findFirst({ where: { companyId, month: { lt: month }, status: { in: ['APPROVED', 'PAID'] } }, orderBy: [{ month: 'desc' }, { version: 'desc' }], include: { lines: { select: { employeeId: true, net: true } } } }),
     ]);
     const heldBefore = new Map(run.lines.filter((l) => l.held).map((l) => [l.employeeId, l.heldReason]));
+    // Corrections name the month they correct.
+    const correctedIds = [...new Set(payments.map((p) => p.correctsRunId).filter((x): x is string => !!x))];
+    const correctedMonths = new Map(
+      (correctedIds.length ? await this.db.payrollRun.findMany({ where: { id: { in: correctedIds } }, select: { id: true, month: true } }) : []).map((r) => [r.id, r.month]),
+    );
 
     const lines: Array<{ employeeId: string; result: ReturnType<typeof calculate>; previousNet: number | null }> = [];
     for (const person of people) {
@@ -260,7 +277,15 @@ export class PayrollService {
         overtimeMinutes: overtime.filter((o) => o.employeeId === person.id).reduce((t, o) => t + (o.approvedMinutes ?? o.minutes), 0),
         payments: payments
           .filter((p) => p.employeeId === person.id)
-          .map((p) => ({ id: p.id, kind: p.kind as 'EARNING' | 'DEDUCTION', category: p.category, amount: num(p.amount), labelAr: PAYMENT_LABELS[p.category]?.[0] ?? p.category, labelEn: PAYMENT_LABELS[p.category]?.[1] ?? p.category })),
+          .map((p) => {
+            const corrected = p.correctsRunId ? correctedMonths.get(p.correctsRunId) : undefined;
+            const [ar, en] = PAYMENT_LABELS[p.category] ?? [p.category, p.category];
+            return {
+              id: p.id, kind: p.kind as 'EARNING' | 'DEDUCTION', category: p.category, amount: num(p.amount),
+              labelAr: corrected ? `${ar} عن ${monthAr(corrected)}` : ar,
+              labelEn: corrected ? `${en} for ${monthEn(corrected)}` : en,
+            };
+          }),
         instalments: instalments.filter((i) => i.loan.employeeId === person.id).map((i) => ({ id: i.id, loanId: i.loanId, kind: i.loan.kind, amount: num(i.amount) })),
       };
       const prev = previousRun?.lines.find((l) => l.employeeId === person.id);
@@ -395,6 +420,43 @@ export class PayrollService {
     const moved = await this.db.payrollRun.updateMany({ where: { id: runId, companyId, status: 'APPROVED' }, data: { status: 'PAID', paidById: actor.id ?? null, paidAt: new Date() } });
     if (moved.count === 0) throw new GuardFailedError('RUN_CLOSED', 'only an approved run can be marked paid');
     await this.log(companyId, actor, runId, 'PAYROLL_PAID', {});
+    return this.get(companyId, runId);
+  }
+
+  /**
+   * Undo an approval before the salaries are paid (e.g. a mistake spotted in
+   * review): the attendance days unlock, instalments and one-off payments go
+   * back to unpaid, the stored payslips are removed, and the run waits to be
+   * recalculated and approved again. Once payslips have gone out — or the
+   * run is paid — a mistake is corrected in the next month instead.
+   */
+  async reopen(companyId: string, runId: string, reason: string, actor: Actor) {
+    const run = await this.db.payrollRun.findFirst({ where: { id: runId, companyId }, include: { lines: { select: { employeeId: true, held: true } } } });
+    if (!run) throw new NotFoundError('payroll run', runId);
+    if (run.status === 'PAID') throw new GuardFailedError('RUN_PAID', 'the salaries are paid — correct it in the next month instead');
+    if (run.status !== 'APPROVED') throw new GuardFailedError('RUN_CLOSED', 'only an approved run can be reopened');
+    if (!reason.trim()) throw new GuardFailedError('REASON_REQUIRED', 'say why the run is reopened', 'reason');
+    const sent = await this.db.payslipDelivery.count({ where: { payslip: { runId }, status: { in: ['QUEUED', 'SENT'] } } });
+    if (sent) throw new GuardFailedError('PAYSLIPS_SENT', 'payslips of this run were already e-mailed — correct it in the next month instead');
+    const paidIds = run.lines.filter((l) => !l.held).map((l) => l.employeeId);
+    const slips = await this.db.payslip.findMany({ where: { runId }, select: { storageKey: true } });
+    await this.db.$transaction(async (tx) => {
+      const moved = await tx.payrollRun.updateMany({
+        where: { id: runId, status: 'APPROVED' },
+        data: { status: 'CALCULATED', approvedById: null, approvedAt: null, reopenedById: actor.id ?? null, reopenedAt: new Date(), reopenReason: reason.trim() },
+      });
+      if (moved.count === 0) throw new GuardFailedError('RUN_CLOSED', 'only an approved run can be reopened');
+      await tx.attendanceDay.updateMany({ where: { employeeId: { in: paidIds }, date: { gte: run.periodFrom, lte: run.periodTo } }, data: { locked: false } });
+      const instalments = await tx.loanInstalment.findMany({ where: { payrollRunId: runId }, select: { loanId: true } });
+      await tx.loanInstalment.updateMany({ where: { payrollRunId: runId }, data: { status: 'DUE', payrollRunId: null, settledAt: null } });
+      // A loan this approval settled is being repaid again (one settled by hand stays settled).
+      const loanIds = [...new Set(instalments.map((i) => i.loanId))];
+      if (loanIds.length) await tx.employeeLoan.updateMany({ where: { id: { in: loanIds }, status: 'SETTLED', closedById: null }, data: { status: 'APPROVED', closedAt: null } });
+      await tx.oneTimePayment.updateMany({ where: { payrollRunId: runId }, data: { status: 'APPROVED', payrollRunId: null } });
+      await tx.payslip.deleteMany({ where: { runId } });
+    });
+    await removeStoredFiles(slips.map((s) => s.storageKey));
+    await this.log(companyId, actor, runId, 'PAYROLL_REOPENED', { month: run.month, reason: reason.trim() });
     return this.get(companyId, runId);
   }
 

@@ -1608,7 +1608,7 @@ model OneTimePayment {
   employeeId    String
   /// EARNING | DEDUCTION
   kind          String
-  /// BONUS | COMMISSION | ARREARS | OTHER_EARNING | PENALTY | DAMAGE | OTHER_DEDUCTION
+  /// BONUS | COMMISSION | ARREARS | OTHER_EARNING | PENALTY | DAMAGE | OTHER_DEDUCTION | CORRECTION
   category      String
   amount        Decimal   @db.Decimal(12, 2)
   /// The payroll month, "YYYY-MM".
@@ -1621,6 +1621,8 @@ model OneTimePayment {
   decidedAt     DateTime?
   decisionNote  String?   @db.Text
   payrollRunId  String?
+  /// A correction of an approved month: the run it corrects.
+  correctsRunId String?
   createdAt     DateTime  @default(now())
 
   @@index([companyId, status, month])
@@ -1661,6 +1663,10 @@ model PayrollRun {
   approvedAt     DateTime?
   paidById       String?
   paidAt         DateTime?
+  /// Approval undone before payment (reason kept), to recalculate and approve again.
+  reopenedById   String?
+  reopenedAt     DateTime?
+  reopenReason   String?   @db.Text
   cancelledById  String?
   cancelledAt    DateTime?
   note           String?   @db.Text

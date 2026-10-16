@@ -772,7 +772,10 @@
       "REASON_REQUIRED": "Give a reason.",
       "NOT_APPROVED": "Payslips exist once the payroll run is approved.",
       "LINE_HELD": "This person was held out of the run — no payslip.",
-      "EMPLOYEE_REQUIRED": "Pick the employee."
+      "EMPLOYEE_REQUIRED": "Pick the employee.",
+      "RUN_PAID": "The salaries are paid — correct it in a later month instead.",
+      "PAYSLIPS_SENT": "Payslips of this run were already e-mailed — correct it in a later month instead.",
+      "BAD_RUN": "Pick an approved payroll month this employee was in."
     }
   },
   "login": {
@@ -2178,7 +2181,8 @@
       "OTHER_EARNING": "Other earning",
       "PENALTY": "Penalty",
       "DAMAGE": "Damage / loss",
-      "OTHER_DEDUCTION": "Other deduction"
+      "OTHER_DEDUCTION": "Other deduction",
+      "CORRECTION": "Correction"
     },
     "approveLoanHint": "The repayment schedule is created and payroll deducts it month by month.",
     "pageTitle": "Loans and payments",
@@ -2246,7 +2250,18 @@
     "employerNote": "paid by the company, not deducted",
     "openFile": "Open the employee file",
     "engine": "Calculation rules {v}",
-    "approveHint": "Approving pays {n} employee(s) a total net of {net}. The attendance days of the period are locked, loan instalments and one-off payments are marked paid."
+    "approveHint": "Approving pays {n} employee(s) a total net of {net}. The attendance days of the period are locked, loan instalments and one-off payments are marked paid.",
+    "reopen": "Reopen",
+    "reopenHint": "Undo the approval before the salaries are paid: the attendance unlocks, instalments and one-off payments go back to unpaid, and the stored payslips are removed. Recalculate, review and approve again. Not possible once payslips were e-mailed.",
+    "reopenedBy": "Reopened by {name}, {at}",
+    "vsMonth": "vs {month}",
+    "prevSummary": "{n} employees · net {net}",
+    "correctNext": "Correct in a later month",
+    "correctTitle": "Correction — {name}",
+    "correctHint": "A paid month never changes. The difference for {month} is paid (or recovered) in a later month, after approval — the payslip names the month it corrects.",
+    "toPay": "Pay the employee",
+    "toRecover": "Recover from the employee",
+    "correctionSent": "Correction for {name} sent for approval — paid in {month}."
   },
   "payslips": {
     "title": "Payslips",

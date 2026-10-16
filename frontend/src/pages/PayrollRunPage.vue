@@ -33,6 +33,8 @@ interface Run {
   warnings: Array<{ code: string; blocking: boolean; count: number }>;
   calculatedById: string | null; calculatedBy: string | null; calculatedAt: string | null;
   approvedBy: string | null; approvedAt: string | null; paidBy: string | null; paidAt: string | null; note: string | null;
+  reopenedBy: string | null; reopenedAt: string | null; reopenReason: string | null;
+  previous: { month: string; employees: number; gross: number; deductions: number; net: number } | null;
   lines: Line[];
 }
 
@@ -108,6 +110,40 @@ function saveApprove() {
   });
 }
 
+// ─────────────────────────────────────── reopen (before payment)
+const reopenDialog = ref({ show: false, reason: '' });
+const reopenForm = useForm();
+function saveReopen() {
+  return reopenForm.submit(async () => {
+    run.value = await api.post<Run>(`/api/payroll/runs/${id}/reopen`, { reason: reopenDialog.value.reason.trim() });
+    reopenDialog.value.show = false;
+  });
+}
+
+// ─────────────────────────────────────── correct in a later month
+const nextMonth = (m: string) => {
+  const [y, mo] = m.split('-').map(Number) as [number, number];
+  return mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`;
+};
+const corrDialog = ref({ show: false, line: null as Line | null, kind: 'EARNING' as 'EARNING' | 'DEDUCTION', amount: '' as string | number, month: '', reason: '' });
+const corrForm = useForm();
+const corrDone = ref('');
+function openCorrection(l: Line) {
+  corrForm.reset();
+  corrDialog.value = { show: true, line: l, kind: 'EARNING', amount: '', month: nextMonth(run.value!.month), reason: '' };
+}
+function saveCorrection() {
+  return corrForm.submit(async () => {
+    const d = corrDialog.value;
+    await api.post(`/api/employees/${d.line!.employee.id}/payments`, {
+      kind: d.kind, category: 'CORRECTION', amount: Number(d.amount), month: d.month, reason: d.reason.trim(), correctsRunId: id,
+    });
+    corrDone.value = t('payroll.correctionSent', { name: `${d.line!.employee.firstName} ${d.line!.employee.lastName}`, month: monthLabel(d.month) });
+    d.show = false;
+  });
+}
+const totalDelta = computed(() => (run.value?.previous ? Math.round((run.value.net - run.value.previous.net) * 100) / 100 : null));
+
 // ─────────────────────────────────────── hold
 const holdDialog = ref({ show: false, line: null as Line | null, reason: '' });
 const holdForm = useForm();
@@ -141,6 +177,7 @@ const FIX_LINK: Record<string, string> = { EXCEPTIONS_PENDING: '/workforce/atten
         <v-btn v-if="auth.can('payroll.approve')" color="success" variant="flat" prepend-icon="check" :disabled="!canApprove" @click="approveForm.reset(); approveDialog = { show: true, note: '' }">{{ $t('payroll.approve') }}</v-btn>
         <v-btn v-if="auth.can('payroll.prepare')" variant="text" color="error" :loading="busy === 'cancel'" @click="act('cancel')">{{ $t('payroll.cancelRun') }}</v-btn>
       </template>
+      <v-btn v-if="run.status === 'APPROVED' && auth.can('payroll.approve')" variant="text" color="warning" prepend-icon="rotate-ccw" @click="reopenForm.reset(); reopenDialog = { show: true, reason: '' }">{{ $t('payroll.reopen') }}</v-btn>
       <v-btn v-if="run.status === 'APPROVED' && auth.can('payroll.approve', 'payroll.prepare')" color="primary" variant="flat" prepend-icon="banknote" :loading="busy === 'paid'" @click="act('paid')">{{ $t('payroll.markPaid') }}</v-btn>
     </PageHeader>
     <v-alert v-if="error" type="error" variant="tonal" density="compact" class="mb-4">{{ error }}</v-alert>
@@ -154,6 +191,11 @@ const FIX_LINK: Record<string, string> = { EXCEPTIONS_PENDING: '/workforce/atten
         <v-card variant="tonal" class="pa-3"><div class="text-caption">{{ $t('payroll.deductions') }}</div><div class="tot" dir="ltr">{{ money(run.deductions) }}</div></v-card>
         <v-card variant="tonal" color="primary" class="pa-3"><div class="text-caption">{{ $t('payroll.net') }}</div><div class="tot" dir="ltr">{{ money(run.net) }}</div></v-card>
         <v-card variant="tonal" class="pa-3"><div class="text-caption">{{ $t('payroll.employerCost') }}</div><div class="tot" dir="ltr">{{ money(run.employerCost) }}</div></v-card>
+        <v-card v-if="run.previous" variant="outlined" class="pa-3">
+          <div class="text-caption">{{ $t('payroll.vsMonth', { month: monthLabel(run.previous.month) }) }}</div>
+          <div class="tot" dir="ltr" :class="totalDelta! > 0 ? 'text-success' : totalDelta! < 0 ? 'text-error' : ''">{{ totalDelta! > 0 ? '+' : '' }}{{ money(totalDelta!) }}</div>
+          <div class="text-caption text-medium-emphasis">{{ $t('payroll.prevSummary', { n: run.previous.employees, net: money(run.previous.net) }) }}</div>
+        </v-card>
       </div>
 
       <!-- Who did what -->
@@ -163,6 +205,10 @@ const FIX_LINK: Record<string, string> = { EXCEPTIONS_PENDING: '/workforce/atten
         <template v-if="run.paidBy"> · {{ $t('payroll.paidByAt', { name: run.paidBy, at: stamp(run.paidAt) }) }}</template>
         <template v-if="run.note"> — {{ run.note }}</template>
       </p>
+      <v-alert v-if="run.reopenedBy && run.status === 'CALCULATED'" type="info" variant="tonal" density="compact" class="mb-3">
+        {{ $t('payroll.reopenedBy', { name: run.reopenedBy, at: stamp(run.reopenedAt) }) }} — {{ run.reopenReason }}
+      </v-alert>
+      <v-alert v-if="corrDone" type="success" variant="tonal" density="compact" closable class="mb-3" @click:close="corrDone = ''">{{ corrDone }}</v-alert>
 
       <!-- What needs attention -->
       <v-alert v-if="run.status === 'CALCULATED' && iCalculated && auth.can('payroll.approve')" type="info" variant="tonal" density="compact" class="mb-3">{{ $t('payroll.notYours') }}</v-alert>
@@ -236,7 +282,10 @@ const FIX_LINK: Record<string, string> = { EXCEPTIONS_PENDING: '/workforce/atten
                     <template v-if="l.inputs.rates"> · {{ $t('payroll.rates', { daily: money(l.inputs.rates.daily), hourly: money(l.inputs.rates.hourly), ot: money(l.inputs.rates.overtimeHourly) }) }}</template>
                     <template v-if="l.items.some((i) => i.kind === 'EMPLOYER')"> · * {{ $t('payroll.employerNote') }}</template>
                   </div>
-                  <router-link :to="`/employees/${l.employee.id}?tab=pay`" class="text-caption">{{ $t('payroll.openFile') }}</router-link>
+                  <div class="d-flex align-center ga-3 mt-1">
+                    <router-link :to="`/employees/${l.employee.id}?tab=pay`" class="text-caption">{{ $t('payroll.openFile') }}</router-link>
+                    <v-btn v-if="(run.status === 'APPROVED' || run.status === 'PAID') && !l.held && auth.can('compensation.write')" size="x-small" variant="tonal" prepend-icon="pencil" @click.stop="openCorrection(l)">{{ $t('payroll.correctNext') }}</v-btn>
+                  </div>
                 </td>
               </tr>
             </template>
@@ -260,6 +309,44 @@ const FIX_LINK: Record<string, string> = { EXCEPTIONS_PENDING: '/workforce/atten
           <v-spacer />
           <v-btn variant="text" @click="approveDialog.show = false">{{ $t('common.cancel') }}</v-btn>
           <v-btn color="success" variant="flat" :loading="approveForm.busy.value" @click="saveApprove">{{ $t('payroll.approve') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="reopenDialog.show" max-width="460">
+      <v-card :title="$t('payroll.reopen')" class="pa-2">
+        <v-card-text>
+          <FormErrorAlert :form="reopenForm" />
+          <p class="text-body-2 text-medium-emphasis mb-3">{{ $t('payroll.reopenHint') }}</p>
+          <v-textarea v-model="reopenDialog.reason" :label="$t('attendance.reason') + ' *'" rows="2" auto-grow :error-messages="reopenForm.errorsFor('reason')" />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="reopenDialog.show = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="warning" variant="flat" :loading="reopenForm.busy.value" @click="saveReopen">{{ $t('payroll.reopen') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="corrDialog.show" max-width="480">
+      <v-card :title="$t('payroll.correctTitle', { name: corrDialog.line ? `${corrDialog.line.employee.firstName} ${corrDialog.line.employee.lastName}` : '' })" class="pa-2">
+        <v-card-text>
+          <FormErrorAlert :form="corrForm" />
+          <p class="text-body-2 text-medium-emphasis mb-3">{{ $t('payroll.correctHint', { month: run ? monthLabel(run.month) : '' }) }}</p>
+          <v-btn-toggle v-model="corrDialog.kind" mandatory density="compact" variant="outlined" color="primary" class="mb-3">
+            <v-btn value="EARNING" prepend-icon="plus">{{ $t('payroll.toPay') }}</v-btn>
+            <v-btn value="DEDUCTION" prepend-icon="minus">{{ $t('payroll.toRecover') }}</v-btn>
+          </v-btn-toggle>
+          <v-row dense>
+            <v-col cols="6"><v-text-field v-model="corrDialog.amount" type="number" min="0" suffix="SAR" :label="$t('money.amount') + ' *'" :error-messages="corrForm.errorsFor('amount')" /></v-col>
+            <v-col cols="6"><v-text-field v-model="corrDialog.month" type="month" :label="$t('money.payrollMonth') + ' *'" :error-messages="corrForm.errorsFor('month')" /></v-col>
+          </v-row>
+          <v-textarea v-model="corrDialog.reason" :label="$t('attendance.reason') + ' *'" rows="2" auto-grow :error-messages="corrForm.errorsFor('reason')" />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="corrDialog.show = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="primary" variant="flat" :loading="corrForm.busy.value" @click="saveCorrection">{{ $t('attendance.send') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
