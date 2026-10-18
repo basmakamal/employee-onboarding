@@ -173,7 +173,7 @@
     "title": "Settings",
     "subtitle": "System configuration (administrators only)",
     "subtitleCompany": "Settings of {company} (administrators only) — each company has its own mail server",
-    "mailInherited": "{company} has no mail server of its own yet, so its e-mails are sent through the main company's settings shown below. Saving here gives {company} its own.",
+    "mailInherited": "{company} has no mail server of its own yet, so its emails are sent through the main company's settings shown below. Saving here gives {company} its own.",
     "mailEnvironment": "No mail server is saved for {company} or the main company yet; the server defaults are used. Saving here gives {company} its own.",
     "mail": "Outgoing email",
     "provider": "Provider",
@@ -360,7 +360,8 @@
     "new": "New",
     "back": "Back",
     "viewAll": "View all",
-    "view": "View"
+    "view": "View",
+    "delete": "Delete"
   },
   "contract": {
     "salary": "Salary",
@@ -558,7 +559,7 @@
     "fixFields": "Please correct the highlighted fields.",
     "field": {
       "required": "This field is required.",
-      "email": "Enter a valid e-mail address, e.g. name{'@'}company.com.",
+      "email": "Enter a valid email address, e.g. name{'@'}company.com.",
       "tooShort": "Too short — at least {min} characters.",
       "tooLong": "Too long — at most {max} characters.",
       "tooLow": "Must be {min} or more.",
@@ -573,13 +574,13 @@
       "unitCode": "Use letters, digits, dash or underscore (up to 41), starting with a letter or digit — e.g. CS-CALL or 52.",
       "handle": "Start with a letter, then letters, digits or underscore — e.g. RIYADA.",
       "mismatch": "The two values do not match.",
-      "emailList": "Not a valid e-mail address: {value}"
+      "emailList": "Not a valid email address: {value}"
     },
     "fields": {
       "firstName": "First name",
       "lastName": "Last name",
       "name": "Name",
-      "email": "E-mail",
+      "email": "Email",
       "phone": "Phone",
       "nationalId": "National ID",
       "birthDate": "Birth date",
@@ -692,8 +693,8 @@
       "UPLOAD_REJECTED": "The upload was rejected. Please try again with one file.",
       "UPLOAD_TARGET_MISSING": "The upload could not be stored. Please try again.",
       "BAD_STORAGE_KEY": "The file could not be found.",
-      "BAD_TEMPLATE": "Please select a valid e-mail template.",
-      "TEMPLATE_INACTIVE": "This e-mail template is switched off.",
+      "BAD_TEMPLATE": "Please select a valid email template.",
+      "TEMPLATE_INACTIVE": "This email template is switched off.",
       "TEMPLATE_INCOMPLETE": "Fill in the subject and body in both languages.",
       "TEMPLATE_IN_USE": "Automations still use this template — change them first.",
       "MAIL_INCOMPLETE": "Complete the mail server settings first.",
@@ -703,7 +704,7 @@
       "NO_CHANGE": "Nothing would change — choose a different branch, job title or manager.",
       "NOT_SCHEDULED": "Only a change that has not taken effect yet can be cancelled.",
       "BAD_DATE": "Enter a valid effective date.",
-      "EMAIL_TAKEN": "Another account already signs in with this e-mail — use a different one.",
+      "EMAIL_TAKEN": "Another account already signs in with this email — use a different one.",
       "SCHEDULE_OVERLAP": "Another schedule already covers these dates.",
       "USE_TEMPORARY": "For a limited period inside the current schedule, add a temporary schedule instead.",
       "TEMPORARY_NEEDS_END": "A temporary schedule needs an end date.",
@@ -775,7 +776,7 @@
       "LINE_HELD": "This person was held out of the run — no payslip.",
       "EMPLOYEE_REQUIRED": "Pick the employee.",
       "RUN_PAID": "The salaries are paid — correct it in a later month instead.",
-      "PAYSLIPS_SENT": "Payslips of this run were already e-mailed — correct it in a later month instead.",
+      "PAYSLIPS_SENT": "Payslips of this run were already emailed — correct it in a later month instead.",
       "BAD_RUN": "Pick an approved payroll month this employee was in."
     }
   },
@@ -836,7 +837,7 @@
       "offboarding": "Offboarding",
       "settlement": "Settlement",
       "reports": "Reports",
-      "emails": "E-mail",
+      "emails": "Email",
       "ai": "AI",
       "audit": "Audit",
       "schedule": "Workforce",
@@ -1014,7 +1015,7 @@
     "addRule": "New rule",
     "processKey": "Watches",
     "status": "Status / document type",
-    "notifySubject": "Also e-mail the employee",
+    "notifySubject": "Also email the employee",
     "anyType": "Any document",
     "expireHint": "EXPIRE closes the record automatically. It only takes effect on the onboarding waiting stages (awaiting form / awaiting approval).",
     "subjectTemplate": "Employee email template",
@@ -1217,7 +1218,7 @@
     "optional": "optional",
     "missingNotes": "What is missing? (sent to the new hire)",
     "activated": "Contract approved — the employee was activated with number {no}.",
-    "sendNow": "Send the data form by e-mail immediately after creation"
+    "sendNow": "Send the data form by email immediately after creation"
   },
   "ai": {
     "letter": "Generate letter",
@@ -1344,7 +1345,7 @@
   "emailTemplates": {
     "title": "Email templates",
     "subtitle": "Edit what the system says. Placeholders fill in automatically for each recipient.",
-    "subtitleCompany": "What {company} says in its e-mails. Each company has its own wording and triggers; placeholders fill in automatically.",
+    "subtitleCompany": "What {company} says in its emails. Each company has its own wording and triggers; placeholders fill in automatically.",
     "audience": {
       "employee": "To employees",
       "staff": "To staff"
@@ -1427,7 +1428,7 @@
   },
   "teams": {
     "title": "Responsible teams",
-    "subtitle": "Named people who follow up each status. Where a status has a team, the team receives the notice instead of the whole role group. Members need no account — an e-mail address is enough; link an account later to add the in-app bell.",
+    "subtitle": "Named people who follow up each status. Where a status has a team, the team receives the notice instead of the whole role group. Members need no account — an email address is enough; link an account later to add the in-app bell.",
     "add": "New team",
     "key": "Key",
     "keyHint": "Upper-case letters, digits and underscores — e.g. EMPLOYMENT_CONTRACT. Cannot be changed later.",
@@ -1437,9 +1438,9 @@
     "members": "Members",
     "membersCount": "{n} member(s)",
     "memberName": "Name",
-    "memberEmail": "E-mail",
+    "memberEmail": "Email",
     "linkedUser": "Linked account (optional)",
-    "noLinkedUser": "E-mail only",
+    "noLinkedUser": "Email only",
     "addMember": "Add member",
     "noMembers": "No members yet — the role group keeps receiving these notices until someone is added.",
     "statuses": "Responsible for",
@@ -1678,7 +1679,7 @@
   },
   "health": {
     "title": "System health",
-    "subtitle": "Is everything running? Database, background work, e-mail delivery and storage — for administrators.",
+    "subtitle": "Is everything running? Database, background work, email delivery and storage — for administrators.",
     "refresh": "Refresh",
     "never": "no activity yet",
     "minutesAgo": "{n} min ago",
@@ -1698,22 +1699,22 @@
       "db": "Database",
       "redis": "Redis (queues and sessions)",
       "automation": "Automation last active",
-      "failedEmails": "E-mails failed (7 days)",
-      "stuckEmails": "E-mails waiting over 15 min",
+      "failedEmails": "Emails failed (7 days)",
+      "stuckEmails": "Emails waiting over 15 min",
       "failedChanges": "Scheduled changes not applied",
       "storage": "File storage"
     },
     "explain": {
       "db": "All records live here.",
-      "redis": "Carries the e-mail queue and the automation jobs.",
+      "redis": "Carries the email queue and the automation jobs.",
       "automation": "The last reminder, expiry or dated change the engine wrote.",
       "failedEmails": "Check the mail settings of the company if this grows.",
       "stuckEmails": "The mail worker may be stopped.",
       "failedChanges": "Transfers whose unit or title closed before their date — see Transfers & promotions.",
       "storage": "Uploaded documents, photos and archives."
     },
-    "mailQueue": "E-mail queue",
-    "noQueue": "No queue — e-mails are sent directly (inline mode).",
+    "mailQueue": "Email queue",
+    "noQueue": "No queue — emails are sent directly (inline mode).",
     "queueStates": {
       "waiting": "Waiting",
       "active": "Sending",
@@ -2253,7 +2254,7 @@
     "engine": "Calculation rules {v}",
     "approveHint": "Approving pays {n} employee(s) a total net of {net}. The attendance days of the period are locked, loan instalments and one-off payments are marked paid.",
     "reopen": "Reopen",
-    "reopenHint": "Undo the approval before the salaries are paid: the attendance unlocks, instalments and one-off payments go back to unpaid, and the stored payslips are removed. Recalculate, review and approve again. Not possible once payslips were e-mailed.",
+    "reopenHint": "Undo the approval before the salaries are paid: the attendance unlocks, instalments and one-off payments go back to unpaid, and the stored payslips are removed. Recalculate, review and approve again. Not possible once payslips were emailed.",
     "reopenedBy": "Reopened by {name}, {at}",
     "vsMonth": "vs {month}",
     "prevSummary": "{n} employees · net {net}",
@@ -2266,29 +2267,29 @@
   },
   "payslips": {
     "title": "Payslips",
-    "counts": "{sent} sent · {pending} not sent yet · {noEmail} without an e-mail address",
+    "counts": "{sent} sent · {pending} not sent yet · {noEmail} without an email address",
     "sendAll": "Send to everyone not sent yet",
     "sendUnit": "Send to a department",
     "sendOne": "Send to {name}",
     "send": "Send",
     "resend": "Send again",
     "resendAll": "Also send again to people who already received it",
-    "sendHint": "Each person receives an e-mail with their payslip attached as a PDF (the e-mail itself shows no amounts). Sending happens in the background.",
+    "sendHint": "Each person receives an email with their payslip attached as a PDF (the email itself shows no amounts). Sending happens in the background.",
     "sending": "{n} payslip(s) on their way ({skipped} already sent were skipped).",
     "statuses": {
       "SENT": "Sent",
       "QUEUED": "Sending",
       "FAILED": "Failed",
-      "NO_EMAIL": "No e-mail address"
+      "NO_EMAIL": "No email address"
     },
     "notSent": "Not sent yet",
     "auto": "automatic",
     "none": "No payslips yet — they appear once a payroll run is approved.",
-    "sentOn": "E-mailed {date} to",
+    "sentOn": "Emailed {date} to",
     "pageTitle": "Payslips",
     "pageSubtitle": "Sending payslips in {company} — automatically each month or by hand.",
     "autoTitle": "Automatic sending",
-    "autoHint": "On the chosen day each month, the month's approved payroll is e-mailed to everyone who has not received their payslip yet. If the payroll is approved after that day, it goes out within the hour.",
+    "autoHint": "On the chosen day each month, the month's approved payroll is emailed to everyone who has not received their payslip yet. If the payroll is approved after that day, it goes out within the hour.",
     "autoOn": "Send automatically",
     "sendDay": "Day of the month",
     "saved": "Saved",

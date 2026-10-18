@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import type { Actor } from '../../workflow/engine.js';
 import type { AuditLogRepository } from '../../workflow/audit-log.repository.js';
@@ -230,11 +231,19 @@ export class PayrollService {
     );
 
     const lines: Array<{ employeeId: string; result: ReturnType<typeof calculate>; previousNet: number | null }> = [];
+    // Grouped once: a month of attendance for a thousand people is tens of thousands of rows.
+    const versionsOf = groupBy(versions, (v) => v.employeeId);
+    const leavesOf = groupBy(leaves, (l) => l.employeeId);
+    const attendanceOf = groupBy(attendance, (a) => a.employeeId);
+    const overtimeOf = groupBy(overtime, (o) => o.employeeId);
+    const paymentsOf = groupBy(payments, (p) => p.employeeId);
+    const instalmentsOf = groupBy(instalments, (i) => i.loan.employeeId);
+    const previousOf = new Map((previousRun?.lines ?? []).map((l) => [l.employeeId, l]));
     for (const person of people) {
       const days = schedules.get(person.id) ?? [];
       const working = (from: string, to: string) => days.filter((d) => d.date >= from && d.date <= to && isWorkingDay(d, cal.weekendDays)).length;
       const start = person.hireDate && dayOf(person.hireDate) > monthStart ? dayOf(person.hireDate) : monthStart;
-      const mine = versions.filter((v) => v.employeeId === person.id);
+      const mine = versionsOf.get(person.id) ?? [];
       const segments: Segment[] = [];
       mine.forEach((v, i) => {
         const next = mine[i + 1];
@@ -247,7 +256,7 @@ export class PayrollService {
 
       // The unpaid share of approved leave inside the period, per leave type and rate.
       const leaveParts = new Map<string, { code: string; nameAr: string; nameEn: string; days: number; percent: number }>();
-      for (const l of leaves.filter((x) => x.employeeId === person.id)) {
+      for (const l of leavesOf.get(person.id) ?? []) {
         const total = Math.round((l.endDate.getTime() - l.startDate.getTime()) / 86_400_000) + 1;
         const from = dayOf(l.startDate) > period.from ? dayOf(l.startDate) : period.from;
         const to = dayOf(l.endDate) < period.to ? dayOf(l.endDate) : period.to;
@@ -262,7 +271,7 @@ export class PayrollService {
         }
       }
 
-      const att = attendance.filter((a) => a.employeeId === person.id);
+      const att = attendanceOf.get(person.id) ?? [];
       const input: EngineInput = {
         month,
         daysInMonth,
@@ -274,9 +283,8 @@ export class PayrollService {
         missingPunchDays: att.filter((a) => a.status === 'INCOMPLETE').length,
         lateEarlyMinutes: att.filter((a) => a.status === 'PRESENT').reduce((t, a) => t + a.lateMinutes + a.earlyLeaveMinutes, 0),
         leave: [...leaveParts.values()].map((x) => ({ ...x, days: r2(x.days) })),
-        overtimeMinutes: overtime.filter((o) => o.employeeId === person.id).reduce((t, o) => t + (o.approvedMinutes ?? o.minutes), 0),
-        payments: payments
-          .filter((p) => p.employeeId === person.id)
+        overtimeMinutes: (overtimeOf.get(person.id) ?? []).reduce((t, o) => t + (o.approvedMinutes ?? o.minutes), 0),
+        payments: (paymentsOf.get(person.id) ?? [])
           .map((p) => {
             const corrected = p.correctsRunId ? correctedMonths.get(p.correctsRunId) : undefined;
             const [ar, en] = PAYMENT_LABELS[p.category] ?? [p.category, p.category];
@@ -286,9 +294,9 @@ export class PayrollService {
               labelEn: corrected ? `${en} for ${monthEn(corrected)}` : en,
             };
           }),
-        instalments: instalments.filter((i) => i.loan.employeeId === person.id).map((i) => ({ id: i.id, loanId: i.loanId, kind: i.loan.kind, amount: num(i.amount) })),
+        instalments: (instalmentsOf.get(person.id) ?? []).map((i) => ({ id: i.id, loanId: i.loanId, kind: i.loan.kind, amount: num(i.amount) })),
       };
-      const prev = previousRun?.lines.find((l) => l.employeeId === person.id);
+      const prev = previousOf.get(person.id);
       lines.push({ employeeId: person.id, result: calculate(input), previousNet: prev ? num(prev.net) : null });
     }
 
@@ -296,31 +304,32 @@ export class PayrollService {
     const warnings = runWarnings(paid.map((l) => l.result.warnings), pendingExceptions);
     const total = (pick: (l: (typeof lines)[number]) => number) => r2(paid.reduce((t, l) => t + pick(l), 0));
     const now = new Date();
+    // Ids are given here so lines and their items go in as a few batched inserts, not one per person.
+    const rows = lines.map((l) => ({ id: randomUUID(), ...l }));
+    const lineRows: Prisma.PayrollLineCreateManyInput[] = rows.map((l) => ({
+      id: l.id,
+      runId,
+      employeeId: l.employeeId,
+      gross: l.result.gross,
+      deductions: l.result.deductions,
+      net: l.result.net,
+      employerCost: l.result.employerCost,
+      previousNet: l.previousNet,
+      held: heldBefore.has(l.employeeId),
+      heldReason: heldBefore.get(l.employeeId) ?? null,
+      inputs: l.result.inputs as Prisma.InputJsonValue,
+      warnings: l.result.warnings as unknown as Prisma.InputJsonValue,
+    }));
+    const itemRows: Prisma.PayrollLineItemCreateManyInput[] = rows.flatMap((l) =>
+      l.result.items.map((i) => ({
+        lineId: l.id, kind: i.kind, source: i.source, sourceId: i.sourceId, code: i.code, labelAr: i.labelAr, labelEn: i.labelEn,
+        quantity: i.quantity, rate: i.rate, amount: i.amount, sortOrder: i.sortOrder,
+      })),
+    );
     await this.db.$transaction(async (tx) => {
       await tx.payrollLine.deleteMany({ where: { runId } });
-      for (const l of lines) {
-        await tx.payrollLine.create({
-          data: {
-            runId,
-            employeeId: l.employeeId,
-            gross: l.result.gross,
-            deductions: l.result.deductions,
-            net: l.result.net,
-            employerCost: l.result.employerCost,
-            previousNet: l.previousNet,
-            held: heldBefore.has(l.employeeId),
-            heldReason: heldBefore.get(l.employeeId) ?? null,
-            inputs: l.result.inputs as Prisma.InputJsonValue,
-            warnings: l.result.warnings as unknown as Prisma.InputJsonValue,
-            items: {
-              create: l.result.items.map((i) => ({
-                kind: i.kind, source: i.source, sourceId: i.sourceId, code: i.code, labelAr: i.labelAr, labelEn: i.labelEn,
-                quantity: i.quantity, rate: i.rate, amount: i.amount, sortOrder: i.sortOrder,
-              })),
-            },
-          },
-        });
-      }
+      for (let i = 0; i < lineRows.length; i += 500) await tx.payrollLine.createMany({ data: lineRows.slice(i, i + 500) });
+      for (let i = 0; i < itemRows.length; i += 1000) await tx.payrollLineItem.createMany({ data: itemRows.slice(i, i + 1000) });
       await tx.payrollRun.update({
         where: { id: runId },
         data: {
@@ -338,7 +347,7 @@ export class PayrollService {
           calculatedAt: now,
         },
       });
-    });
+    }, { timeout: 60_000 }); // a large company writes thousands of rows; the 5-second default is too tight
     await this.log(companyId, actor, runId, 'PAYROLL_CALCULATED', { month, employees: paid.length });
   }
 
@@ -466,6 +475,18 @@ export class PayrollService {
     if (moved.count === 0) throw new GuardFailedError('RUN_CLOSED', 'an approved run cannot be cancelled');
     await this.log(companyId, actor, runId, 'PAYROLL_CANCELLED', {});
   }
+}
+
+/** Rows by key, in their original order. */
+function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const row of rows) {
+    const k = key(row);
+    const list = out.get(k);
+    if (list) list.push(row);
+    else out.set(k, [row]);
+  }
+  return out;
 }
 
 /** What blocks approval, and what HR should look at — counted over the people being paid. */

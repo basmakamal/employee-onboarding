@@ -34,9 +34,34 @@ export interface DayResult {
 
 // ─────────────────────────────────────────────────────────── time zone
 
+// Building a formatter is slow (a month for a thousand people needs ~100k
+// conversions), so one per zone is kept and reused.
+const wallFormats = new Map<string, Intl.DateTimeFormat>();
+const timeFormats = new Map<string, Intl.DateTimeFormat>();
+function cached(cache: Map<string, Intl.DateTimeFormat>, timeZone: string, make: () => Intl.DateTimeFormat): Intl.DateTimeFormat {
+  let f = cache.get(timeZone);
+  if (!f) cache.set(timeZone, (f = make()));
+  return f;
+}
+
+// Offsets only change on quarter-hour boundaries (time-zone rules are whole
+// quarter hours), so the answer for one quarter hour holds for all of it.
+const QUARTER = 15 * 60_000;
+const offsets = new Map<string, number>();
+
 /** How far the zone's wall clock is ahead of UTC at an instant (ms). */
 function offsetMs(timeZone: string, at: number): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
+  const key = `${timeZone}|${Math.floor(at / QUARTER)}`;
+  const known = offsets.get(key);
+  if (known !== undefined) return known;
+  if (offsets.size > 100_000) offsets.clear();
+  const value = wallOffset(timeZone, at);
+  offsets.set(key, value);
+  return value;
+}
+
+function wallOffset(timeZone: string, at: number): number {
+  const parts = cached(wallFormats, timeZone, () => new Intl.DateTimeFormat('en-US', {
     timeZone,
     hourCycle: 'h23',
     year: 'numeric',
@@ -45,7 +70,7 @@ function offsetMs(timeZone: string, at: number): number {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-  }).formatToParts(new Date(at));
+  })).formatToParts(new Date(at));
   const n = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
   const wall = Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute'), n('second'));
   return wall - Math.floor(at / 1000) * 1000;
@@ -66,7 +91,7 @@ export function addDays(day: string, n: number): string {
 
 /** The local "HH:MM" of an instant in a zone. */
 export function localTime(at: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
+  return cached(timeFormats, timeZone, () => new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })).format(at);
 }
 
 // ─────────────────────────────────────────────────────────── windows

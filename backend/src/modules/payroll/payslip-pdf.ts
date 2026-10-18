@@ -8,6 +8,7 @@ import PDFDocument from 'pdfkit';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { isRtl, visualPieces } from './pdf-text.js';
+import { sfntFont } from './woff.js';
 
 const require = createRequire(import.meta.url);
 const FONT_DIR = join(dirname(require.resolve('@ibm/plex-sans-arabic/package.json')), 'fonts', 'complete', 'woff');
@@ -52,8 +53,9 @@ const dateEn = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-
 
 export function renderPayslip(data: PayslipData): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: PAGE.m, info: { Title: `Payslip ${data.month} — ${data.employee.name}`, Author: data.company.nameEn } });
-  doc.registerFont('reg', FONTS.regular);
-  doc.registerFont('bold', FONTS.bold);
+  // Unpacked once per process (see woff.ts) — read straight from the WOFF it costs ~2 s a page.
+  doc.registerFont('reg', sfntFont(FONTS.regular));
+  doc.registerFont('bold', sfntFont(FONTS.bold));
   const chunks: Buffer[] = [];
   doc.on('data', (c: Buffer) => chunks.push(c));
   const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
