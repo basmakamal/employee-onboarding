@@ -9,18 +9,14 @@
  * public data form may offer "Other" where a new hire cannot add anything.
  */
 import { computed, ref, watch } from 'vue';
-import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useListsStore, type ListDto, type ListValueDto } from '../stores/lists';
 import { useConfirm } from '../composables/useConfirm';
 import PageHeader from '../components/PageHeader.vue';
-import { useActiveCompanyName } from '../composables/useActiveCompany';
 
 const { t } = useI18n();
 const lists = useListsStore();
-/** Each company has its own lists — the header says whose these are. */
-const companyName = useActiveCompanyName();
 const confirm = useConfirm();
 
 const selectedKey = ref('');
@@ -28,8 +24,6 @@ const search = ref('');
 const busy = ref('');
 const snackbar = ref({ show: false, text: '', color: 'success' });
 const adding = ref({ labelAr: '', labelEn: '' });
-/** Shown under both label fields when Add is pressed with neither filled. */
-const addError = ref('');
 
 function notify(text: string, color = 'success') {
   snackbar.value = { show: true, text, color };
@@ -88,7 +82,7 @@ async function save(row: ListValueDto, patch?: Partial<ListValueDto>) {
     await lists.load(true);
     notify(t('common.saved'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
   }
@@ -109,7 +103,7 @@ async function move(row: ListValueDto, dir: -1 | 1) {
     ]);
     await lists.load(true);
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
   }
@@ -119,11 +113,7 @@ async function add() {
   if (!selected.value) return;
   const labelAr = adding.value.labelAr.trim();
   const labelEn = adding.value.labelEn.trim();
-  if (!labelAr && !labelEn) {
-    addError.value = t('lists.labelRequired');
-    return;
-  }
-  addError.value = '';
+  if (!labelAr && !labelEn) return;
   busy.value = 'add';
   try {
     await api.post(`/api/lists/${selected.value.key}/values`, {
@@ -134,7 +124,7 @@ async function add() {
     await lists.load(true);
     notify(t('lists.added'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
   }
@@ -155,7 +145,7 @@ async function remove(row: ListValueDto) {
     await lists.load(true);
     notify(t('lists.deleted'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
   }
@@ -164,7 +154,7 @@ async function remove(row: ListValueDto) {
 
 <template>
   <v-container fluid class="pa-4 pa-md-6">
-    <PageHeader :title="$t('lists.title')" :subtitle="$t('lists.subtitleCompany', { company: companyName })" />
+    <PageHeader :title="$t('lists.title')" :subtitle="$t('lists.subtitle')" />
 
     <v-row>
       <!-- Which list -->
@@ -293,14 +283,13 @@ async function remove(row: ListValueDto) {
             <div v-if="isFree" class="add mt-5">
               <div class="text-body-2 font-weight-semibold mb-2">{{ $t('lists.addValue') }}</div>
               <div class="d-flex flex-wrap ga-2 align-center">
-                <v-text-field v-model="adding.labelAr" :label="$t('lists.labelAr')" density="compact" hide-details :error="!!addError" dir="rtl" style="min-width: 220px" @update:model-value="addError = ''" @keyup.enter="add" />
-                <v-text-field v-model="adding.labelEn" :label="$t('lists.labelEn')" density="compact" hide-details :error="!!addError" dir="ltr" style="min-width: 220px" @update:model-value="addError = ''" @keyup.enter="add" />
-                <v-btn color="primary" variant="flat" prepend-icon="plus" :loading="busy === 'add'" @click="add">
+                <v-text-field v-model="adding.labelAr" :label="$t('lists.labelAr')" density="compact" hide-details dir="rtl" style="min-width: 220px" @keyup.enter="add" />
+                <v-text-field v-model="adding.labelEn" :label="$t('lists.labelEn')" density="compact" hide-details dir="ltr" style="min-width: 220px" @keyup.enter="add" />
+                <v-btn color="primary" variant="flat" prepend-icon="plus" :loading="busy === 'add'" :disabled="!adding.labelAr.trim() && !adding.labelEn.trim()" @click="add">
                   {{ $t('lists.add') }}
                 </v-btn>
               </div>
-              <p v-if="addError" class="text-caption text-error mt-2 mb-0" role="alert">{{ addError }}</p>
-              <p v-else class="text-caption text-medium-emphasis mt-2 mb-0">{{ $t('lists.addHint') }}</p>
+              <p class="text-caption text-medium-emphasis mt-2 mb-0">{{ $t('lists.addHint') }}</p>
             </div>
           </v-card-text>
         </v-card>

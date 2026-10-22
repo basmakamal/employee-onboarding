@@ -8,10 +8,9 @@
  * hand, so an e-approval and an HR approval leave the record identical.
  */
 import { computed, onMounted, ref } from 'vue';
-import { errorText } from '../../validation/errors';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { api } from '../../api/client';
+import { api, ApiError } from '../../api/client';
 import { usePreferencesStore } from '../../stores/preferences';
 
 interface ContractContext {
@@ -120,7 +119,7 @@ async function decide(decision: 'APPROVE' | 'REJECT') {
     employeeNo.value = res.employeeNo;
     state.value = decision === 'APPROVE' ? 'accepted' : 'rejected';
   } catch (e) {
-    error.value = errorText(e);
+    error.value = e instanceof ApiError ? e.message : t('common.error');
     state.value = 'ready';
   }
 }

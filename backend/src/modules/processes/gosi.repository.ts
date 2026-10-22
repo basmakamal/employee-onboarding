@@ -1,6 +1,5 @@
 import type { Db } from '../../common/prisma.js';
 import type { ProcessStatus, GosiHoldReason } from '../../generated/prisma/enums.js';
-import { viaEmployeeCompanyWhere, type CompanyFilter } from '../../workflow/company-filter.js';
 
 export class GosiRepository {
   constructor(private readonly db: Db) {}
@@ -10,9 +9,9 @@ export class GosiRepository {
   }
 
   /** SLA scan input: cards sitting in `status` since before `threshold`. */
-  listInStatusSince(status: string, threshold: Date, limit = 500, company?: CompanyFilter) {
+  listInStatusSince(status: string, threshold: Date, limit = 500) {
     return this.db.gosiProcess.findMany({
-      where: { status: status as ProcessStatus, updatedAt: { lt: threshold }, ...viaEmployeeCompanyWhere(company) },
+      where: { status: status as ProcessStatus, updatedAt: { lt: threshold } },
       include: { employee: { select: { firstName: true, lastName: true } } },
       orderBy: { updatedAt: 'asc' },
       take: limit,

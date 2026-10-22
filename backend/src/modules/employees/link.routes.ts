@@ -15,7 +15,6 @@ import type { OnboardingService } from './onboarding.service.js';
 import type { AssetService } from '../assets/asset.service.js';
 import type { OffboardingService } from '../offboarding/offboarding.service.js';
 import type { LinkTokenService } from '../../auth/link-token.service.js';
-import type { ListService } from '../lists/list.service.js';
 // The full employee data form — every field required, Saudi formats checked
 // server-side because a public signed link is the only gate in front of it.
 import { dataFormSchema } from './data-form.schema.js';
@@ -35,22 +34,8 @@ export function linkRouter(
   assets: AssetService,
   offboarding: OffboardingService,
   links: LinkTokenService,
-  lists?: ListService,
 ): Router {
   const router = Router();
-
-  /**
-   * The data form's dropdowns — the lists of the company this person
-   * belongs to (each company has its own). The token is the only gate.
-   */
-  router.get(
-    '/:token/lists',
-    asyncHandler(async (req, res) => {
-      const row = await links.verify(req.params['token'] as string);
-      if (!lists) throw new NotFoundError('lists', 'not available');
-      res.json({ lists: await lists.forPublicForm(row.employee?.companyId ?? null) });
-    }),
-  );
 
   /** What should this link's page show? Dispatch by the token's purpose. */
   router.get(

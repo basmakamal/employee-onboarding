@@ -10,15 +10,10 @@
  * Only the last one restricts who may act.
  */
 import { computed, onMounted, ref } from 'vue';
-import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import PageHeader from '../components/PageHeader.vue';
-import { useActiveCompanyName } from '../composables/useActiveCompany';
 import { useConfirm } from '../composables/useConfirm';
-import FormErrorAlert from '../components/FormErrorAlert.vue';
-import { useForm } from '../composables/useForm';
-import { rules } from '../validation/rules';
 
 interface OwnershipRow {
   id: string;
@@ -79,8 +74,6 @@ const RESPONSIBILITY_KEYS = [
 ] as const;
 
 const { t, locale } = useI18n();
-/** Each company has its own settings here — the header says whose. */
-const companyName = useActiveCompanyName();
 const confirm = useConfirm();
 const rows = ref<OwnershipRow[]>([]);
 const teams = ref<Team[]>([]);
@@ -171,9 +164,8 @@ function onLinkPicked(member: TeamMember, userId: string | null) {
 
 async function saveMembers(team: Team) {
   const members = membersOf(team).filter((m) => m.email.trim());
-  // The fields show which row is wrong (their rules); this stops the save and says so.
-  if (members.some((m) => !m.name.trim() || rules.email(m.email) !== true)) {
-    notify(t('errors.fixFields'), 'error');
+  if (members.some((m) => !m.name.trim())) {
+    notify(t('teams.memberName') + ' — ' + t('common.error'), 'error');
     return;
   }
   busy.value = `team-members:${team.id}`;
@@ -185,7 +177,7 @@ async function saveMembers(team: Team) {
     delete draftMembers.value[team.id];
     notify(t('common.saved'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
   }
@@ -203,7 +195,7 @@ async function saveStatuses(team: Team) {
     delete draftStatuses.value[team.id];
     notify(t('common.saved'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
   }
@@ -216,10 +208,9 @@ function replaceTeam(updated: Team) {
 const teamDialog = ref(false);
 const newTeam = ref({ key: '', nameAr: '', nameEn: '', description: '' });
 
-const teamForm = useForm();
-
-function createTeam() {
-  return teamForm.submit(async () => {
+async function createTeam() {
+  busy.value = 'team-create';
+  try {
     const created = await api.post<Team>('/api/settings/groups', {
       key: newTeam.value.key.trim().toUpperCase(),
       nameAr: newTeam.value.nameAr.trim(),
@@ -232,7 +223,11 @@ function createTeam() {
     teamDialog.value = false;
     newTeam.value = { key: '', nameAr: '', nameEn: '', description: '' };
     notify(t('common.saved'));
-  });
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
 }
 
 async function deleteTeam(team: Team) {
@@ -250,7 +245,7 @@ async function deleteTeam(team: Team) {
     teams.value = teams.value.filter((x) => x.id !== team.id);
     notify(t('common.saved'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
   }
@@ -267,7 +262,7 @@ async function update(row: OwnershipRow, roles: string[]) {
     await api.put(`/api/settings/ownership/${row.id}`, { roles });
     notify(t('common.saved'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
     await load();
@@ -280,7 +275,7 @@ async function updateOwners(processKey: string, userIds: string[]) {
     responsibility.value = await api.put(`/api/settings/responsibility/${processKey}`, { userIds });
     notify(t('common.saved'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
     await load();
   } finally {
     busy.value = '';
@@ -303,7 +298,7 @@ onMounted(load);
       <v-card class="mb-6">
         <v-card-item>
           <template #append>
-            <v-btn color="primary" variant="flat" size="small" prepend-icon="plus" @click="teamForm.reset(); teamDialog = true">
+            <v-btn color="primary" variant="flat" size="small" prepend-icon="plus" @click="teamDialog = true">
               {{ $t('teams.add') }}
             </v-btn>
           </template>
@@ -335,10 +330,10 @@ onMounted(load);
               <div v-if="membersOf(team).length === 0" class="text-body-2 text-medium-emphasis mb-2">{{ $t('teams.noMembers') }}</div>
               <v-row v-for="(m, i) in membersOf(team)" :key="i" dense class="align-center">
                 <v-col cols="12" sm="3">
-                  <v-text-field v-model="m.name" :label="$t('teams.memberName') + ' *'" density="compact" hide-details="auto" :rules="[rules.required]" />
+                  <v-text-field v-model="m.name" :label="$t('teams.memberName')" density="compact" hide-details />
                 </v-col>
                 <v-col cols="12" sm="4">
-                  <v-text-field v-model="m.email" :label="$t('teams.memberEmail') + ' *'" density="compact" hide-details="auto" dir="ltr" type="email" :rules="[rules.required, rules.email]" />
+                  <v-text-field v-model="m.email" :label="$t('teams.memberEmail')" density="compact" hide-details dir="ltr" type="email" />
                 </v-col>
                 <v-col cols="10" sm="4">
                   <v-select
@@ -397,7 +392,7 @@ onMounted(load);
             <v-icon icon="fluent:person-starburst" class="me-2" />
             {{ $t('responsibility.title') }}
           </v-card-title>
-          <v-card-subtitle class="text-wrap">{{ $t('responsibility.subtitleCompany', { company: companyName }) }}</v-card-subtitle>
+          <v-card-subtitle class="text-wrap">{{ $t('responsibility.subtitle') }}</v-card-subtitle>
         </v-card-item>
         <v-table density="comfortable">
           <thead>
@@ -485,20 +480,18 @@ onMounted(load);
     <v-dialog v-model="teamDialog" max-width="520">
       <v-card :title="$t('teams.add')" class="pa-2">
         <v-card-text>
-          <FormErrorAlert :form="teamForm" />
-          <v-form :ref="teamForm.bind" @submit.prevent="createTeam">
-          <v-text-field v-model="newTeam.key" :label="$t('teams.key') + ' *'" :hint="$t('teams.keyHint')" persistent-hint :rules="[rules.required, rules.handle]" :error-messages="teamForm.errorsFor('key')" dir="ltr" class="mb-2" />
-          <v-text-field v-model="newTeam.nameAr" :label="$t('teams.nameAr') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="teamForm.errorsFor('nameAr')" dir="rtl" />
-          <v-text-field v-model="newTeam.nameEn" :label="$t('teams.nameEn') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="teamForm.errorsFor('nameEn')" dir="ltr" />
-          <v-textarea v-model="newTeam.description" :label="$t('teams.description')" rows="2" :rules="[rules.maxLength(1000)]" :error-messages="teamForm.errorsFor('description')" />
-          </v-form>
+          <v-text-field v-model="newTeam.key" :label="$t('teams.key')" :hint="$t('teams.keyHint')" persistent-hint dir="ltr" class="mb-2" />
+          <v-text-field v-model="newTeam.nameAr" :label="$t('teams.nameAr')" />
+          <v-text-field v-model="newTeam.nameEn" :label="$t('teams.nameEn')" dir="ltr" />
+          <v-textarea v-model="newTeam.description" :label="$t('teams.description')" rows="2" />
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="teamDialog = false">{{ $t('common.cancel') }}</v-btn>
           <v-btn
             color="primary"
-            :loading="teamForm.busy.value"
+            :loading="busy === 'team-create'"
+            :disabled="!/^[A-Z][A-Z0-9_]{1,60}$/.test(newTeam.key.trim().toUpperCase()) || !newTeam.nameAr.trim() || !newTeam.nameEn.trim()"
             @click="createTeam"
           >
             {{ $t('common.save') }}

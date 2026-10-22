@@ -29,12 +29,9 @@ export class ForbiddenActorError extends DomainError {
 export class GuardFailedError extends DomainError {
   readonly code: string;
   readonly httpStatus = 422;
-  /** The input field the rule is about, so the form can mark it (e.g. 'code'). */
-  readonly field: string | undefined;
-  constructor(code: string, message: string, field?: string) {
+  constructor(code: string, message: string) {
     super(message);
     this.code = code;
-    this.field = field;
   }
 }
 
@@ -74,17 +71,5 @@ export class ForbiddenError extends DomainError {
   readonly httpStatus = 403;
   constructor(message = 'insufficient permissions') {
     super(message);
-  }
-}
-
-/**
- * A company-owned route was called without a selected company. Clients
- * send the user to the company selector; nothing falls back to "all".
- */
-export class CompanyRequiredError extends DomainError {
-  readonly code = 'COMPANY_REQUIRED';
-  readonly httpStatus = 403;
-  constructor() {
-    super('select a company to continue');
   }
 }

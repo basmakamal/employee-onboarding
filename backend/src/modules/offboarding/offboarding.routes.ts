@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
-import { requirePermission } from '../../auth/authz/authorize.js';
+import { requireRole } from '../../auth/require-auth.middleware.js';
 import type { OffboardingService } from './offboarding.service.js';
 import type { Actor } from '../../workflow/engine.js';
 
@@ -35,7 +35,7 @@ export function offboardingRouter(service: OffboardingService): Router {
   /** HR opens the termination request (machine enforces the rest). */
   router.post(
     '/',
-    requirePermission('offboarding.manage'),
+    requireRole('HR', 'ADMIN'),
     validate(createSchema),
     asyncHandler(async (req, res) => {
       const { employeeId, reason, notes } = req.body as z.infer<typeof createSchema>;
@@ -66,7 +66,7 @@ export function offboardingRouter(service: OffboardingService): Router {
   /** HR marks one custody item as physically returned. */
   router.put(
     '/:id/assets/:itemId/return',
-    requirePermission('offboarding.manage'),
+    requireRole('HR', 'ADMIN'),
     asyncHandler(async (req, res) => {
       res.json(
         await service.markItemReturned(
@@ -81,7 +81,7 @@ export function offboardingRouter(service: OffboardingService): Router {
   /** Settlement amounts (HR or FINANCE enter; only FINANCE closes). */
   router.put(
     '/:id/settlement',
-    requirePermission('settlement.approve', 'offboarding.manage'),
+    requireRole('HR', 'FINANCE', 'ADMIN'),
     validate(settlementSchema),
     asyncHandler(async (req, res) => {
       const amounts = compact(req.body as z.infer<typeof settlementSchema>);

@@ -129,7 +129,6 @@ describe('NotificationService links a message to the employee file', () => {
       'hr.form_submitted',
       'ar',
       expect.objectContaining({ employeeLink: 'https://hr.example/employees/e1' }),
-      null, // no company lookup wired in this test
     );
   });
 

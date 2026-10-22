@@ -1,5 +1,4 @@
 import { config } from './common/config.js';
-import { configureFieldCrypto } from './common/field-crypto.js';
 import { prisma, type Db, type UnitOfWork } from './common/prisma.js';
 import { EventBus } from './events/event-bus.js';
 import { EmployeeRepository } from './modules/employees/employee.repository.js';
@@ -13,18 +12,6 @@ import { AuditLogRepository } from './workflow/audit-log.repository.js';
 import { SlaRuleRepository, HolidayRepository } from './workflow/sla-rule.repository.js';
 import { NotificationRepository } from './notifications/notification.repository.js';
 import { NotificationService } from './notifications/notification.service.js';
-import { ScheduleService } from './modules/workforce/schedule.service.js';
-import { AttendanceService } from './modules/workforce/attendance.service.js';
-import { LeaveService } from './modules/workforce/leave.service.js';
-import { CompensationService } from './modules/payroll/compensation.service.js';
-import { LoanService } from './modules/payroll/loan.service.js';
-import { PayrollService } from './modules/payroll/payroll.service.js';
-import { PayslipService } from './modules/payroll/payslip.service.js';
-import { WorkforceReportsService } from './modules/reports/workforce-reports.service.js';
-import { EmploymentEventRepository } from './modules/employees/employment-event.repository.js';
-import { EmploymentHistoryService } from './modules/employees/employment-history.service.js';
-import { CompanyResolver } from './modules/companies/company-resolver.js';
-import { CompanyDefaults } from './modules/companies/company-defaults.js';
 import { SettingsService, DynamicNotifier } from './modules/settings/settings.service.js';
 import { DashboardService } from './modules/dashboard/dashboard.service.js';
 import { ReportsService } from './modules/reports/reports.service.js';
@@ -64,18 +51,12 @@ import { withAfterCommit } from './common/after-commit.js';
 import { OpenWorkHalter, type HaltScope } from './workflow/halt-open-work.js';
 import { ResponsibilityService } from './workflow/responsibility.service.js';
 import { NotificationGroupRepository } from './notifications/notification-group.repository.js';
-import { CompanyRepository } from './auth/company.repository.js';
-import { CompanyService } from './modules/companies/company.service.js';
-import { AssignmentService } from './auth/assignment.service.js';
-import { OrgService } from './modules/organisation/org.service.js';
 
 /**
  * Composition root — the ONLY place where concrete implementations are
  * chosen and wired. Everything else receives its dependencies.
  */
 export function buildContainer() {
-  // Bank details are encrypted at rest with DATA_ENCRYPTION_KEY (when set).
-  configureFieldCrypto(config.DATA_ENCRYPTION_KEY);
   const employees = new EmployeeRepository(prisma);
   const documents = new OnboardingDocumentRepository(prisma);
   const contracts = new ContractRepository(prisma);
@@ -92,11 +73,7 @@ export function buildContainer() {
 
   // The notifier follows the admin's saved mail settings at send time
   // (console/gmail/microsoft/custom) — no restart needed after changes.
-  // Which company a message / rule belongs to; "no company" = the main (oldest) one.
-  const companyResolver = new CompanyResolver(prisma);
-  // Mail server + weekend days are per company (a company without its own
-  // mail settings sends through the main company's).
-  const settingsService = new SettingsService(prisma, companyResolver);
+  const settingsService = new SettingsService(prisma);
   const notifier = new DynamicNotifier(settingsService);
   // With Redis, emails are queued and the worker delivers them (with
   // retries); without it they send inline exactly as before.
@@ -113,11 +90,9 @@ export function buildContainer() {
     notifier,
     redisEnabled ? (job) => getMailQueue().add('send', job) : undefined,
     publishNotify,
-    // Each company words its own e-mails.
-    (key, locale, params, companyId) => templateService.render(key, locale, params, companyId),
+    (key, locale, params) => templateService.render(key, locale, params),
     config.APP_URL,
     notificationGroups,
-    companyResolver,
   );
   // "When X enters status Y, email Z" — fires after each transition commits.
   const linkTokenService = new LinkTokenService(linkTokens, config.APP_URL, config.LINK_TTL_HOURS);
@@ -127,7 +102,6 @@ export function buildContainer() {
     templateService,
     linkTokenService,
     notificationGroups,
-    companyResolver,
   );
   onTransition((event) => triggerService.handle(event));
   const dashboardService = new DashboardService(prisma);
@@ -182,7 +156,6 @@ export function buildContainer() {
     medical: new MedicalInsuranceRepository(db),
     criminal: new CriminalRecordRepository(db),
     audit: new AuditLogRepository(db),
-    history: new EmploymentEventRepository(db),
   });
 
   const assetScope = (db: Db): AssetTxScope => ({
@@ -210,27 +183,7 @@ export function buildContainer() {
   const openWorkHalter = new OpenWorkHalter(unitOfWork(haltScope));
 
   // Named primary owners per process — steer reminders, never permissions.
-  const responsibilityService = new ResponsibilityService(prisma, companyResolver);
-
-  // Employment history: dated transfers / promotions / status changes.
-  const employmentHistory = new EmploymentHistoryService(prisma, new EmploymentEventRepository(prisma), employees, audit);
-  // Work schedules: shifts, patterns, effective-dated assignments.
-  const scheduleService = new ScheduleService(prisma, audit);
-  // Attendance: punches, judged days, corrections and overtime.
-  const attendanceService = new AttendanceService(prisma, scheduleService, audit);
-  // Leave: types (Saudi defaults), requests, ledger balances; approved leave marks attendance days.
-  const leaveService = new LeaveService(prisma, scheduleService, settingsService, audit, attendanceService);
-  // Pay: components, payroll policy (versioned) and each employee's pay over time.
-  const compensationService = new CompensationService(prisma, audit);
-  // Advances, loans and one-off payments, approved before payroll uses them.
-  const loanService = new LoanService(prisma, compensationService, audit);
-  // Payroll runs: the month calculated from everything decided elsewhere.
-  const payrollService = new PayrollService(prisma, compensationService, scheduleService, settingsService, audit);
-  // Payslips: PDFs of approved runs, e-mailed by hand or on the chosen day.
-  const payslipService = new PayslipService(prisma, compensationService, notifications, audit);
-  // Attendance, leave and payroll reports (screen + Excel).
-  const workforceReports = new WorkforceReportsService(prisma, audit);
-  onTransition((event) => employmentHistory.recordStatus(event));
+  const responsibilityService = new ResponsibilityService(prisma);
 
   const employeeDocuments = new EmployeeDocumentRepository(prisma);
   const slaFirings = new SlaFiringRepository(prisma);
@@ -245,17 +198,6 @@ export function buildContainer() {
       notifications,
       calendar: settingsService,
       responsibility: responsibilityService,
-      companies: companyResolver,
-      // A transfer dated 1 November takes effect on that local day.
-      jobs: [
-        { name: 'employment-changes', run: (now) => employmentHistory.applyDue(now) },
-        // Yesterday's attendance is judged once its shifts have closed (hourly).
-        { name: 'attendance-days', run: (now) => attendanceService.recomputeRecent(now) },
-        // Monthly leave accrual and the year-end carry-forward cap.
-        { name: 'leave-accrual', run: (now) => leaveService.accrue(now) },
-        // Payslips e-mailed automatically on each company's chosen day.
-        { name: 'payslip-auto-send', run: (now) => payslipService.autoSend(now) },
-      ],
     },
     [
       onboardingWatcher(employees, onboardingWorkflow, contracts, linkTokenService),
@@ -267,14 +209,6 @@ export function buildContainer() {
     ],
   );
 
-  // Companies + unit paths resolve each request's workspace and scope.
-  const companies = new CompanyRepository(prisma);
-  // Roles, assignments and the manager seats that drive them.
-  const assignmentService = new AssignmentService(prisma, audit);
-  // A new company starts with the default automation rules + holiday calendar.
-  const companyDefaults = new CompanyDefaults(slaRules, holidays);
-  const companyService = new CompanyService(prisma, audit, assignmentService, companyDefaults);
-  const orgService = new OrgService(prisma, audit, assignmentService);
   const authService = new AuthService(
     users,
     {
@@ -283,8 +217,6 @@ export function buildContainer() {
     },
     // Refresh tokens become single-use + revocable when Redis is present.
     redisEnabled ? new RedisRefreshTokenStore(getSharedRedis()) : undefined,
-    companies,
-    audit,
   );
 
   const listValues = new ListValueRepository(prisma);
@@ -307,7 +239,6 @@ export function buildContainer() {
     ownershipService,
     onboardingWorkflow,
     listService,
-    employmentHistory,
   );
 
   const assetService = new AssetService(
@@ -348,7 +279,6 @@ export function buildContainer() {
       employeeDocuments,
       notificationRepo,
       notificationGroups,
-      companies,
     },
     notifications,
     notifier,
@@ -359,23 +289,9 @@ export function buildContainer() {
     linkTokenService,
     onboardingService,
     employeeService,
-    employmentHistory,
-    scheduleService,
-    attendanceService,
-    leaveService,
-    compensationService,
-    loanService,
-    payrollService,
-    payslipService,
-    workforceReports,
     assetService,
     offboardingService,
     authService,
-    companyService,
-    companyDefaults,
-    companyResolver,
-    assignmentService,
-    orgService,
     settingsService,
     dashboardService,
     reportsService,

@@ -289,27 +289,15 @@ The frontend needs no `.env`; it reads everything from the API.
 
 ## 6. API map
 
-**Interactive docs (Swagger):** open `/api/docs/` on any running backend
-(locally <http://localhost:3000/api/docs/>, on the server
-`https://<your-domain>/api/docs/`). The raw OpenAPI file is at
-`/api/docs/openapi.json` — import it into Postman if you prefer.
-
-The spec is **generated from the code**, not written by hand: every mounted
-route is listed with its path parameters, the request body / query rules
-(from the same Zod schemas that validate the request), the permission it
-needs and whether it works inside the selected company. A new route appears
-the moment it is added. To try a staff endpoint: `POST /api/auth/login` →
-copy `accessToken` → **Authorize** → paste. Set `API_DOCS=false` in
-`backend/.env` to switch the docs off on a server.
-
 All staff endpoints live under `/api` and require a Bearer access token (the UI
-handles refresh silently). Signed-link endpoints (`/api/link/*`) are
-rate-limited and need no login; the token in the link is the only gate.
+handles refresh silently). Signed-link endpoints (`/api/link/*`) and the public
+list endpoint are rate-limited and need no login.
 
 | Prefix | Area | Highlights |
 |---|---|---|
 | `POST /api/auth/*` | Login, refresh, logout, change password | JWT access + refresh cookie |
-| `/api/link/*` | **Signed-link pages** (no account) | Data form (+ `/:token/lists`, the dropdowns of the new hire's company), contract view, asset-custody approval, exit interview |
+| `/api/link/*` | **Signed-link pages** (no account) | Data form, contract view, asset-custody approval, exit interview |
+| `/api/public/lists` | Dropdown values for the public data form | |
 | `/api/employees` | Employee file | List/search (paged), create (onboarding or direct), profile, photo, audit timeline, **onboarding actions** (`send-form`, `resend-form`, `request-missing`, `accept-documents`, `reopen`), withdraw, contract + status + file, **HR requests** (+ one document each), process cards (`gosi` / `medical` / `criminal`) with certificate upload |
 | `/api/employees/:id/documents`, `/api/employee-documents` | Expiry-tracked documents (Iqama, passport…) | Renewal clears past alerts |
 | `/api/assets`, `/api/asset-forms` | Asset registry + custody forms | Draft → sent → approved by the employee via link |
@@ -317,10 +305,10 @@ rate-limited and need no login; the token in the link is the only gate.
 | `/api/notifications` | In-app bell, SSE stream, e-mail log (`/log`) | |
 | `/api/dashboard` | Home-page summary | |
 | `/api/reports/*` | Excel exports | |
-| `/api/settings/*` | SLA rules, holidays, weekend days, status ownership, responsibility, e-mail settings | ADMIN. **Per company**: automation rules, calendar, primary owners and the mail server belong to the selected company (a company without its own mail server sends through the main company's). Status ownership and responsible teams are shared |
-| `/api/email-templates`, `/api/email-triggers` | Editable bilingual templates, memo triggers (who gets which notice) | **Per company**: each company words its own e-mails and has its own triggers; every message uses the wording and mail server of the company it is about |
+| `/api/settings/*` | SLA rules, holidays, status ownership, responsibility, e-mail settings | ADMIN |
+| `/api/email-templates`, `/api/email-triggers` | Editable bilingual templates, memo triggers (who gets which notice) | |
 | `/api/users` | Staff accounts & roles, invitations | ADMIN |
-| `/api/lists` | Editable dropdown lists | **Per company**: every company owns its own copy, seeded from the catalogue at boot or on first use |
+| `/api/lists` | Editable dropdown lists | |
 | `/api/ai/*` | Letter drafting, assistant | Off without `ANTHROPIC_API_KEY` |
 | `GET /api/health`, `GET /api/ready`, `GET /api/admin/health` | Liveness · DB readiness · full snapshot (DB, Redis, queues, disk) | |
 
@@ -450,27 +438,8 @@ cd frontend && npm run typecheck && npm run build
 Tests need **no database** — repositories are replaced with in-memory fakes, and
 the state machines are tested in isolation (`tests/machines.test.ts`,
 `tests/engine.test.ts`). GitHub Actions (`.github/workflows/ci.yml`) runs
-`prisma generate → lint → typecheck → test` for the backend and
-`check:i18n → build` for the frontend on every push and pull request to
-`develop`, `staging` and `main`.
-
-### Before a release
-
-| Check | What it proves |
-|---|---|
-| `cd frontend && npm run check:i18n` | every text key the screens use exists in Arabic **and** English (no raw `payroll.x.y` on screen) |
-| `tests/permission-matrix.test.ts` | every workforce / payroll / report route is called as each built-in role: refused (403) without the permission, before anything else runs; plus the business rules — salaries stay with HR, payroll and the managers; only a company manager or the super admin approves a run; requests are approved by managers |
-| `tests/company-isolation.test.ts` | an id from another company never finds or changes anything (decisions, runs, payslips, IBANs) |
-| `scripts/perf-check.ts` | month-end speed with realistic volumes — **only on a throw-away database whose name ends in `_perf`** (the script refuses anything else) |
-
-```bash
-# speed check: a separate database, migrated and seeded, then filled with 1,000 people
-cd backend
-export DATABASE_URL="mysql://root:…@127.0.0.1:3306/employee_onboarding_perf"
-npx prisma migrate reset --force        # creates / empties the _perf database
-npx prisma db seed                      # roles and the admin / HR test users
-npx tsx scripts/perf-check.ts 1000
-```
+`prisma generate → lint → typecheck → test` for the backend and `build` for the
+frontend on every push and pull request to `develop`, `staging` and `main`.
 
 ---
 

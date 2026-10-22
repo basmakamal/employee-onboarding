@@ -5,9 +5,8 @@
  * original attempt stays on record.
  */
 import { computed, ref, watch } from 'vue';
-import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
 import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
@@ -88,7 +87,7 @@ async function load() {
     rows.value = data.items;
     total.value = data.total;
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     loading.value = false;
   }
@@ -120,7 +119,7 @@ async function resend(row: LogRow) {
     viewing.value = null;
     await load();
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     resending.value = '';
   }

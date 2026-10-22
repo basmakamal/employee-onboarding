@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { asyncHandler, validate } from '../common/http.js';
-import { actorScope, requirePermission } from '../auth/authz/authorize.js';
+import { requireRole } from '../auth/require-auth.middleware.js';
 import { GuardFailedError } from '../workflow/errors.js';
 import type { AiService } from './ai.service.js';
 
@@ -38,7 +38,7 @@ const documentScan = multer({
 /** AI features — HR/ADMIN only, all read-only against the database. */
 export function aiRouter(service: AiService): Router {
   const router = Router();
-  router.use(requirePermission('ai.use'));
+  router.use(requireRole('HR', 'ADMIN'));
 
   router.post(
     '/letters',
@@ -51,7 +51,7 @@ export function aiRouter(service: AiService): Router {
           type: body.type,
           ...(body.notes ? { notes: body.notes } : {}),
           ...(body.locale ? { locale: body.locale } : {}),
-        }, actorScope(req.actor)),
+        }),
       );
     }),
   );
@@ -61,7 +61,7 @@ export function aiRouter(service: AiService): Router {
     validate(chatSchema),
     asyncHandler(async (req, res) => {
       const { messages } = req.body as z.infer<typeof chatSchema>;
-      res.json(await service.chat(messages, actorScope(req.actor)));
+      res.json(await service.chat(messages));
     }),
   );
 

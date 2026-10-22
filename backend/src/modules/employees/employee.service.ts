@@ -5,9 +5,7 @@ import {
   criminalRecordMachine,
 } from '../../workflow/machines/employee-process.machine.js';
 import { NotFoundError } from '../../workflow/errors.js';
-import { actorScope } from '../../auth/authz/authorize.js';
-import { resolvePlacement, type PlacementInput } from './org-placement.js';
-import type { Employee, Prisma } from '../../generated/prisma/client.js';
+import type { Employee } from '../../generated/prisma/client.js';
 import type { UnitOfWork } from '../../common/prisma.js';
 import type {
   EmployeeListQuery,
@@ -26,9 +24,6 @@ import type {
   CriminalRecordStatus,
   EmployeeRequestType,
 } from '../../generated/prisma/enums.js';
-import type { EmploymentEventRepository } from './employment-event.repository.js';
-import type { EmploymentHistoryService } from './employment-history.service.js';
-import { fieldCrypto, maskIban } from '../../common/field-crypto.js';
 
 export type ProcessKind = 'gosi' | 'medical' | 'criminal';
 
@@ -47,8 +42,6 @@ interface ProcessRow {
 /** One employee-file unit of work — all repositories share one transaction. */
 export interface EmployeeTxScope {
   employees: EmployeeRepository;
-  /** Employment history rows written with the edit that caused them. */
-  history?: Pick<EmploymentEventRepository, 'createMany'>;
   requests: EmployeeRequestRepository;
   gosi: GosiRepository;
   medical: MedicalInsuranceRepository;
@@ -64,25 +57,8 @@ export interface EmployeeTxScope {
  */
 /** The dropdown lists: options to offer, and a way to remember a value staff typed. */
 interface ListsLike {
-  codes(companyId: string, key: string): Promise<string[]>;
-  ensureValue(companyId: string | null | undefined, key: string, value: string | null | undefined): Promise<void>;
-}
-
-/** Identity and bank numbers never enter the audit trail — only the fact that they changed. */
-const MASKED_FIELDS = new Set(['nationalId', 'iban', 'passwordHash']);
-
-/** { field: { from, to } } for the fields an edit actually changed. */
-export function profileChanges(before: Record<string, unknown>, after: Record<string, unknown>): Record<string, { from: unknown; to: unknown }> {
-  const plain = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : (v ?? null));
-  const out: Record<string, { from: unknown; to: unknown }> = {};
-  for (const [field, next] of Object.entries(after)) {
-    if (next === undefined || field === 'companyId') continue;
-    const was = plain(before[field]);
-    const now = plain(next);
-    if (JSON.stringify(was) === JSON.stringify(now)) continue;
-    out[field] = MASKED_FIELDS.has(field) ? { from: was === null ? null : '•••', to: now === null ? null : '•••' } : { from: was, to: now };
-  }
-  return out;
+  codes(key: string): Promise<string[]>;
+  ensureValue(key: string, value: string | null | undefined): Promise<void>;
 }
 
 export class EmployeeService {
@@ -100,32 +76,25 @@ export class EmployeeService {
     /** The onboarding pipeline machine — drives the profile's action buttons. */
     private readonly onboarding?: Workflow<Employee>,
     private readonly lists?: ListsLike,
-    /** Turns a profile edit into dated history rows (unit, title, manager…). */
-    private readonly history?: Pick<EmploymentHistoryService, 'draftsForEdit'>,
   ) {}
 
-  /** A department, project or title typed by staff becomes a choice in that company's lists. */
-  private async remember(
-    companyId: string | null | undefined,
-    input: {
-      department?: string | null;
-      project?: string | null;
-      jobTitle?: string | null;
-    },
-  ): Promise<void> {
-    if (!this.lists || !companyId) return;
-    await this.lists.ensureValue(companyId, 'DEPARTMENT', input.department);
-    await this.lists.ensureValue(companyId, 'PROJECT', input.project);
-    await this.lists.ensureValue(companyId, 'JOB_TITLE', input.jobTitle);
+  /** A department, project or title typed by staff becomes a choice for everyone. */
+  private async remember(input: {
+    department?: string | null;
+    project?: string | null;
+    jobTitle?: string | null;
+  }): Promise<void> {
+    if (!this.lists) return;
+    await this.lists.ensureValue('DEPARTMENT', input.department);
+    await this.lists.ensureValue('PROJECT', input.project);
+    await this.lists.ensureValue('JOB_TITLE', input.jobTitle);
   }
 
   /** One server-side page plus the tab badge counts, in parallel. */
-  /** The list, counts included, limited to what this actor may reach. */
-  async list(query: EmployeeListQuery, actor?: Actor) {
-    const scope = actorScope(actor);
+  async list(query: EmployeeListQuery) {
     const [{ items, total }, counts] = await Promise.all([
-      this.repos.employees.listPaged(query, scope),
-      this.repos.employees.statusCounts(scope),
+      this.repos.employees.listPaged(query),
+      this.repos.employees.statusCounts(),
     ]);
     return { items, total, counts };
   }
@@ -134,13 +103,13 @@ export class EmployeeService {
     return this.repos.employees.timelinePage(employeeId, page, limit);
   }
 
-  /** Dropdown choices for the employee forms — the selected company's lists when present. */
-  async fieldOptions(companyId?: string) {
-    if (!this.lists || !companyId) return this.repos.employees.fieldOptions();
+  /** Dropdown choices for the employee forms — the admin-managed lists when present. */
+  async fieldOptions() {
+    if (!this.lists) return this.repos.employees.fieldOptions();
     const [departments, jobTitles, projects] = await Promise.all([
-      this.lists.codes(companyId, 'DEPARTMENT'),
-      this.lists.codes(companyId, 'JOB_TITLE'),
-      this.lists.codes(companyId, 'PROJECT'),
+      this.lists.codes('DEPARTMENT'),
+      this.lists.codes('JOB_TITLE'),
+      this.lists.codes('PROJECT'),
     ]);
     return { departments, jobTitles, projects };
   }
@@ -164,17 +133,14 @@ export class EmployeeService {
       jobTitle?: string;
       directManager?: string;
       hireDate?: Date;
-    } & PlacementInput,
+    },
     actor: Actor,
   ) {
-    // Company and placement come from the validated context, never the body.
-    const placement = await resolvePlacement(this.repos.employees, actor, input);
-    await this.remember(actor.companyId, { ...input, ...placement });
+    await this.remember(input);
     return this.transact(async (s) => {
       const employeeNo = await s.employees.allocateEmployeeNo();
       const employee = await s.employees.createDirect({
         ...input,
-        ...placement,
         employeeNo,
         hireDate: input.hireDate ?? new Date(),
         ...(actor.id ? { createdById: actor.id } : {}),
@@ -197,18 +163,13 @@ export class EmployeeService {
    * HR edits the profile in place. Audited with the list of touched fields
    * so the timeline shows WHAT changed, not just that something did.
    */
-  async update(id: string, input: UpdateEmployeeData & PlacementInput, actor: Actor) {
-    const before = await this.mustFind(id, actor);
-    const { companyId: _ignored, ...placement } = await resolvePlacement(this.repos.employees, actor, input, { selfId: id });
-    void _ignored; // the company never changes through an edit
-    const data = { ...input, ...placement };
-    await this.remember(actor.companyId, data);
-    // What changed in the employment (unit, title, manager, type, hire date) becomes history, effective today.
-    const drafts = this.history ? await this.history.draftsForEdit(before, data, actor) : [];
+  async update(id: string, input: UpdateEmployeeData, actor: Actor) {
+    const existing = await this.repos.employees.findById(id);
+    if (!existing) throw new NotFoundError('employee', id);
+    await this.remember(input);
 
     return this.transact(async (s) => {
-      const updated = await s.employees.update(id, data);
-      if (drafts.length > 0) await s.history?.createMany(drafts);
+      const updated = await s.employees.update(id, input);
       await s.audit.append({
         entity: 'EMPLOYEE',
         entityId: id,
@@ -217,7 +178,6 @@ export class EmployeeService {
         ...(actor.type === 'USER' && actor.id ? { actorId: actor.id } : {}),
         employeeId: id,
         metadata: { fields: Object.keys(input) },
-        changes: profileChanges(before, data) as Prisma.InputJsonValue,
       });
       return updated;
     });
@@ -230,7 +190,8 @@ export class EmployeeService {
    * caller can remove them from disk AFTER the commit.
    */
   async remove(id: string, actor: Actor): Promise<string[]> {
-    const existing = await this.mustFind(id, actor);
+    const existing = await this.repos.employees.findById(id);
+    if (!existing) throw new NotFoundError('employee', id);
 
     const storageKeys = await this.repos.employees.collectStorageKeys(id);
     await this.transact(async (s) => {
@@ -253,7 +214,8 @@ export class EmployeeService {
 
   /** Returns the replaced photo's key so the caller can delete the file. */
   async setPhoto(id: string, photoKey: string, actor: Actor) {
-    const existing = await this.mustFind(id, actor);
+    const existing = await this.repos.employees.findById(id);
+    if (!existing) throw new NotFoundError('employee', id);
 
     await this.transact(async (s) => {
       await s.employees.setPhoto(id, photoKey);
@@ -269,8 +231,8 @@ export class EmployeeService {
     return { photoKey, previousKey: existing.photoKey };
   }
 
-  async getPhotoKey(id: string, actor?: Actor): Promise<string> {
-    const employee = await this.repos.employees.findById(id, actorScope(actor));
+  async getPhotoKey(id: string): Promise<string> {
+    const employee = await this.repos.employees.findById(id);
     if (!employee?.photoKey) throw new NotFoundError('photo', id);
     return employee.photoKey;
   }
@@ -286,8 +248,8 @@ export class EmployeeService {
     notes?: string,
     document?: RequestDocument,
   ) {
-    // Scope guard: an employee outside the actor's company / subtree is a 404.
-    await this.mustFind(employeeId, actor);
+    const existing = await this.repos.employees.findById(employeeId);
+    if (!existing) throw new NotFoundError('employee', employeeId);
 
     return this.transact(async (s) => {
       const request = await s.requests.create({
@@ -348,13 +310,6 @@ export class EmployeeService {
   }
 
   /** A request is only reachable through its own employee's file. */
-  /** The employee, or 404 — outside the actor's scope counts as not found. */
-  private async mustFind(id: string, actor?: Actor) {
-    const employee = await this.repos.employees.findById(id, actorScope(actor));
-    if (!employee) throw new NotFoundError('employee', id);
-    return employee;
-  }
-
   private async mustFindRequest(employeeId: string, requestId: string) {
     const request = await this.repos.requests.findById(requestId);
     if (!request || request.employeeId !== employeeId) throw new NotFoundError('request', requestId);
@@ -362,7 +317,7 @@ export class EmployeeService {
   }
 
   async getDetails(id: string, actor: Actor) {
-    const employee = await this.repos.employees.findWithDetails(id, actorScope(actor));
+    const employee = await this.repos.employees.findWithDetails(id);
     if (!employee) throw new NotFoundError('employee', id);
     // Newest page of the timeline; the rest is paged in from /audit.
     const timeline = await this.repos.employees.timelinePage(id, 1, 20);
@@ -391,8 +346,6 @@ export class EmployeeService {
 
     return {
       ...rest,
-      // Bank details: only the last digits here; the full number via GET /:id/iban (pay permission, audited).
-      iban: maskIban(fieldCrypto().decrypt(rest.iban)),
       auditLogs: timeline.items,
       /** Everything on the timeline — the page above holds only the newest 20. */
       auditTotal: timeline.total,
@@ -421,8 +374,7 @@ export class EmployeeService {
   }
 
   /** Storage key of a process's completion document, for viewing. */
-  async getProcessCertificateKey(employeeId: string, kind: ProcessKind, actor?: Actor): Promise<string> {
-    await this.mustFind(employeeId, actor);
+  async getProcessCertificateKey(employeeId: string, kind: ProcessKind): Promise<string> {
     const repo =
       kind === 'gosi' ? this.repos.gosi : kind === 'medical' ? this.repos.medical : this.repos.criminal;
     const row = await repo.findByEmployee(employeeId);
@@ -438,7 +390,6 @@ export class EmployeeService {
     actor: Actor,
     input: ProcessActionInput = {},
   ) {
-    await this.mustFind(employeeId, actor);
     if (kind === 'criminal') return this.actOnCriminal(employeeId, action, actor, input);
     return this.actOnHoldable(employeeId, kind, action, actor, input);
   }

@@ -4,7 +4,6 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 // The SDK's zod helpers are typed against zod v4 — zod 3.25+ ships it here.
 import { z } from 'zod/v4';
 import type { PrismaClient } from '../generated/prisma/client.js';
-import { withScope, type EmployeeScope } from '../auth/authz/authorize.js';
 import { GuardFailedError } from '../workflow/errors.js';
 
 export type LetterLocale = 'ar' | 'en';
@@ -76,11 +75,10 @@ export class AiService {
     type: string;
     notes?: string;
     locale?: LetterLocale;
-  }, scope?: EmployeeScope): Promise<{ letter: string }> {
+  }): Promise<{ letter: string }> {
     const client = this.requireClient();
-    // Only an employee inside the actor's company / subtree can be written about.
-    const employee = await this.prisma.employee.findFirst({
-      where: withScope({ id: input.employeeId }, scope),
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: input.employeeId },
       include: { contract: true },
     });
     if (!employee) throw new GuardFailedError('NOT_FOUND', 'employee not found');
@@ -137,12 +135,7 @@ export class AiService {
   // --------------------------------------------------------- HR assistant
 
   /** Data-aware chat: Claude answers HR questions using read-only tools. */
-  /**
-   * Every tool the assistant can call reads ONLY the actor's company (and,
-   * for a branch / department manager, their subtree) — the model never sees
-   * another company's people, whatever it is asked.
-   */
-  async chat(history: ChatTurn[], scope?: EmployeeScope): Promise<{ reply: string }> {
+  async chat(history: ChatTurn[]): Promise<{ reply: string }> {
     const client = this.requireClient();
 
     const countEmployees = betaZodTool({
@@ -156,7 +149,7 @@ export class AiService {
         const rows = await this.prisma.employee.groupBy({
           by: ['status'],
           _count: { _all: true },
-          where: withScope(department ? { department } : {}, scope),
+          ...(department ? { where: { department } } : {}),
         });
         return JSON.stringify(rows.map((r) => ({ status: r.status, count: r._count._all })));
       },
@@ -176,7 +169,7 @@ export class AiService {
       }),
       run: async ({ query, status, department }) => {
         const rows = await this.prisma.employee.findMany({
-          where: withScope({
+          where: {
             ...(status ? { status: status as never } : {}),
             ...(department ? { department } : {}),
             ...(query
@@ -189,7 +182,7 @@ export class AiService {
                   ],
                 }
               : {}),
-          }, scope),
+          },
           take: 20,
           orderBy: { createdAt: 'desc' },
         });
@@ -216,7 +209,7 @@ export class AiService {
       run: async ({ withinDays }) => {
         const threshold = new Date(Date.now() + withinDays * 86_400_000);
         const rows = await this.prisma.employeeDocument.findMany({
-          where: { expiryDate: { lte: threshold }, employee: withScope({ status: 'ACTIVE' }, scope) },
+          where: { expiryDate: { lte: threshold }, employee: { status: 'ACTIVE' } },
           include: { employee: { select: { employeeNo: true, firstName: true, lastName: true } } },
           orderBy: { expiryDate: 'asc' },
           take: 50,
@@ -244,7 +237,7 @@ export class AiService {
       run: async ({ employeeNo, email }) => {
         if (!employeeNo && !email) return 'Provide employeeNo or email.';
         const employee = await this.prisma.employee.findFirst({
-          where: withScope(employeeNo ? { employeeNo } : { email: email as string }, scope),
+          where: employeeNo ? { employeeNo } : { email: email as string },
           include: {
             gosi: true,
             medical: true,

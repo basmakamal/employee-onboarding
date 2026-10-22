@@ -7,8 +7,7 @@ import express from 'express';
 import request from 'supertest';
 import cookieParser from 'cookie-parser';
 import { AuthService } from '../src/auth/auth.service.js';
-import { requireAuth } from '../src/auth/require-auth.middleware.js';
-import { requirePermission } from '../src/auth/authz/authorize.js';
+import { requireAuth, requireRole } from '../src/auth/require-auth.middleware.js';
 import { authRouter } from '../src/auth/auth.routes.js';
 import { errorHandler } from '../src/common/http.js';
 import type { UserRepository } from '../src/auth/user.repository.js';
@@ -46,13 +45,7 @@ describe('AuthService', () => {
     const auth = new AuthService(makeUsers(), SECRETS);
     const result = await auth.login('HR@example.com', 'Passw0rd!');
 
-    expect(result.user).toMatchObject({ id: 'u1', name: 'HR Officer', email: 'hr@example.com', role: 'HR', mustChangePassword: false, hasPhoto: false });
-    // No assignment rows yet (legacy database): the single role keeps its old powers, globally.
-    expect(result.user.roles).toEqual(['HR']);
-    expect(result.user.permissions).toContain('employees.write');
-    expect(result.user.permissions).not.toContain('users.manage');
-    expect(result.user.companies).toEqual([]);
-    expect(result.user.activeCompany).toBeNull();
+    expect(result.user).toEqual({ id: 'u1', name: 'HR Officer', email: 'hr@example.com', role: 'HR', mustChangePassword: false, hasPhoto: false });
     expect(result.accessToken).toBeTruthy();
     expect(result.refreshToken).toBeTruthy();
   });
@@ -63,11 +56,6 @@ describe('AuthService', () => {
   ])('rejects %s with the same generic error', async (_label, email, password) => {
     const auth = new AuthService(makeUsers(), SECRETS);
     await expect(auth.login(email, password)).rejects.toThrow('invalid email or password');
-  });
-
-  it('employees never sign in: a leftover employee account is refused like a wrong password', async () => {
-    const auth = new AuthService(makeUsers({ role: 'EMPLOYEE' }), SECRETS);
-    await expect(auth.login('hr@example.com', 'Passw0rd!')).rejects.toThrow('invalid email or password');
   });
 
   it('rejects a deactivated account even with a valid token', async () => {
@@ -100,10 +88,10 @@ describe('auth routes + guards', () => {
     app.use(express.json());
     app.use(cookieParser());
     app.use('/api/auth', authRouter(auth));
-    app.get('/api/protected', requireAuth(auth), requirePermission('employees.read'), (_req, res) => {
+    app.get('/api/protected', requireAuth(auth), requireRole('HR'), (_req, res) => {
       res.json({ ok: true });
     });
-    app.get('/api/admin-only', requireAuth(auth), requirePermission('users.manage'), (_req, res) => {
+    app.get('/api/admin-only', requireAuth(auth), requireRole('ADMIN'), (_req, res) => {
       res.json({ ok: true });
     });
     app.use(errorHandler);

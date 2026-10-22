@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, pagedQuery, validateQuery } from '../common/http.js';
-import { requirePermission } from '../auth/authz/authorize.js';
+import { requireRole } from '../auth/require-auth.middleware.js';
 import type { NotificationRepository } from './notification.repository.js';
 import type { NotificationService } from './notification.service.js';
 
@@ -44,7 +44,7 @@ export function notificationRouter(
   /** Every message the system has sent — the audit trail for email. */
   router.get(
     '/log',
-    requirePermission('emails.view'),
+    requireRole('HR', 'ADMIN'),
     validateQuery(logQuerySchema),
     asyncHandler(async (req, res) => {
       const q = pagedQuery<z.infer<typeof logQuerySchema>>(req);
@@ -63,7 +63,7 @@ export function notificationRouter(
 
   router.post(
     '/:id/resend',
-    requirePermission('emails.view'),
+    requireRole('HR', 'ADMIN'),
     asyncHandler(async (req, res) => {
       res.status(201).json(await service.resend(req.params['id'] as string));
     }),

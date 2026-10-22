@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { errorText } from '../../validation/errors';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { api } from '../../api/client';
+import { api, ApiError } from '../../api/client';
 import { usePreferencesStore } from '../../stores/preferences';
-import { rules } from '../../validation/rules';
 
 interface ExitContext {
   purpose: string;
@@ -24,8 +22,6 @@ const state = ref<'loading' | 'ready' | 'submitting' | 'done' | 'invalid'>('load
 const ctx = ref<ExitContext | null>(null);
 const error = ref('');
 const answers = ref<Record<string, string>>({ leavingReason: '', experience: '', improvements: '' });
-/** Only the first question is required; the field rule marks it when Submit is pressed. */
-const formRef = ref<{ validate(): Promise<{ valid: boolean }> } | null>(null);
 
 onMounted(async () => {
   try {
@@ -43,21 +39,15 @@ onMounted(async () => {
 });
 
 async function submit() {
-  if (state.value === 'submitting') return;
-  error.value = '';
-  const { valid } = (await formRef.value?.validate()) ?? { valid: true };
-  if (!valid) {
-    error.value = t('errors.fixFields');
-    return;
-  }
   state.value = 'submitting';
+  error.value = '';
   try {
     const filled: Record<string, string> = {};
     for (const [k, v] of Object.entries(answers.value)) if (v.trim()) filled[k] = v.trim();
     await api.post(`/api/link/${token}/exit-interview`, filled);
     state.value = 'done';
   } catch (e) {
-    error.value = errorText(e);
+    error.value = e instanceof ApiError ? e.message : t('common.error');
     state.value = 'ready';
   }
 }
@@ -101,17 +91,14 @@ async function submit() {
         <v-alert v-if="error" type="error" variant="tonal" class="mb-4">{{ error }}</v-alert>
         <p class="text-medium-emphasis mb-4">{{ $t('exitInterview.intro') }}</p>
 
-        <v-form ref="formRef" @submit.prevent="submit">
-          <v-textarea
-            v-for="q in QUESTIONS"
-            :key="q"
-            v-model="answers[q]"
-            :label="$t(`exitInterview.${q}`) + (q === 'leavingReason' ? ' *' : '')"
-            :rules="q === 'leavingReason' ? [rules.required, rules.maxLength(4000)] : [rules.maxLength(4000)]"
-            rows="3"
-            class="mb-2"
-          />
-        </v-form>
+        <v-textarea
+          v-for="q in QUESTIONS"
+          :key="q"
+          v-model="answers[q]"
+          :label="$t(`exitInterview.${q}`)"
+          rows="3"
+          class="mb-2"
+        />
       </v-card-text>
 
       <v-card-actions class="pa-4">
@@ -121,6 +108,7 @@ async function submit() {
           size="large"
           variant="flat"
           :loading="state === 'submitting'"
+          :disabled="!answers['leavingReason']?.trim()"
           @click="submit"
         >
           {{ $t('common.submit') }}
