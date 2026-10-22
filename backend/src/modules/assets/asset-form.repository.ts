@@ -1,7 +1,5 @@
 import type { Db } from '../../common/prisma.js';
-import type { EmployeeScope } from '../../auth/authz/authorize.js';
 import type { AssetFormStatus, AssetCondition } from '../../generated/prisma/enums.js';
-import { viaEmployeeCompanyWhere, type CompanyFilter } from '../../workflow/company-filter.js';
 
 export interface AssetFormItemInput {
   assetId?: string;
@@ -29,10 +27,9 @@ export class AssetFormRepository {
     });
   }
 
-  /** With a scope, a form whose employee sits outside it is simply not found. */
-  findWithItems(id: string, scope?: EmployeeScope) {
-    return this.db.assetForm.findFirst({
-      where: { id, ...(scope ? { employee: scope } : {}) },
+  findWithItems(id: string) {
+    return this.db.assetForm.findUnique({
+      where: { id },
       include: { items: true, employee: true },
     });
   }
@@ -74,9 +71,9 @@ export class AssetFormRepository {
   }
 
   /** SLA scan input — forms sitting in a status since before the threshold. */
-  listInStatusSince(status: AssetFormStatus, threshold: Date, limit = 500, company?: CompanyFilter) {
+  listInStatusSince(status: AssetFormStatus, threshold: Date, limit = 500) {
     return this.db.assetForm.findMany({
-      where: { status, updatedAt: { lt: threshold }, ...viaEmployeeCompanyWhere(company) },
+      where: { status, updatedAt: { lt: threshold } },
       include: { employee: true },
       orderBy: { updatedAt: 'asc' },
       take: limit,

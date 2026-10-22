@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
-import { contextOf, requirePermission } from '../../auth/authz/authorize.js';
+import { requireRole } from '../../auth/require-auth.middleware.js';
 import { calendarSchema, mailSettingsSchema, type SettingsService } from './settings.service.js';
 import type { SlaRuleRepository, HolidayRepository } from '../../workflow/sla-rule.repository.js';
 import type { OwnershipService } from '../../workflow/ownership.service.js';
@@ -17,8 +17,6 @@ import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
 const holidaySchema = z.object({
   date: z.coerce.date(),
   name: z.string().min(1),
-  /** Optional: only this branch / unit (and the units under it) is off. */
-  orgUnitId: z.string().min(1).nullable().optional(),
 });
 
 const testSchema = z.object({ to: z.string().email() });
@@ -97,11 +95,7 @@ const ruleCreateSchema = z.object({
   active: z.boolean().default(true),
 });
 
-/**
- * ADMIN-only settings. The work calendar, holidays, primary owners,
- * automation rules and mail server belong to the SELECTED company (each
- * company has its own). Responsible teams and status ownership stay shared.
- */
+/** ADMIN-only system settings. */
 export function settingsRouter(
   service: SettingsService,
   slaRules: SlaRuleRepository,
@@ -109,11 +103,9 @@ export function settingsRouter(
   holidays: HolidayRepository,
   responsibility: ResponsibilityService,
   groups?: NotificationGroupRepository,
-  /** Checks a branch-specific holiday's unit belongs to the company. */
-  orgUnits: { exists(companyId: string, id: string): Promise<boolean> } = { exists: async () => false },
 ): Router {
   const router = Router();
-  router.use(requirePermission('settings.manage'));
+  router.use(requireRole('ADMIN'));
 
   // ---- Responsible teams: named people per status (notifications) ----
   if (groups) {
@@ -136,7 +128,7 @@ export function settingsRouter(
       asyncHandler(async (req, res) => {
         const body = req.body as z.infer<typeof groupSchema>;
         if (await groups.findByKey(body.key)) {
-          throw new GuardFailedError('DUPLICATE_KEY', `a team with key ${body.key} already exists`, 'key');
+          throw new GuardFailedError('DUPLICATE_KEY', `a team with key ${body.key} already exists`);
         }
         res.status(201).json(await groups.create(body));
       }),
@@ -195,9 +187,8 @@ export function settingsRouter(
   // ---- Work calendar: weekend days + public holidays ----
   router.get(
     '/calendar',
-    asyncHandler(async (req, res) => {
-      const { companyId } = contextOf(req);
-      res.json({ ...(await service.getCalendar(companyId)), holidays: await holidays.list(companyId) });
+    asyncHandler(async (_req, res) => {
+      res.json({ ...(await service.getCalendar()), holidays: await holidays.list() });
     }),
   );
 
@@ -205,7 +196,7 @@ export function settingsRouter(
     '/calendar',
     validate(calendarSchema),
     asyncHandler(async (req, res) => {
-      res.json(await service.updateCalendar(contextOf(req).companyId, req.body as z.infer<typeof calendarSchema>));
+      res.json(await service.updateCalendar(req.body as z.infer<typeof calendarSchema>));
     }),
   );
 
@@ -213,19 +204,15 @@ export function settingsRouter(
     '/holidays',
     validate(holidaySchema),
     asyncHandler(async (req, res) => {
-      const { date, name, orgUnitId } = req.body as z.infer<typeof holidaySchema>;
-      const { companyId } = contextOf(req);
-      if (orgUnitId && !(await orgUnits.exists(companyId, orgUnitId))) {
-        throw new GuardFailedError('BAD_ORG_UNIT', 'pick a branch or department of this company', 'orgUnitId');
-      }
-      res.status(201).json(await holidays.add(companyId, date, name, orgUnitId ?? null));
+      const { date, name } = req.body as z.infer<typeof holidaySchema>;
+      res.status(201).json(await holidays.add(date, name));
     }),
   );
 
   router.delete(
     '/holidays/:id',
     asyncHandler(async (req, res) => {
-      await holidays.remove(contextOf(req).companyId, req.params['id'] as string);
+      await holidays.remove(req.params['id'] as string);
       res.status(204).end();
     }),
   );
@@ -236,14 +223,13 @@ export function settingsRouter(
     validate(z.object({ year: z.number().int().min(2020).max(2100) })),
     asyncHandler(async (req, res) => {
       const { year } = req.body as { year: number };
-      const { companyId } = contextOf(req);
       const existing = new Set(
-        (await holidays.list(companyId)).map((h) => h.date.toISOString().slice(0, 10)),
+        (await holidays.list()).map((h) => h.date.toISOString().slice(0, 10)),
       );
       let created = 0;
       for (const holiday of generateSaudiHolidays(year)) {
         if (existing.has(holiday.date.toISOString().slice(0, 10))) continue;
-        await holidays.add(companyId, holiday.date, holiday.name);
+        await holidays.add(holiday.date, holiday.name);
         created += 1;
       }
       res.json({ created });
@@ -270,8 +256,8 @@ export function settingsRouter(
   // ---- Primary follow-up owners per process (notifications only) ----
   router.get(
     '/responsibility',
-    asyncHandler(async (req, res) => {
-      res.json(await responsibility.all(contextOf(req).companyId));
+    asyncHandler(async (_req, res) => {
+      res.json(await responsibility.all());
     }),
   );
 
@@ -281,17 +267,16 @@ export function settingsRouter(
     asyncHandler(async (req, res) => {
       const key = z.enum(RESPONSIBILITY_KEYS).parse(req.params['processKey']);
       const { userIds } = req.body as z.infer<typeof responsibilitySchema>;
-      const { companyId } = contextOf(req);
-      await responsibility.set(companyId, key, userIds);
-      res.json(await responsibility.all(companyId));
+      await responsibility.set(key, userIds);
+      res.json(await responsibility.all());
     }),
   );
 
   // ---- Automation (SLA) rules ----
   router.get(
     '/sla',
-    asyncHandler(async (req, res) => {
-      res.json(await slaRules.list(contextOf(req).companyId));
+    asyncHandler(async (_req, res) => {
+      res.json(await slaRules.list());
     }),
   );
 
@@ -302,7 +287,7 @@ export function settingsRouter(
     asyncHandler(async (req, res) => {
       const body = req.body as z.infer<typeof ruleCreateSchema>;
       res.status(201).json(
-        await slaRules.create(contextOf(req).companyId, {
+        await slaRules.create({
           processKey: body.processKey,
           status: body.status,
           afterValue: body.afterValue,
@@ -326,7 +311,7 @@ export function settingsRouter(
     asyncHandler(async (req, res) => {
       const changes = req.body as z.infer<typeof ruleUpdateSchema>;
       res.json(
-        await slaRules.update(contextOf(req).companyId, req.params['id'] as string, {
+        await slaRules.update(req.params['id'] as string, {
           ...compact({ ...changes, ccEmails: undefined }),
           // nullable fields must survive compact(); cc list is stored comma-separated
           ...(changes.escalateToRole === null ? { escalateToRole: null } : {}),
@@ -340,8 +325,8 @@ export function settingsRouter(
 
   router.get(
     '/mail',
-    asyncHandler(async (req, res) => {
-      res.json(await service.getMailSettingsMasked(contextOf(req).companyId));
+    asyncHandler(async (_req, res) => {
+      res.json(await service.getMailSettingsMasked());
     }),
   );
 
@@ -349,9 +334,8 @@ export function settingsRouter(
     '/mail',
     validate(mailSettingsSchema),
     asyncHandler(async (req, res) => {
-      const { companyId } = contextOf(req);
-      await service.updateMailSettings(companyId, req.body as never);
-      res.json(await service.getMailSettingsMasked(companyId));
+      await service.updateMailSettings(req.body as never);
+      res.json(await service.getMailSettingsMasked());
     }),
   );
 
@@ -360,7 +344,7 @@ export function settingsRouter(
     validate(testSchema),
     asyncHandler(async (req, res) => {
       const { to } = req.body as z.infer<typeof testSchema>;
-      await service.sendTest(contextOf(req).companyId, to);
+      await service.sendTest(to);
       res.json({ ok: true });
     }),
   );

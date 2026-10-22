@@ -1,8 +1,6 @@
 import type { Db } from '../../common/prisma.js';
-import type { EmployeeScope } from '../../auth/authz/authorize.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { OffboardingReason, OffboardingStatus } from '../../generated/prisma/enums.js';
-import { viaEmployeeCompanyWhere, type CompanyFilter } from '../../workflow/company-filter.js';
 
 export class OffboardingRepository {
   constructor(private readonly db: Db) {}
@@ -16,11 +14,8 @@ export class OffboardingRepository {
     return this.db.offboarding.create({ data });
   }
 
-  /** With a scope, an offboarding whose employee sits outside it is simply not found. */
-  findById(id: string, scope?: EmployeeScope) {
-    return scope
-      ? this.db.offboarding.findFirst({ where: { id, employee: scope } })
-      : this.db.offboarding.findUnique({ where: { id } });
+  findById(id: string) {
+    return this.db.offboarding.findUnique({ where: { id } });
   }
 
   /** An employee may have at most one offboarding that is not closed/cancelled. */
@@ -31,9 +26,9 @@ export class OffboardingRepository {
   }
 
   /** SLA scan input: records sitting in `status` since before `threshold`. */
-  listInStatusSince(status: string, threshold: Date, limit = 500, company?: CompanyFilter) {
+  listInStatusSince(status: string, threshold: Date, limit = 500) {
     return this.db.offboarding.findMany({
-      where: { status: status as OffboardingStatus, updatedAt: { lt: threshold }, ...viaEmployeeCompanyWhere(company) },
+      where: { status: status as OffboardingStatus, updatedAt: { lt: threshold } },
       include: { employee: { select: { firstName: true, lastName: true } } },
       orderBy: { updatedAt: 'asc' },
       take: limit,

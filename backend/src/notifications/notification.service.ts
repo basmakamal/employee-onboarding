@@ -9,17 +9,6 @@ import { NotFoundError } from '../workflow/errors.js';
 interface EntityRef {
   entity: string;
   entityId: string;
-  /**
-   * The company the message belongs to, when the caller already knows it
-   * (the scheduler, a trigger). Otherwise it is looked up from the record.
-   */
-  companyId?: string | null;
-}
-
-/** Finds the company of a record; null company = the main company. */
-export interface CompanyLookup {
-  ofRef(ref: { entity: string; entityId: string } | undefined): Promise<string | null>;
-  orMain(companyId: string | null | undefined): Promise<string | null>;
 }
 
 /** Hands a persisted, ready-to-send email to the queue worker. */
@@ -37,8 +26,6 @@ export type RenderFn = (
   key: string,
   locale: Locale,
   params: TemplateParams,
-  /** Whose wording to use — each company edits its own templates. */
-  companyId: string | null,
 ) => Promise<RenderedMessage & { templateKey?: string; templateVersion?: number | null }>;
 
 const renderFromCode: RenderFn = (key, locale, params) =>
@@ -88,25 +75,7 @@ export class NotificationService {
     private readonly appUrl?: string,
     /** Responsible teams per status — absent means role broadcast only. */
     private readonly groups?: GroupLookup,
-    /** Which company a message belongs to — absent = no company (single-company setups, tests). */
-    private readonly companies?: CompanyLookup,
   ) {}
-
-  /**
-   * The company a message is about: given by the caller, or looked up from
-   * the record it references; anything without one belongs to the main
-   * company. It picks the template wording and the mail server.
-   */
-  private async companyFor(ref?: EntityRef): Promise<string | null> {
-    if (!this.companies) return ref?.companyId ?? null;
-    const known = ref?.companyId !== undefined ? ref.companyId : await this.companies.ofRef(ref);
-    return this.companies.orMain(known);
-  }
-
-  /** What a log row stores about the record (the company is a column of its own). */
-  private refFields(ref?: EntityRef) {
-    return ref ? { entity: ref.entity, entityId: ref.entityId } : {};
-  }
 
   /** The employee's file in the system, for staff-facing messages. */
   employeeLink(employeeId: string): string | undefined {
@@ -133,8 +102,7 @@ export class NotificationService {
     ref?: EntityRef,
     locale: Locale = 'ar',
   ): Promise<void> {
-    const companyId = await this.companyFor(ref);
-    const message = await this.render(templateKey, locale, params, companyId);
+    const message = await this.render(templateKey, locale, params);
     const row = await this.notifications.create({
       channel: 'EMAIL',
       recipientEmail: email,
@@ -143,53 +111,14 @@ export class NotificationService {
       body: message.text,
       templateKey: message.templateKey ?? templateKey,
       templateVersion: message.templateVersion ?? null,
-      companyId,
-      ...this.refFields(ref),
+      ...ref,
     });
     await this.deliver(row.id, {
       to: email,
       subject: message.subject,
       text: message.text,
-      companyId,
       ...(message.html ? { html: message.html } : {}),
     });
-  }
-
-  /**
-   * E-mail a document to an external person (a payslip to an employee) and
-   * return the log row, so the caller can follow the delivery. The file is
-   * attached at send time from storage.
-   */
-  async sendDocument(
-    email: string,
-    templateKey: string,
-    params: TemplateParams,
-    attachment: { filename: string; storageKey: string; contentType?: string },
-    ref?: EntityRef,
-    locale: Locale = 'ar',
-  ): Promise<{ id: string }> {
-    const companyId = await this.companyFor(ref);
-    const message = await this.render(templateKey, locale, params, companyId);
-    const row = await this.notifications.create({
-      channel: 'EMAIL',
-      recipientEmail: email,
-      locale,
-      subject: message.subject,
-      body: message.text,
-      templateKey: message.templateKey ?? templateKey,
-      templateVersion: message.templateVersion ?? null,
-      companyId,
-      ...this.refFields(ref),
-    });
-    await this.deliver(row.id, {
-      to: email,
-      subject: message.subject,
-      text: message.text,
-      companyId,
-      attachments: [attachment],
-      ...(message.html ? { html: message.html } : {}),
-    });
-    return { id: row.id };
   }
 
   /** Notify every active HR user: email + in-app bell entry. */
@@ -210,10 +139,8 @@ export class NotificationService {
     ref?: EntityRef,
     locale: Locale = 'ar',
   ): Promise<void> {
-    // Only the role's staff who work in the record's company.
-    const companyId = await this.companyFor(ref);
-    const staff = await this.users.listActiveByRole(role as never, companyId);
-    await this.fanOut(staff, templateKey, params, ref, locale, companyId);
+    const staff = await this.users.listActiveByRole(role as never);
+    await this.fanOut(staff, templateKey, params, ref, locale);
   }
 
   /**
@@ -229,14 +156,13 @@ export class NotificationService {
     ref?: EntityRef,
     locale: Locale = 'ar',
   ): Promise<void> {
-    const companyId = await this.companyFor(ref);
     const [group, owners] = await Promise.all([
-      this.users.listActiveByRole(role as never, companyId),
+      this.users.listActiveByRole(role as never),
       this.users.listActiveByIds(userIds),
     ]);
     const seen = new Set<string>();
     const staff = [...group, ...owners].filter((u) => !seen.has(u.id) && seen.add(u.id));
-    await this.fanOut(staff, templateKey, params, ref, locale, companyId);
+    await this.fanOut(staff, templateKey, params, ref, locale);
   }
 
   /**
@@ -306,16 +232,12 @@ export class NotificationService {
     params: TemplateParams,
     ref: EntityRef | undefined,
     locale: Locale,
-    /** Already resolved by the caller — saves a second lookup. */
-    knownCompanyId?: string | null,
   ): Promise<void> {
     if (staff.length === 0) return;
-    const companyId = knownCompanyId !== undefined ? knownCompanyId : await this.companyFor(ref);
-    const message = await this.render(templateKey, locale, this.withLinks(params, ref), companyId);
+    const message = await this.render(templateKey, locale, this.withLinks(params, ref));
     const stamp = {
       templateKey: message.templateKey ?? templateKey,
       templateVersion: message.templateVersion ?? null,
-      companyId,
     };
 
     for (const user of staff) {
@@ -326,7 +248,7 @@ export class NotificationService {
         subject: message.subject,
         body: message.text,
         ...stamp,
-        ...this.refFields(ref),
+        ...ref,
       });
       // Nudge the user's open browser tabs (SSE) — best-effort.
       this.onInApp?.(user.id);
@@ -339,13 +261,12 @@ export class NotificationService {
         subject: message.subject,
         body: message.text,
         ...stamp,
-        ...this.refFields(ref),
+        ...ref,
       });
       await this.deliver(emailRow.id, {
         to: user.email,
         subject: message.subject,
         text: message.text,
-        companyId,
         ...(message.html ? { html: message.html } : {}),
       });
     }
@@ -372,13 +293,11 @@ export class NotificationService {
       templateVersion: original.templateVersion,
       ...(original.entity ? { entity: original.entity } : {}),
       ...(original.entityId ? { entityId: original.entityId } : {}),
-      companyId: original.companyId,
     });
     await this.deliver(copy.id, {
       to: original.recipientEmail,
       subject: original.subject ?? '',
       text: original.body,
-      companyId: original.companyId,
     });
     return copy;
   }

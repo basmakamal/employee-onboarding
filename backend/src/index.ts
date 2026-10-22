@@ -5,10 +5,6 @@ import { createApp } from './app.js';
 import { buildContainer } from './container.js';
 import { startSlaScheduler } from './workflow/sla-scheduler.js';
 import { requireAuth } from './auth/require-auth.middleware.js';
-import { actorScope, COMPANY_SCOPED_PREFIXES, requireCompany, requirePermission } from './auth/authz/authorize.js';
-import { companyRouter } from './modules/companies/company.routes.js';
-import { orgRouter } from './modules/organisation/org.routes.js';
-import { assignmentsRouter, rolesRouter } from './auth/authz.routes.js';
 import { authRouter } from './auth/auth.routes.js';
 import { employeeRouter } from './modules/employees/employee.routes.js';
 import { assetRouter } from './modules/assets/asset.routes.js';
@@ -21,23 +17,9 @@ import { notificationRouter } from './notifications/notification.routes.js';
 import { emailTemplatesRouter, emailTriggersRouter } from './notifications/email-admin.routes.js';
 import { linkRouter } from './modules/employees/link.routes.js';
 import { aiRouter } from './ai/ai.routes.js';
-import { readinessRouter } from './modules/employees/readiness.routes.js';
-import { auditRouter } from './modules/audit/audit.routes.js';
-import { employeeScheduleRouter, workforceRouter } from './modules/workforce/workforce.routes.js';
-import { attendanceRouter, employeeAttendanceRouter } from './modules/workforce/attendance.routes.js';
-import { employeeLeaveRouter, leaveRouter } from './modules/workforce/leave.routes.js';
-import { approvalsRouter } from './modules/workforce/approvals.routes.js';
-import { employeeCompensationRouter, payrollSetupRouter } from './modules/payroll/compensation.routes.js';
-import { employeeLoanRouter, loanRouter } from './modules/payroll/loan.routes.js';
-import { payrollRunRouter } from './modules/payroll/payroll.routes.js';
-import { employeePayslipRouter, payslipRouter } from './modules/payroll/payslip.routes.js';
-import { workforceReportsRouter } from './modules/reports/workforce-reports.routes.js';
-import { registersRouter } from './modules/registers/registers.routes.js';
-import { employeeScopeGuard } from './modules/employees/employee-scope.guard.js';
-import { employmentHistoryRouter } from './modules/employees/employment-history.routes.js';
-import { listsRouter } from './modules/lists/lists.routes.js';
+import { listsRouter, publicListsRouter } from './modules/lists/lists.routes.js';
 import { asyncHandler } from './common/http.js';
-import { encryptExistingIbans } from './common/encrypt-existing.js';
+import { requireRole } from './auth/require-auth.middleware.js';
 import { statfsSync } from 'node:fs';
 import { closeQueues, getMailQueue, getSharedRedis, redisEnabled } from './common/queue.js';
 import { uploadRoot } from './common/storage.js';
@@ -52,95 +34,19 @@ void container.listService
   .ensureDefaults()
   .catch((err: unknown) => logger.error({ err }, 'list values could not be seeded'));
 
-// Bank details: encrypt IBANs stored before the key was set (idempotent).
-void encryptExistingIbans(container.prisma)
-  .then((n) => n > 0 && logger.info(`encrypted ${n} stored IBAN(s)`))
-  .catch((err: unknown) => logger.error({ err }, 'stored IBANs could not be encrypted'));
-
-// Employment history starts with an opening entry per employee (written once).
-void container.employmentHistory
-  .ensureOpenings()
-  .catch((err: unknown) => logger.error({ err }, 'employment history could not be opened'));
-
-// Every company runs its own automation: one without rules gets the defaults.
-void container.prisma.company
-  .findMany({ select: { id: true } })
-  .then((rows) => container.companyDefaults.ensureAll(rows.map((r) => r.id)))
-  .catch((err: unknown) => logger.error({ err }, 'default automation rules could not be created'));
-
 // Any active staff member may enter; ownership per status is enforced by
 // the state machines (roles on transitions) and per-route gates below.
 const staffApi = Router();
 staffApi.use(requireAuth(container.authService));
-// Global administration — the one HR-adjacent surface that works before a
-// company is selected (it is how a super admin gets one).
-staffApi.use('/companies', companyRouter(container.companyService));
-staffApi.use('/roles', rolesRouter(container.assignmentService));
-staffApi.use('/users/:id/assignments', assignmentsRouter(container.assignmentService));
-// Company-owned data refuses to answer without a selected workspace; it
-// never widens to "all companies".
-staffApi.use([...COMPANY_SCOPED_PREFIXES], requireCompany());
 const docRouters = employeeDocumentRouter({
   documents: container.repos.employeeDocuments,
   firings: container.repos.slaFirings,
   audit: container.repos.audit,
-  employees: container.repos.employees,
 });
 staffApi.use('/employees/:id/documents', docRouters.nested);
 staffApi.use('/employee-documents', docRouters.flat);
-// Every /employees/:id/... route: the employee must be in the selected company and the actor's scope.
-staffApi.use('/employees/:id', employeeScopeGuard(container.repos.employees));
-// Employment history first: `/employees/changes` must not be read as an employee id.
-staffApi.use('/employees', employmentHistoryRouter(container.employmentHistory));
-staffApi.use(
-  '/employees',
-  readinessRouter((id) =>
-    container.prisma.employee.findUnique({
-      where: { id },
-      select: {
-        status: true, hireDate: true, orgUnitId: true, positionId: true, managerId: true, nationalId: true, iban: true,
-        contract: { select: { status: true } },
-        companyId: true,
-      },
-    }).then(async (e) =>
-      e
-        ? {
-            ...e,
-            hasSchedule: e.companyId ? await container.scheduleService.hasScheduleToday(e.companyId, id) : false,
-            hasPay: e.companyId ? await container.compensationService.hasPayToday(e.companyId, id) : false,
-          }
-        : null,
-    ),
-  ),
-);
-// The audit trail of the selected company (read-only).
-staffApi.use('/audit', auditRouter(container.prisma));
-// Contracts / documents / offboardings across the company (scoped, paged).
-staffApi.use('/registers', registersRouter(container.prisma));
-// Work schedules: shifts, patterns, the team schedule; one person's schedule under /employees/:id.
-staffApi.use('/workforce', workforceRouter(container.scheduleService, container.prisma));
-staffApi.use('/employees', employeeScheduleRouter(container.scheduleService));
-// Attendance: the register, exception review, corrections and overtime to approve.
-staffApi.use('/attendance', attendanceRouter(container.attendanceService, container.prisma));
-staffApi.use('/employees', employeeAttendanceRouter(container.attendanceService));
-// Leave: types, requests to approve, and the Leave tab of the employee file.
-staffApi.use('/leave', leaveRouter(container.leaveService, container.prisma));
-staffApi.use('/employees', employeeLeaveRouter(container.leaveService));
-// One inbox for approvers: leave and overtime waiting for them.
-staffApi.use('/approvals', approvalsRouter(container.prisma));
-// Pay: components and payroll policy; the Pay tab of the employee file.
-staffApi.use('/payroll', payrollSetupRouter(container.compensationService));
-staffApi.use('/employees', employeeCompensationRouter(container.compensationService));
-staffApi.use('/payroll', loanRouter(container.loanService));
-staffApi.use('/payroll', payrollRunRouter(container.payrollService));
-staffApi.use('/payroll', payslipRouter(container.payslipService));
-staffApi.use('/employees', employeePayslipRouter(container.payslipService));
-// Attendance, leave and payroll reports.
-staffApi.use('/hr-reports', workforceReportsRouter(container.workforceReports));
-staffApi.use('/employees', employeeLoanRouter(container.loanService));
 staffApi.use('/employees', employeeRouter(container.employeeService, container.onboardingService));
 staffApi.use('/offboardings', offboardingRouter(container.offboardingService));
-staffApi.use('/org', orgRouter(container.orgService));
 staffApi.use('/reports', reportsRouter(container.reportsService));
 staffApi.use(
   '/settings',
@@ -151,15 +57,14 @@ staffApi.use(
     container.repos.holidays,
     container.responsibilityService,
     container.repos.notificationGroups,
-    {
-      exists: async (companyId: string, id: string) =>
-        !!(await container.prisma.orgUnit.findFirst({ where: { id, companyId }, select: { id: true } })),
-    },
   ),
 );
 staffApi.use('/users', usersRouter(container.repos.users, container.notifications, config.APP_URL));
 staffApi.use('/lists', listsRouter(container.listService));
 
+// No sign-in: the data form's dropdowns.
+const publicApi = Router();
+publicApi.use('/lists', publicListsRouter(container.listService));
 staffApi.use(
   '/notifications',
   notificationRouter(container.repos.notificationRepo, container.notifications),
@@ -173,14 +78,14 @@ staffApi.use(
 staffApi.use('/email-triggers', emailTriggersRouter(container.triggerService));
 staffApi.get(
   '/dashboard',
-  asyncHandler(async (req, res) => {
-    res.json(await container.dashboardService.summary(actorScope(req.actor)));
+  asyncHandler(async (_req, res) => {
+    res.json(await container.dashboardService.summary());
   }),
 );
 /** Queue visibility for admins (feeds the phase-6 health dashboard). */
 staffApi.get(
   '/admin/queues',
-  requirePermission('settings.manage'),
+  requireRole('ADMIN'),
   asyncHandler(async (_req, res) => {
     if (!redisEnabled) {
       res.json({ enabled: false });
@@ -199,7 +104,7 @@ staffApi.get(
 /** One health snapshot for admins: DB, Redis, queues, disk, table growth. */
 staffApi.get(
   '/admin/health',
-  requirePermission('settings.manage'),
+  requireRole('ADMIN'),
   asyncHandler(async (_req, res) => {
     const t0 = Date.now();
     const db = await container.prisma
@@ -219,17 +124,11 @@ staffApi.get(
     }
 
     // Growth of the unbounded tables — what retention keeps in check.
-    const weekAgo = new Date(Date.now() - 7 * 86_400_000);
-    const [auditLogs, notifications, slaFirings, linkTokens, lastRun, failedEmails, pendingEmails, failedChanges] = await Promise.all([
+    const [auditLogs, notifications, slaFirings, linkTokens] = await Promise.all([
       container.prisma.auditLog.count(),
       container.prisma.notification.count(),
       container.prisma.slaFiring.count(),
       container.prisma.linkToken.count(),
-      // The automation engine marks what it writes (see request-context).
-      container.prisma.auditLog.findFirst({ where: { source: 'SCHEDULER' }, orderBy: { at: 'desc' }, select: { at: true } }),
-      container.prisma.notification.count({ where: { channel: 'EMAIL', status: 'FAILED', createdAt: { gte: weekAgo } } }),
-      container.prisma.notification.count({ where: { channel: 'EMAIL', status: 'PENDING', createdAt: { lt: new Date(Date.now() - 15 * 60_000) } } }),
-      container.prisma.employmentEvent.count({ where: { status: 'FAILED' } }),
     ]);
 
     let disk: { totalGb: number; freeGb: number; usedPct: number } | null = null;
@@ -251,15 +150,6 @@ staffApi.get(
       redis: redisEnabled ? redis : { up: false, configured: false },
       queues: { mail },
       tables: { auditLogs, notifications, slaFirings, linkTokens },
-      jobs: {
-        /** When the automation last wrote anything (a reminder, an expiry, a dated change). */
-        lastAutomationActivity: lastRun?.at ?? null,
-        failedEmailsLast7Days: failedEmails,
-        /** Waiting more than 15 minutes — the mail queue or worker may be down. */
-        stuckEmails: pendingEmails,
-        failedScheduledChanges: failedChanges,
-        mode: redisEnabled ? 'worker' : 'inline',
-      },
       storage: disk,
       uptimeSeconds: Math.round(process.uptime()),
     });
@@ -311,13 +201,12 @@ const app = createApp({
   },
   authRouter: authRouter(container.authService),
   staffRouter: staffApi,
-  ...(config.API_DOCS ? { docs: { title: 'HR System', version: process.env['npm_package_version'] ?? '1.0.0' } } : {}),
+  publicRouter: publicApi,
   linkRouter: linkRouter(
     container.onboardingService,
     container.assetService,
     container.offboardingService,
     container.linkTokenService,
-    container.listService,
   ),
 });
 

@@ -17,20 +17,20 @@ const EVENT: TransitionEvent = {
 
 function row(body: string) {
   return {
-    companyId: 'co-a', key: 'custom.form-nudge', name: 'Form nudge', audience: 'employee', active: true, version: 1,
+    key: 'custom.form-nudge', name: 'Form nudge', audience: 'employee', active: true, version: 1,
     subjectAr: 'نموذجك', subjectEn: 'Your form', bodyAr: body, bodyEn: body, ctaLabelAr: null, ctaLabelEn: null,
   };
 }
 
 function setup(body: string) {
   const trigger = {
-    id: 't1', companyId: 'co-a', processKey: 'EMPLOYEE', status: 'AWAITING_FORM', templateKey: 'custom.form-nudge',
+    id: 't1', processKey: 'EMPLOYEE', status: 'AWAITING_FORM', templateKey: 'custom.form-nudge',
     recipient: 'SUBJECT', role: null, active: true, ccEmails: 'hr@riyada-ksa.com',
   };
   const prisma = {
     emailTrigger: { findMany: vi.fn().mockResolvedValue([trigger]) },
     emailTemplate: { findMany: vi.fn().mockResolvedValue([row(body)]) },
-    employee: { findUnique: vi.fn().mockResolvedValue({ companyId: 'co-a', firstName: 'Sara', lastName: 'Ali', email: 's@x.com' }) },
+    employee: { findUnique: vi.fn().mockResolvedValue({ firstName: 'Sara', lastName: 'Ali', email: 's@x.com' }) },
   };
   const templates = new TemplateService(prisma as unknown as PrismaClient, 'https://hr.example');
   const notifications = { notifyExternal: vi.fn().mockResolvedValue(undefined) };
@@ -47,7 +47,7 @@ function setup(body: string) {
 describe('{{formLink}} in custom templates', () => {
   it('is offered to the editor and turns the CTA button on', async () => {
     const { templates } = setup('Please open {{formLink}} and complete your data.');
-    const detail = await templates.get('co-a', 'custom.form-nudge');
+    const detail = await templates.get('custom.form-nudge');
     expect(detail.placeholders.map((p) => p.key)).toContain('formLink');
     expect(detail.meta.hasCta).toBe(true);
   });
@@ -64,7 +64,7 @@ describe('{{formLink}} in custom templates', () => {
 
   it('renders the link inline and as the button', async () => {
     const { templates } = setup('Open {{formLink}} please.');
-    const out = await templates.render('custom.form-nudge', 'en', { name: 'Sara', formLink: 'https://hr.example/form/tok123', linkUrl: 'https://hr.example/form/tok123' }, 'co-a');
+    const out = await templates.render('custom.form-nudge', 'en', { name: 'Sara', formLink: 'https://hr.example/form/tok123', linkUrl: 'https://hr.example/form/tok123' });
     expect(out.text).toContain('Open https://hr.example/form/tok123 please.');
     expect(out.html).toContain('https://hr.example/form/tok123');
   });

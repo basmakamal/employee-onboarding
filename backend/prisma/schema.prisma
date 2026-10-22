@@ -15,16 +15,14 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 /// Staff role groups — each workflow status is owned by a group (machine
-/// transitions declare `roles`); ADMIN overrides everything. Candidates act
-/// through signed link tokens; an employee may additionally get a
-/// self-service account (EMPLOYEE), which only ever sees its own record.
+/// transitions declare `roles`); ADMIN overrides everything. Trainees and
+/// employees are NOT users — they act through signed link tokens.
 enum Role {
   HR // trainee stage, criminal record, offboarding flow
   INSURANCE // GOSI + medical insurance cards
   IT // asset registry + custody forms
   FINANCE // final settlement + file closure
   ADMIN
-  EMPLOYEE // self-service account of one employee — never reaches the staff API
 }
 
 /// One lifecycle for the whole journey (BRD stages 1–3): the onboarding
@@ -191,178 +189,13 @@ enum NotificationStatus {
 // Staff
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Companies and organisation (multi-company platform, Oct 2026)
-// ---------------------------------------------------------------------------
-
-/// A tenant. Every HR record belongs to exactly one company — directly
-/// (employees, org units, positions, assets) or through its employee.
-model Company {
-  id        String   @id @default(cuid())
-  /// Short stable handle, e.g. RIYADA — used in reports and the switcher.
-  code      String   @unique
-  nameAr    String
-  nameEn    String
-  active    Boolean  @default(true)
-  /// IANA time zone (e.g. Asia/Riyadh) — which local day a punch, a leave day or a deadline falls on.
-  timezone  String   @default("Asia/Riyadh")
-  /// The company manager (a staff account). Setting it maintains a
-  /// COMPANY_MANAGER assignment, so the person's login sees this company.
-  manager   User?    @relation("CompanyManager", fields: [managerId], references: [id], onDelete: SetNull)
-  managerId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  employees        Employee[]
-  orgUnits         OrgUnit[]
-  positions        Position[]
-  assets           Asset[]
-  listValues       ListValue[]
-  slaRules         SlaRule[]
-  holidays         Holiday[]
-  emailTemplates   EmailTemplate[]
-  emailTriggers    EmailTrigger[]
-  settings         Setting[]
-  employmentEvents EmploymentEvent[]
-  shifts           ShiftDefinition[]
-  shiftPatterns    ShiftPattern[]
-  shiftAssignments ShiftAssignment[]
-  attendanceEvents AttendanceEvent[]
-  attendanceDays   AttendanceDay[]
-  overtimeRequests OvertimeRequest[]
-  leaveTypes       LeaveType[]
-  leaveRequests    LeaveRequest[]
-  leaveLedger      LeaveLedgerEntry[]
-  payComponents    PayComponent[]
-  compensations    EmployeeCompensation[]
-  payrollPolicies  PayrollPolicy[]
-  loans            EmployeeLoan[]
-  oneTimePayments  OneTimePayment[]
-  payrollRuns      PayrollRun[]
-  payslips         Payslip[]
-  payslipSetting   PayslipSetting?
-  auditLogs        AuditLog[]
-  notifications    Notification[]
-  assignments      UserAssignment[]
-  activeFor        User[]                 @relation("ActiveCompany")
-
-  @@map("companies")
-}
-
-/// One table for the whole hierarchy: branches / locations and the
-/// department tree under them (a former "team" is simply a child
-/// department). `type` is a code from the ORG_UNIT_TYPE list, so a company
-/// that has no branches simply never creates one, and a new level later is
-/// a list value, not a migration. `path` is the materialised ancestry
-/// ("/a/b/c/") — "this unit and everything under it" is one indexed prefix
-/// match, and a cycle is impossible to express. The unit's manager (a staff
-/// account) gets a UNIT_MANAGER assignment for exactly that subtree.
-model OrgUnit {
-  id        String    @id @default(cuid())
-  company   Company   @relation(fields: [companyId], references: [id])
-  companyId String
-  parent    OrgUnit?  @relation("OrgUnitTree", fields: [parentId], references: [id])
-  parentId  String?
-  children  OrgUnit[] @relation("OrgUnitTree")
-  type      String
-  code      String
-  nameAr    String
-  nameEn    String
-  path      String
-  depth     Int       @default(0)
-  active    Boolean   @default(true)
-  manager   User?     @relation("OrgUnitManager", fields: [managerId], references: [id], onDelete: SetNull)
-  managerId String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  employees Employee[]
-
-  @@unique([companyId, code])
-  @@index([companyId, parentId])
-  @@index([companyId, path])
-  @@index([companyId, type, active])
-  @@map("org_units")
-}
-
-/// Job titles — an independent master per company. A title belongs to no
-/// department: the department link is made on the employee, so one title
-/// (e.g. Team Leader) serves every department.
-model Position {
-  id        String   @id @default(cuid())
-  company   Company  @relation(fields: [companyId], references: [id])
-  companyId String
-  code      String
-  titleAr   String
-  titleEn   String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  employees Employee[]
-
-  @@unique([companyId, code])
-  @@index([companyId, active])
-  @@map("positions")
-}
-
-/// A role bundles permission codes (see src/auth/authz/permissions.ts).
-/// Rows marked `system` are seeded and cannot be deleted, only re-bundled.
-model RoleDefinition {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  nameAr    String
-  nameEn    String
-  /// GLOBAL | COMPANY | UNIT — where the role is meant to be assigned (guides the admin UI).
-  level     String   @default("COMPANY")
-  system    Boolean  @default(false)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  permissions RolePermission[]
-  assignments UserAssignment[]
-
-  @@map("roles")
-}
-
-model RolePermission {
-  id         String         @id @default(cuid())
-  role       RoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  roleId     String
-  permission String
-
-  @@unique([roleId, permission])
-  @@map("role_permissions")
-}
-
-/// "User U holds role R in scope S." Scope: both NULL = global (super admin);
-/// companyId only = the whole company; companyId + orgUnitId = that unit and
-/// its descendants. Effective access = the union of a user's assignments.
-model UserAssignment {
-  id          String         @id @default(cuid())
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String
-  role        RoleDefinition @relation(fields: [roleId], references: [id])
-  roleId      String
-  company     Company?       @relation(fields: [companyId], references: [id])
-  companyId   String?
-  orgUnitId   String?
-  createdAt   DateTime       @default(now())
-  createdById String?
-
-  @@index([userId])
-  @@index([companyId, roleId])
-  @@map("user_assignments")
-}
-
 model User {
-  id                 String    @id @default(cuid())
-  email              String    @unique
-  name               String
-  role               Role
-  passwordHash       String? // set in Phase F (auth)
-  active             Boolean   @default(true)
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         Role
+  passwordHash String? // set in Phase F (auth)
+  active       Boolean  @default(true)
   /// Invitation flow: true until the person signs in and sets their own password.
   mustChangePassword Boolean   @default(false)
   invitedAt          DateTime?
@@ -370,29 +203,16 @@ model User {
   lastLoginAt        DateTime?
   /// Storage key of the staff member's own profile picture.
   photoKey           String?
-  /// The company workspace this user is working in. Set by the company
-  /// selector, re-validated against assignments on every request — it is a
-  /// context, never a proof of authorisation.
-  activeCompany      Company?  @relation("ActiveCompany", fields: [activeCompanyId], references: [id])
-  activeCompanyId    String?
-  /// Set for a self-service account (role EMPLOYEE): the one employee record it may see.
-  employee           Employee? @relation("EmployeeAccount", fields: [employeeId], references: [id], onDelete: SetNull)
-  employeeId         String?   @unique
-  createdAt          DateTime  @default(now())
+  createdAt    DateTime @default(now())
 
-  assignments              UserAssignment[]
-  managedCompanies         Company[]                 @relation("CompanyManager")
-  managedUnits             OrgUnit[]                 @relation("OrgUnitManager")
-  employeesCreated         Employee[]                @relation("EmployeeCreatedBy")
-  contractsCreated         Contract[]
-  assetFormsCreated        AssetForm[]
-  offboardingRequests      Offboarding[]             @relation("OffboardingRequestedBy")
-  auditEntries             AuditLog[]
-  notifications            Notification[]
-  employeeRequests         EmployeeRequest[]
-  groupMemberships         NotificationGroupMember[]
-  employmentEventsCreated  EmploymentEvent[]         @relation("EmploymentEventCreatedBy")
-  employmentEventsApproved EmploymentEvent[]         @relation("EmploymentEventApprovedBy")
+  employeesCreated    Employee[]    @relation("EmployeeCreatedBy")
+  contractsCreated    Contract[]
+  assetFormsCreated   AssetForm[]
+  offboardingRequests Offboarding[] @relation("OffboardingRequestedBy")
+  auditEntries        AuditLog[]
+  notifications       Notification[]
+  employeeRequests    EmployeeRequest[]
+  groupMemberships    NotificationGroupMember[]
 
   @@map("users")
 }
@@ -402,61 +222,48 @@ model User {
 // ---------------------------------------------------------------------------
 
 model Employee {
-  id                    String          @id @default(cuid())
+  id             String         @id @default(cuid())
   /// e.g. EMP-0001 — allocated when the employee becomes ACTIVE, never before.
-  employeeNo            String?         @unique
+  employeeNo     String?        @unique
   /// الاسم الرباعي — kept as four parts because contracts, GOSI and Absher
   /// all expect them separately, and splitting a single string later is
   /// guesswork. firstName/lastName remain the display pair.
-  firstName             String
-  fatherName            String?
-  grandfatherName       String?
-  lastName              String
-  email                 String
-  phone                 String?
-  nationalId            String?
+  firstName        String
+  fatherName       String?
+  grandfatherName  String?
+  lastName         String
+  email            String         @unique
+  phone            String?
+  nationalId       String?
   /// Gregorian — the value every downstream system (contract, GOSI) needs.
-  birthDate             DateTime?
+  birthDate        DateTime?
   /// The Hijri date the employee actually entered, kept verbatim (e.g.
   /// 1400-05-12) so what HR reads back matches what was typed. birthDate is
   /// the converted equivalent; this is the source of truth for display.
-  birthDateHijri        String?
-  gender                Gender?
-  nationality           String?
-  maritalStatus         MaritalStatus?
+  birthDateHijri   String?
+  gender           Gender?
+  nationality      String?
+  maritalStatus    MaritalStatus?
   /// العنوان الوطني المختصر (سبل) — 4 letters + 4 digits, e.g. RRRD2929.
-  splAddress            String?
+  splAddress       String?
   /// Saudi IBAN: SA + 22 digits. Validated with the mod-97 checksum on entry
   /// so a mistyped digit surfaces at the form, not at payroll.
-  iban                  String?
-  qualification         EducationLevel?
-  major                 String?
+  iban             String?
+  qualification    EducationLevel?
+  major            String?
   emergencyContactName  String?
   emergencyContactPhone String?
-  /// Legacy free-text placement — read-only mirrors until the org tables
-  /// carry every record (dropped in the final multi-company phase).
-  department            String?
-  project               String?
-  jobTitle              String?
-  directManager         String?
-  /// Nullable only until the legacy mapping has run everywhere; services
-  /// always set it, and scoped queries never match a NULL.
-  company               Company?        @relation(fields: [companyId], references: [id])
-  companyId             String?
-  orgUnit               OrgUnit?        @relation(fields: [orgUnitId], references: [id])
-  orgUnitId             String?
-  position              Position?       @relation(fields: [positionId], references: [id])
-  positionId            String?
-  manager               Employee?       @relation("EmployeeManager", fields: [managerId], references: [id])
-  managerId             String?
-  reports               Employee[]      @relation("EmployeeManager")
-  employmentType        EmploymentType  @default(FULL_TIME)
+  department     String?
+  project        String?
+  jobTitle       String?
+  directManager  String?
+  employmentType EmploymentType @default(FULL_TIME)
   /// Language of every email this person receives (set at creation, confirmed by the data form).
-  preferredLanguage     Language        @default(AR)
-  photoKey              String? // storage key of the profile photo (UPLOAD_DIR)
+  preferredLanguage Language @default(AR)
+  photoKey       String? // storage key of the profile photo (UPLOAD_DIR)
   /// Set on activation (contract approval or direct add of existing staff).
-  hireDate              DateTime?
-  status                EmployeeStatus  @default(CREATED)
+  hireDate       DateTime?
+  status         EmployeeStatus @default(CREATED)
 
   /// SLA anchor: every transition updates this; the scheduler measures from it.
   statusChangedAt DateTime @default(now())
@@ -467,44 +274,22 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  documents        OnboardingDocument[]
-  contract         Contract?
-  gosi             GosiProcess?
-  medical          MedicalInsuranceProcess?
-  criminalRecord   CriminalRecordProcess?
-  assetForms       AssetForm[]
-  offboardings     Offboarding[]
-  linkTokens       LinkToken[]
-  expiryDocuments  EmployeeDocument[]
-  requests         EmployeeRequest[]
-  employmentEvents EmploymentEvent[]
-  /// The employee's own sign-in (self-service), when HR has created one.
-  account          User?                    @relation("EmployeeAccount")
-  /// Work schedules over time (effective-dated; temporary ones override).
-  shiftAssignments ShiftAssignment[]
-  /// Raw punches (never edited) and the day-by-day result against the schedule.
-  attendanceEvents AttendanceEvent[]
-  attendanceDays   AttendanceDay[]
-  overtimeRequests OvertimeRequest[]
-  leaveRequests    LeaveRequest[]
-  leaveLedger      LeaveLedgerEntry[]
-  /// Pay over time (effective-dated versions; only payroll/HR permissions see it).
-  compensations    EmployeeCompensation[]
-  loans            EmployeeLoan[]
-  oneTimePayments  OneTimePayment[]
-  payrollLines     PayrollLine[]
-  payslips         Payslip[]
-  auditLogs        AuditLog[]               @relation("EmployeeAudit")
+  documents       OnboardingDocument[]
+  contract        Contract?
+  gosi            GosiProcess?
+  medical         MedicalInsuranceProcess?
+  criminalRecord  CriminalRecordProcess?
+  assetForms      AssetForm[]
+  offboardings    Offboarding[]
+  linkTokens      LinkToken[]
+  expiryDocuments EmployeeDocument[]
+  requests        EmployeeRequest[]
+  auditLogs       AuditLog[]               @relation("EmployeeAudit")
 
   /// (status, statusChangedAt) serves both the status filters and the SLA
   /// scan "in status X for longer than Y"; createdAt serves the list sort.
-  @@unique([companyId, email])
   @@index([status, statusChangedAt])
   @@index([createdAt])
-  /// Every scoped list / count / SLA scan starts from the company.
-  @@index([companyId, status, statusChangedAt])
-  @@index([companyId, orgUnitId])
-  @@index([companyId, createdAt])
   @@map("employees")
 }
 
@@ -537,23 +322,23 @@ enum ContractStatus {
 }
 
 model Contract {
-  id              String         @id @default(cuid())
+  id          String    @id @default(cuid())
   /// Set by HR by hand — the contract itself lives on an external platform.
   status          ContractStatus @default(DRAFT)
   statusChangedAt DateTime       @default(now())
   rejectReason    String?
   /// Reference number on the external contracting platform (optional).
   externalRef     String?
-  employee        Employee       @relation(fields: [employeeId], references: [id])
-  employeeId      String         @unique
-  createdBy       User           @relation(fields: [createdById], references: [id])
-  createdById     String
-  storageKey      String? // generated/uploaded contract document
-  details         Json? // salary, duration, terms
-  sentAt          DateTime?
-  approvedAt      DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  employeeId  String    @unique
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdById String
+  storageKey  String? // generated/uploaded contract document
+  details     Json? // salary, duration, terms
+  sentAt      DateTime?
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@map("contracts")
 }
@@ -580,16 +365,16 @@ model EmployeeRequest {
 }
 
 model GosiProcess {
-  id                    String          @id @default(cuid())
-  employee              Employee        @relation(fields: [employeeId], references: [id])
-  employeeId            String          @unique
-  status                ProcessStatus   @default(PENDING)
-  holdReason            GosiHoldReason?
-  holdNote              String?
+  id         String          @id @default(cuid())
+  employee   Employee        @relation(fields: [employeeId], references: [id])
+  employeeId String          @unique
+  status     ProcessStatus   @default(PENDING)
+  holdReason GosiHoldReason?
+  holdNote   String?
   /// Proof document attached when the card is completed.
   certificateStorageKey String?
-  updatedAt             DateTime        @updatedAt
-  createdAt             DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  createdAt  DateTime        @default(now())
 
   /// SLA scan + dashboard groupBy both filter/aggregate on status.
   @@index([status, updatedAt])
@@ -597,16 +382,16 @@ model GosiProcess {
 }
 
 model MedicalInsuranceProcess {
-  id                    String             @id @default(cuid())
-  employee              Employee           @relation(fields: [employeeId], references: [id])
-  employeeId            String             @unique
-  status                ProcessStatus      @default(PENDING)
-  holdReason            MedicalHoldReason?
-  holdNote              String?
+  id         String             @id @default(cuid())
+  employee   Employee           @relation(fields: [employeeId], references: [id])
+  employeeId String             @unique
+  status     ProcessStatus      @default(PENDING)
+  holdReason MedicalHoldReason?
+  holdNote   String?
   /// Proof document attached when the card is completed.
   certificateStorageKey String?
-  updatedAt             DateTime           @updatedAt
-  createdAt             DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  createdAt  DateTime           @default(now())
 
   /// SLA scan + dashboard groupBy both filter/aggregate on status.
   @@index([status, updatedAt])
@@ -633,19 +418,15 @@ model CriminalRecordProcess {
 /// (cables, accessories) may have no serial.
 model Asset {
   id           String   @id @default(cuid())
-  company      Company? @relation(fields: [companyId], references: [id])
-  companyId    String?
   type         String // e.g. LAPTOP, HEADPHONE, PHONE, ACCESS_CARD
   name         String
-  serialNumber String?
+  serialNumber String?  @unique
   notes        String?
   createdAt    DateTime @default(now())
 
   formItems AssetFormItem[]
 
-  @@unique([companyId, serialNumber])
   @@index([type])
-  @@index([companyId, type])
   @@map("assets")
 }
 
@@ -746,36 +527,28 @@ model Offboarding {
 /// evaluates active rules against records sitting in `status` for longer
 /// than `afterValue afterUnit` (measured from statusChangedAt).
 model SlaRule {
-  id                 String    @id @default(cuid())
-  /// Every company runs its own automation: its rules watch only its records.
-  company            Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId          String
-  processKey         String    @default("EMPLOYEE") // which state machine this targets
-  status             String // the status the record must be in
-  afterValue         Int
-  afterUnit          SlaUnit
-  action             SlaAction
-  notifySubject      Boolean   @default(true) // the employee / new hire
-  notifyHr           Boolean   @default(true) // legacy flag; notifyRole is the target
-  /**
-   * Staff group that receives the reminder.
-   */
-  notifyRole         String    @default("HR")
-  /**
-   * ESCALATE only: the higher group that gets the escalation.
-   */
-  escalateToRole     String?
+  id            String    @id @default(cuid())
+  processKey    String    @default("EMPLOYEE") // which state machine this targets
+  status        String // the status the record must be in
+  afterValue    Int
+  afterUnit     SlaUnit
+  action        SlaAction
+  notifySubject Boolean   @default(true) // the employee / new hire
+  notifyHr      Boolean   @default(true) // legacy flag; notifyRole is the target
+  /** Staff group that receives the reminder. */
+  notifyRole    String    @default("HR")
+  /** ESCALATE only: the higher group that gets the escalation. */
+  escalateToRole String?
   /// Optional template overrides; null = the watcher's built-in choice.
   subjectTemplateKey String?
   staffTemplateKey   String?
   /// Extra recipients (comma-separated) who get a copy of every staff message from this rule.
-  ccEmails           String?
-  active             Boolean   @default(true)
-  createdAt          DateTime  @default(now())
+  ccEmails      String?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
 
   firings SlaFiring[]
 
-  @@index([companyId, processKey, status, active])
   @@index([processKey, status, active])
   @@map("sla_rules")
 }
@@ -796,16 +569,10 @@ model SlaFiring {
 
 /// Public holidays — excluded (with Fri/Sat weekends) from working-day math.
 model Holiday {
-  id        String   @id @default(cuid())
-  /// Each company keeps its own calendar.
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId String
-  date      DateTime @db.Date
-  name      String
-  /// Optional: the holiday applies only to this branch / unit and the units under it.
-  orgUnitId String?
+  id   String   @id @default(cuid())
+  date DateTime @unique @db.Date
+  name String
 
-  @@unique([companyId, date, orgUnitId])
   @@map("holidays")
 }
 
@@ -814,11 +581,7 @@ model Holiday {
 /// keeps the edit on file but falls back to the default. `version` climbs on
 /// every save and is stamped onto each notification sent from it.
 model EmailTemplate {
-  id          String   @id @default(cuid())
-  /// Each company words its own e-mails; the key is unique within a company.
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId   String
-  key         String
+  key         String   @id
   name        String
   subjectAr   String
   subjectEn   String
@@ -833,7 +596,6 @@ model EmailTemplate {
   updatedAt   DateTime @updatedAt
   updatedById String?
 
-  @@unique([companyId, key])
   @@map("email_templates")
 }
 
@@ -847,9 +609,6 @@ enum TriggerRecipient {
 /// after the transition's transaction commits.
 model EmailTrigger {
   id          String           @id @default(cuid())
-  /// A trigger fires only for records of its own company.
-  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId   String
   processKey  String
   status      String
   templateKey String
@@ -863,7 +622,7 @@ model EmailTrigger {
   /// Extra recipients (comma-separated) — e.g. an admin checking the wording. Each gets its own copy.
   ccEmails    String?
 
-  @@index([companyId, processKey, status, active])
+  @@index([processKey, status, active])
   @@map("email_triggers")
 }
 
@@ -880,15 +639,10 @@ model Sequence {
 
 /// Admin-editable system settings (JSON values keyed by area, e.g. "mail").
 model Setting {
-  id        String   @id @default(cuid())
-  /// Mail server, weekend days… are kept per company.
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId String
-  key       String
+  key       String   @id
   value     String   @db.Text
   updatedAt DateTime @updatedAt
 
-  @@unique([companyId, key])
   @@map("settings")
 }
 
@@ -962,31 +716,27 @@ model NotificationGroupAssignment {
 // ---------------------------------------------------------------------------
 
 model Notification {
-  id              String              @id @default(cuid())
-  channel         NotificationChannel
-  status          NotificationStatus  @default(PENDING)
+  id             String              @id @default(cuid())
+  channel        NotificationChannel
+  status         NotificationStatus  @default(PENDING)
   /// Staff recipient (in-app + email) …
-  recipient       User?               @relation(fields: [recipientUserId], references: [id])
+  recipient      User?               @relation(fields: [recipientUserId], references: [id])
   recipientUserId String?
   /// … or external recipient (trainee/employee) by email.
-  recipientEmail  String?
-  locale          String              @default("ar")
-  subject         String?
-  body            String              @db.Text
-  entity          String? // e.g. TRAINEE, ASSET_FORM — for deep links
-  entityId        String?
+  recipientEmail String?
+  locale         String              @default("ar")
+  subject        String?
+  body           String              @db.Text
+  entity         String? // e.g. TRAINEE, ASSET_FORM — for deep links
+  entityId       String?
   /// Which template produced this message, and which version of it — so the
   /// history stays truthful after an admin edits the template.
   templateKey     String?
   templateVersion Int?
-  sentAt          DateTime?
-  readAt          DateTime? // in-app read marker
-  /// The company the message is about (NULL for system / global mail) — the e-mail log is scoped by it.
-  company         Company?            @relation(fields: [companyId], references: [id])
-  companyId       String?
-  createdAt       DateTime            @default(now())
+  sentAt         DateTime?
+  readAt         DateTime? // in-app read marker
+  createdAt      DateTime            @default(now())
 
-  @@index([companyId, createdAt])
   @@index([recipientUserId, readAt])
   /// The bell fetches "my latest N" — recipient + recency.
   @@index([recipientUserId, createdAt])
@@ -1052,24 +802,14 @@ model AuditLog {
   /// Optional anchor so a record's full timeline is one indexed query.
   employee   Employee? @relation("EmployeeAudit", fields: [employeeId], references: [id])
   employeeId String?
-  /// Denormalised from the record so scoped timelines and exports never join; NULL for global admin actions.
-  company    Company?  @relation(fields: [companyId], references: [id])
-  companyId  String?
 
-  metadata  Json?
-  /// Field-level before / after for edits: { field: { from, to } } (sensitive values masked).
-  changes   Json?
-  /// WEB | LINK | SCHEDULER | SYSTEM — where the action came from.
-  source    String?
-  /// The request (or scheduler run) that caused it — ties several entries to one action.
-  requestId String?
-  at        DateTime @default(now())
+  metadata Json?
+  at       DateTime @default(now())
 
   @@index([entity, entityId])
   @@index([employeeId, at])
   /// Time-bounded exports and "latest activity" both order by at alone.
   @@index([at])
-  @@index([companyId, at])
   @@map("audit_logs")
 }
 
@@ -1079,9 +819,6 @@ model AuditLog {
 /// (only labels and order change); free lists grow as staff type new values.
 model ListValue {
   id        String   @id @default(cuid())
-  /// Every company owns its own copy of every list (seeded from the catalogue).
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId String
   list      String
   code      String
   labelAr   String
@@ -1093,705 +830,7 @@ model ListValue {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([companyId, list, code])
-  @@index([companyId, list, active, sortOrder])
+  @@unique([list, code])
+  @@index([list, active, sortOrder])
   @@map("list_values")
-}
-
-/// Employment history — WHAT changed in someone's employment and WHEN it took
-/// effect (a transfer, a promotion, a new manager, a status change). This is
-/// business history: the audit log records who pressed which button; this
-/// table answers "where did this person work on 1 March?". Rows are never
-/// overwritten: a future-dated change waits as SCHEDULED and is applied on
-/// its date; a change of mind is CANCELLED, not deleted.
-model EmploymentEvent {
-  id            String    @id @default(cuid())
-  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String
-  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId    String
-  /// OPENING | ORG_UNIT | POSITION | MANAGER | STATUS | EMPLOYMENT_TYPE | HIRE_DATE
-  category      String
-  /// Snapshots ({ id?, code?, ar?, en? }) so the history still reads right after a unit is renamed or removed.
-  oldValue      Json?
-  newValue      Json?
-  /// The local (company time zone) date the change takes effect.
-  effectiveDate DateTime  @db.Date
-  /// SCHEDULED → APPLIED, or CANCELLED / FAILED.
-  status        String    @default("APPLIED")
-  appliedAt     DateTime?
-  /// The rows of one change (unit + title + manager together) share a batch id.
-  batchId       String
-  reason        String?   @db.Text
-  /// Why a scheduled change could not be applied (unit closed, title inactive…).
-  failReason    String?
-  createdBy     User?     @relation("EmploymentEventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdById   String?
-  approvedBy    User?     @relation("EmploymentEventApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
-  approvedById  String?
-  approvedAt    DateTime?
-  recordedAt    DateTime  @default(now())
-
-  @@index([companyId, employeeId, effectiveDate])
-  @@index([companyId, status, effectiveDate])
-  @@index([batchId])
-  @@map("employment_events")
-}
-
-/// A reusable shift: when work starts and ends (company local time), the
-/// unpaid break and the lateness grace. An end at or before the start means
-/// the shift runs past midnight (e.g. 22:00 → 06:00). FLEXIBLE shifts give a
-/// window inside which `requiredMinutes` must be worked.
-model ShiftDefinition {
-  id              String   @id @default(cuid())
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId       String
-  code            String
-  nameAr          String
-  nameEn          String
-  /// FIXED | FLEXIBLE
-  kind            String   @default("FIXED")
-  /// "HH:MM", company local time.
-  startTime       String
-  endTime         String
-  /// Unpaid break inside the shift.
-  breakMinutes    Int      @default(0)
-  /// Arriving within this many minutes after the start is not "late".
-  graceMinutes    Int      @default(0)
-  /// FLEXIBLE only: minutes to work inside the window.
-  requiredMinutes Int?
-  /// For the schedule grids (e.g. #5b3fd1).
-  color           String?
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@unique([companyId, code])
-  @@map("shift_definitions")
-}
-
-/// Which shift(s) on which day. WEEKLY patterns have 7 days, Sunday first
-/// (the day of the week picks the entry). ROTATION patterns repeat every
-/// `cycleDays` days counted from the assignment's start date. Each day holds
-/// zero shifts (rest day), one, or several that do not overlap (split shift).
-model ShiftPattern {
-  id        String   @id @default(cuid())
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId String
-  code      String
-  nameAr    String
-  nameEn    String
-  /// WEEKLY | ROTATION
-  kind      String   @default("WEEKLY")
-  cycleDays Int      @default(7)
-  /// string[][] — shift-definition ids per day of the cycle.
-  days      Json
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  assignments ShiftAssignment[]
-
-  @@unique([companyId, code])
-  @@map("shift_patterns")
-}
-
-/// "From this date, this person works this pattern." Regular assignments never
-/// overlap each other (a new one closes the previous); a TEMPORARY one (a
-/// covering week, Ramadan hours…) overrides the regular one for its dates.
-/// Attendance reads the assignment in force on each date — never "the current shift".
-model ShiftAssignment {
-  id          String       @id @default(cuid())
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId   String
-  employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId  String
-  pattern     ShiftPattern @relation(fields: [patternId], references: [id])
-  patternId   String
-  startDate   DateTime     @db.Date
-  /// Inclusive; NULL = until further notice.
-  endDate     DateTime?    @db.Date
-  temporary   Boolean      @default(false)
-  reason      String?      @db.Text
-  createdById String?
-  createdAt   DateTime     @default(now())
-
-  @@index([companyId, employeeId, startDate])
-  @@index([employeeId, temporary, startDate])
-  @@map("shift_assignments")
-}
-
-/// One punch. Staff record them on the employee file (source MANUAL); a
-/// biometric device or an imported file adds them later (DEVICE / IMPORT).
-/// A punch is never edited: a wrong manual one is deleted (audited) and
-/// entered again; device and imported punches cannot be deleted.
-model AttendanceEvent {
-  id            String   @id @default(cuid())
-  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String
-  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId    String
-  /// IN | OUT
-  kind          String
-  /// The instant (UTC); staff enter local times, converted with the company time zone.
-  at            DateTime
-  /// MANUAL | DEVICE | IMPORT
-  source        String
-  deviceId      String?
-  importBatchId String?
-  /// Why a manual punch was entered (e.g. "the device was down").
-  note          String?  @db.Text
-  /// Duplicate guard: the same person, kind and minute (or a re-imported file) is one row.
-  fingerprint   String   @unique
-  createdById   String?
-  createdAt     DateTime @default(now())
-
-  @@index([companyId, employeeId, at])
-  @@index([employeeId, at])
-  @@map("attendance_events")
-}
-
-/// A person's day against the schedule in force that day — recalculated from
-/// the punches until payroll locks it. Exceptions (absent, late, early,
-/// missing punch) wait for HR: only CONFIRMED ones may ever be deducted.
-model AttendanceDay {
-  id                String    @id @default(cuid())
-  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId         String
-  employee          Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId        String
-  /// The local (company time zone) date.
-  date              DateTime  @db.Date
-  /// PRESENT | ABSENT | INCOMPLETE | REST | HOLIDAY | UNSCHEDULED | LEAVE
-  status            String
-  /// The approved leave covering the day (its type code), if any.
-  leaveCode         String?
-  /// Shift codes of the day, e.g. "M" or "N".
-  shiftCodes        String?
-  scheduledMinutes  Int       @default(0)
-  workedMinutes     Int       @default(0)
-  lateMinutes       Int       @default(0)
-  earlyLeaveMinutes Int       @default(0)
-  overtimeMinutes   Int       @default(0)
-  firstIn           DateTime?
-  lastOut           DateTime?
-  /// NONE (nothing to review) | PENDING | CONFIRMED (may be deducted) | EXCUSED
-  review            String    @default("NONE")
-  reviewedById      String?
-  reviewedAt        DateTime?
-  reviewNote        String?   @db.Text
-  /// Set when payroll has used the day — then it is never recalculated.
-  locked            Boolean   @default(false)
-  computedAt        DateTime  @default(now())
-
-  @@unique([employeeId, date])
-  @@index([companyId, date])
-  @@index([companyId, review, date])
-  @@map("attendance_days")
-}
-
-/// Overtime needs approval before payroll may pay it (Art. 107 default:
-/// hourly wage + 50% of the basic hourly wage — applied in payroll).
-model OvertimeRequest {
-  id              String    @id @default(cuid())
-  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId       String
-  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId      String
-  date            DateTime  @db.Date
-  minutes         Int
-  /// What the approver allowed (may be less than asked).
-  approvedMinutes Int?
-  reason          String    @db.Text
-  /// PENDING | APPROVED | REJECTED | CANCELLED
-  status          String    @default("PENDING")
-  /// The staff member who entered it; the approver is decidedById.
-  requestedById   String?
-  decidedById     String?
-  decidedAt       DateTime?
-  decisionNote    String?   @db.Text
-  createdAt       DateTime  @default(now())
-
-  @@index([companyId, status, createdAt])
-  @@index([employeeId, date])
-  @@map("overtime_requests")
-}
-
-/// A kind of leave and its rules, per company. Seeded with Saudi Labour Law
-/// defaults (Arts. 109, 113, 114, 117, 151, 160) that HR may edit — nothing
-/// here is hard-coded in the calculation.
-model LeaveType {
-  id                String   @id @default(cuid())
-  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId         String
-  code              String
-  nameAr            String
-  nameEn            String
-  color             String?
-  /// Share of the wage paid during the leave (0 = unpaid). Sick leave uses payTiers instead.
-  paidPercent       Int      @default(100)
-  /// ACCRUAL (a balance builds up, e.g. annual) | NONE (no balance: limited per request / per year)
-  balanceMode       String   @default("NONE")
-  /// MONTHLY (1/12 of the yearly days each month) | YEARLY (all on 1 January, prorated for joiners)
-  accrual           String?
-  daysPerYear       Decimal? @db.Decimal(6, 2)
-  /// More days once the person has served seniorAfterYears (Art. 109: 30 after 5 years).
-  seniorDaysPerYear Decimal? @db.Decimal(6, 2)
-  seniorAfterYears  Int?
-  /// Unused days kept at the turn of the year (NULL = no cap).
-  carryForwardMax   Decimal? @db.Decimal(6, 2)
-  /// Most days in one calendar year (sick leave: 120).
-  yearlyLimit       Int?
-  /// Pay by days already taken this year, e.g. [{"days":30,"percent":100},{"days":60,"percent":75},{"days":30,"percent":0}].
-  payTiers          Json?
-  maxPerRequest     Int?
-  /// Once in the whole employment (Hajj).
-  oncePerService    Boolean  @default(false)
-  /// Months of service before it can be taken (Hajj: 24).
-  minServiceMonths  Int?
-  /// ANY | FEMALE | MALE
-  gender            String   @default("ANY")
-  /// WORKING (only the person's working days count) | CALENDAR (every day counts)
-  countMode         String   @default("WORKING")
-  allowHalfDay      Boolean  @default(false)
-  /// Seeded by the system — can be edited and switched off, not deleted.
-  system            Boolean  @default(false)
-  active            Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  requests LeaveRequest[]
-  ledger   LeaveLedgerEntry[]
-
-  @@unique([companyId, code])
-  @@map("leave_types")
-}
-
-/// A leave entered by staff for an employee, approved by the branch manager,
-/// the company manager or the super admin (the approver is recorded).
-model LeaveRequest {
-  id            String    @id @default(cuid())
-  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String
-  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId    String
-  leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id])
-  leaveTypeId   String
-  startDate     DateTime  @db.Date
-  /// Inclusive.
-  endDate       DateTime  @db.Date
-  /// A single half day (only when the type allows it).
-  halfDay       Boolean   @default(false)
-  /// Days that count, by the type's counting mode (working or calendar days).
-  days          Decimal   @db.Decimal(6, 2)
-  /// How the days are paid, e.g. [{"days":2,"percent":100},{"days":1,"percent":75}].
-  payBreakdown  Json?
-  reason        String?   @db.Text
-  /// PENDING | APPROVED | REJECTED | CANCELLED
-  status        String    @default("PENDING")
-  requestedById String?
-  decidedById   String?
-  decidedAt     DateTime?
-  decisionNote  String?   @db.Text
-  cancelledById String?
-  cancelledAt   DateTime?
-  createdAt     DateTime  @default(now())
-
-  ledger LeaveLedgerEntry[]
-
-  @@index([companyId, status, createdAt])
-  @@index([employeeId, startDate])
-  @@map("leave_requests")
-}
-
-/// The balance is the sum of these rows — never one editable number.
-/// ACCRUAL (+), USE (−, an approved request), REVERSAL (+, a cancelled one),
-/// ADJUSTMENT (±, HR, e.g. the opening balance), EXPIRY (−, over the carry-forward cap).
-model LeaveLedgerEntry {
-  id          String        @id @default(cuid())
-  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId   String
-  employee    Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId  String
-  leaveType   LeaveType     @relation(fields: [leaveTypeId], references: [id])
-  leaveTypeId String
-  kind        String
-  days        Decimal       @db.Decimal(6, 2)
-  /// The day it counts from.
-  date        DateTime      @db.Date
-  request     LeaveRequest? @relation(fields: [requestId], references: [id])
-  requestId   String?
-  /// Makes automatic entries happen once: "2026-11" for a monthly accrual, "2026-carry" for a year-end expiry.
-  periodKey   String?
-  note        String?       @db.Text
-  createdById String?
-  createdAt   DateTime      @default(now())
-
-  @@unique([employeeId, leaveTypeId, kind, periodKey])
-  @@index([employeeId, leaveTypeId, date])
-  @@map("leave_ledger")
-}
-
-/// An earning or deduction that can appear on a payslip, per company.
-/// Amounts live on each employee's compensation, not here.
-model PayComponent {
-  id             String   @id @default(cuid())
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId      String
-  code           String
-  nameAr         String
-  nameEn         String
-  /// EARNING | DEDUCTION
-  kind           String   @default("EARNING")
-  /// FIXED (an amount per employee) | PERCENT_OF_BASIC (a percent per employee, defaultPercent pre-filled)
-  method         String   @default("FIXED")
-  defaultPercent Decimal? @db.Decimal(5, 2)
-  /// Part of the wage GOSI contributions are calculated on (basic + housing in Saudi Arabia).
-  gosiBase       Boolean  @default(false)
-  /// Reduced for a partial month (joiners, leavers, unpaid days) — by working days.
-  prorated       Boolean  @default(true)
-  /// Part of the wage the hourly rate is worked out from (overtime, absence).
-  hourlyBase     Boolean  @default(true)
-  sortOrder      Int      @default(100)
-  /// Seeded — can be edited and switched off, not deleted.
-  system         Boolean  @default(false)
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  lines EmployeeCompensationLine[]
-
-  @@unique([companyId, code])
-  @@map("pay_components")
-}
-
-/// One version of someone's pay, in force from effectiveFrom until the next
-/// version starts. Versions are never edited once in force — a change is a
-/// new version (a future one may still be corrected or removed).
-model EmployeeCompensation {
-  id            String   @id @default(cuid())
-  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String
-  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId    String
-  effectiveFrom DateTime @db.Date
-  currency      String   @default("SAR")
-  reason        String?  @db.Text
-  createdById   String?
-  createdAt     DateTime @default(now())
-  updatedById   String?
-  updatedAt     DateTime @updatedAt
-
-  lines EmployeeCompensationLine[]
-
-  @@unique([employeeId, effectiveFrom])
-  @@index([companyId, effectiveFrom])
-  @@map("employee_compensations")
-}
-
-model EmployeeCompensationLine {
-  id             String               @id @default(cuid())
-  compensation   EmployeeCompensation @relation(fields: [compensationId], references: [id], onDelete: Cascade)
-  compensationId String
-  component      PayComponent         @relation(fields: [componentId], references: [id])
-  componentId    String
-  /// FIXED components: the monthly amount.
-  amount         Decimal?             @db.Decimal(12, 2)
-  /// PERCENT_OF_BASIC components: the percent of the basic salary.
-  percent        Decimal?             @db.Decimal(5, 2)
-
-  @@unique([compensationId, componentId])
-  @@map("employee_compensation_lines")
-}
-
-/// How payroll works for a company, versioned by effective date so a past
-/// month is always recalculated with the rules of its time. Nothing here is
-/// hard-coded in the engine; GOSI rates stay empty until HR enters them.
-model PayrollPolicy {
-  id                      String   @id @default(cuid())
-  company                 Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId               String
-  effectiveFrom           DateTime @db.Date
-  /// MONTHLY
-  frequency               String   @default("MONTHLY")
-  /// Attendance up to this day of the month counts in this month's payroll.
-  cutoffDay               Int      @default(25)
-  /// The day salaries are paid.
-  payDay                  Int      @default(27)
-  currency                String   @default("SAR")
-  /// WORKING_DAYS (decided) | CALENDAR_DAYS | THIRTY_DAYS
-  proration               String   @default("WORKING_DAYS")
-  /// Hourly rate = monthly hourly-base wage ÷ (rateDaysPerMonth × hoursPerDay).
-  rateDaysPerMonth        Int      @default(30)
-  hoursPerDay             Decimal  @default(8) @db.Decimal(4, 2)
-  /// Art. 107: hourly wage + this percent of the basic hourly wage.
-  overtimePremiumPct      Decimal  @default(50) @db.Decimal(5, 2)
-  /// GOSI — left empty until HR confirms the rates.
-  gosiSaudiEmployeePct    Decimal? @db.Decimal(5, 2)
-  gosiSaudiEmployerPct    Decimal? @db.Decimal(5, 2)
-  gosiNonSaudiEmployerPct Decimal? @db.Decimal(5, 2)
-  /// Most wage GOSI is calculated on (empty = no cap).
-  gosiWageCap             Decimal? @db.Decimal(12, 2)
-  /// Art. 92: a loan instalment may take at most this share of the wage (empty = no limit).
-  loanInstalmentMaxPct    Decimal? @default(10) @db.Decimal(5, 2)
-  /// Art. 92: all deductions of a month together at most this share of the wage.
-  deductionsMaxPct        Decimal? @default(50) @db.Decimal(5, 2)
-  /// Amounts are rounded to this many decimals.
-  roundingDecimals        Int      @default(2)
-  note                    String?  @db.Text
-  createdById             String?
-  createdAt               DateTime @default(now())
-
-  @@unique([companyId, effectiveFrom])
-  @@map("payroll_policies")
-}
-
-/// An advance (one instalment) or a loan, repaid from salary month by month.
-/// Entered by HR / payroll, approved by an approver (recorded); the schedule
-/// is created on approval and payroll marks instalments DEDUCTED.
-model EmployeeLoan {
-  id              String    @id @default(cuid())
-  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId       String
-  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId      String
-  /// ADVANCE | LOAN
-  kind            String
-  amount          Decimal   @db.Decimal(12, 2)
-  instalmentCount Int
-  /// The payroll month of the first instalment, "YYYY-MM".
-  startMonth      String
-  reason          String    @db.Text
-  /// PENDING | APPROVED (being repaid) | SETTLED | REJECTED | CANCELLED
-  status          String    @default("PENDING")
-  requestedById   String?
-  decidedById     String?
-  decidedAt       DateTime?
-  decisionNote    String?   @db.Text
-  closedById      String?
-  closedAt        DateTime?
-  createdAt       DateTime  @default(now())
-
-  instalments LoanInstalment[]
-
-  @@index([companyId, status, createdAt])
-  @@index([employeeId, status])
-  @@map("employee_loans")
-}
-
-model LoanInstalment {
-  id           String       @id @default(cuid())
-  loan         EmployeeLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  loanId       String
-  seq          Int
-  /// The payroll month it is deducted in, "YYYY-MM".
-  month        String
-  amount       Decimal      @db.Decimal(12, 2)
-  /// DUE | DEDUCTED (by payroll) | PAID_CASH | POSTPONED (moved — a new instalment replaces it)
-  status       String       @default("DUE")
-  payrollRunId String?
-  settledAt    DateTime?
-  note         String?      @db.Text
-
-  @@unique([loanId, seq])
-  @@index([month, status])
-  @@map("loan_instalments")
-}
-
-/// A one-off earning (bonus, commission, arrears) or deduction (penalty,
-/// damage) for one payroll month, approved before payroll may use it.
-model OneTimePayment {
-  id            String    @id @default(cuid())
-  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String
-  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId    String
-  /// EARNING | DEDUCTION
-  kind          String
-  /// BONUS | COMMISSION | ARREARS | OTHER_EARNING | PENALTY | DAMAGE | OTHER_DEDUCTION | CORRECTION
-  category      String
-  amount        Decimal   @db.Decimal(12, 2)
-  /// The payroll month, "YYYY-MM".
-  month         String
-  reason        String    @db.Text
-  /// PENDING | APPROVED | REJECTED | CANCELLED | PAID
-  status        String    @default("PENDING")
-  requestedById String?
-  decidedById   String?
-  decidedAt     DateTime?
-  decisionNote  String?   @db.Text
-  payrollRunId  String?
-  /// A correction of an approved month: the run it corrects.
-  correctsRunId String?
-  createdAt     DateTime  @default(now())
-
-  @@index([companyId, status, month])
-  @@index([employeeId, month])
-  @@map("one_time_payments")
-}
-
-/// One month of payroll for a company. Calculated (and recalculated) until
-/// approved; approval locks the attendance days it used and marks the loan
-/// instalments and one-off payments it paid. Whoever calculated a run can
-/// never approve it. At most one run per month is not cancelled.
-model PayrollRun {
-  id             String    @id @default(cuid())
-  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId      String
-  /// "YYYY-MM"
-  month          String
-  /// 1, 2, … — a new run for the same month after a cancelled one.
-  version        Int       @default(1)
-  /// CALCULATED | APPROVED | PAID | CANCELLED
-  status         String    @default("CALCULATED")
-  /// The attendance period the run read (cut-off to cut-off), inclusive.
-  periodFrom     DateTime  @db.Date
-  periodTo       DateTime  @db.Date
-  policyId       String?
-  /// Version of the calculation rules in this code, kept with every run.
-  engineVersion  String
-  employees      Int       @default(0)
-  gross          Decimal   @default(0) @db.Decimal(14, 2)
-  deductions     Decimal   @default(0) @db.Decimal(14, 2)
-  net            Decimal   @default(0) @db.Decimal(14, 2)
-  employerCost   Decimal   @default(0) @db.Decimal(14, 2)
-  /// Run-level problems: [{ code, blocking, count, … }].
-  warnings       Json?
-  calculatedById String?
-  calculatedAt   DateTime?
-  approvedById   String?
-  approvedAt     DateTime?
-  paidById       String?
-  paidAt         DateTime?
-  /// Approval undone before payment (reason kept), to recalculate and approve again.
-  reopenedById   String?
-  reopenedAt     DateTime?
-  reopenReason   String?   @db.Text
-  cancelledById  String?
-  cancelledAt    DateTime?
-  note           String?   @db.Text
-  createdAt      DateTime  @default(now())
-
-  lines PayrollLine[]
-
-  @@unique([companyId, month, version])
-  @@index([companyId, status])
-  @@map("payroll_runs")
-}
-
-/// One employee in a run: the totals, the inputs it was calculated from
-/// (a snapshot — later changes never alter a past line) and its items.
-model PayrollLine {
-  id           String     @id @default(cuid())
-  run          PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  runId        String
-  employee     Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId   String
-  gross        Decimal    @db.Decimal(12, 2)
-  deductions   Decimal    @db.Decimal(12, 2)
-  net          Decimal    @db.Decimal(12, 2)
-  /// GOSI the employer pays on top (not deducted).
-  employerCost Decimal    @default(0) @db.Decimal(12, 2)
-  /// Net of the previous approved run, for the month-to-month comparison.
-  previousNet  Decimal?   @db.Decimal(12, 2)
-  /// Left out of this run's payment (e.g. pending a decision) — nothing is marked paid for it.
-  held         Boolean    @default(false)
-  heldReason   String?    @db.Text
-  /// Days, rates, versions the line was worked out from.
-  inputs       Json
-  warnings     Json?
-
-  items   PayrollLineItem[]
-  payslip Payslip?
-
-  @@unique([runId, employeeId])
-  @@index([employeeId])
-  @@map("payroll_lines")
-}
-
-model PayrollLineItem {
-  id        String      @id @default(cuid())
-  line      PayrollLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
-  lineId    String
-  /// EARNING | DEDUCTION | EMPLOYER (cost, not on the payslip total)
-  kind      String
-  /// COMPONENT | OVERTIME | ABSENCE | LATE | LEAVE | LOAN | PAYMENT | GOSI
-  source    String
-  sourceId  String?
-  code      String
-  labelAr   String
-  labelEn   String
-  /// e.g. days, hours or minutes the amount stands for.
-  quantity  Decimal?    @db.Decimal(10, 2)
-  rate      Decimal?    @db.Decimal(12, 4)
-  amount    Decimal     @db.Decimal(12, 2)
-  sortOrder Int         @default(100)
-
-  @@index([lineId])
-  @@map("payroll_line_items")
-}
-
-/// The PDF of one employee's line in an approved run, stored privately with
-/// a content hash. Generated once (on first download or send) and never
-/// rewritten — the line it shows is frozen too.
-model Payslip {
-  id            String      @id @default(cuid())
-  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String
-  line          PayrollLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
-  lineId        String      @unique
-  runId         String
-  employee      Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId    String
-  month         String
-  storageKey    String
-  sha256        String
-  sizeBytes     Int
-  generatedById String?
-  generatedAt   DateTime    @default(now())
-
-  deliveries PayslipDelivery[]
-
-  @@index([runId])
-  @@index([employeeId, month])
-  @@map("payslips")
-}
-
-/// One attempt to e-mail a payslip. The delivery key makes a send happen
-/// once — sending a run again skips everyone already sent, unless a resend
-/// is asked for explicitly.
-model PayslipDelivery {
-  id             String    @id @default(cuid())
-  payslip        Payslip   @relation(fields: [payslipId], references: [id], onDelete: Cascade)
-  payslipId      String
-  email          String?
-  /// QUEUED | SENT | FAILED | NO_EMAIL
-  status         String    @default("QUEUED")
-  /// MANUAL | SCHEDULED
-  trigger        String    @default("MANUAL")
-  deliveryKey    String    @unique
-  notificationId String?
-  requestedById  String?
-  error          String?   @db.Text
-  createdAt      DateTime  @default(now())
-  sentAt         DateTime?
-
-  @@index([payslipId])
-  @@map("payslip_deliveries")
-}
-
-/// Sending payslips automatically: on this day of the month, the approved
-/// run of the month is e-mailed to everyone not sent yet.
-model PayslipSetting {
-  id            String   @id @default(cuid())
-  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String   @unique
-  autoSend      Boolean  @default(false)
-  sendDay       Int      @default(27)
-  /// The last month sent automatically ("YYYY-MM") — the job runs once a month.
-  lastAutoMonth String?
-  updatedById   String?
-  updatedAt     DateTime @updatedAt
-
-  @@map("payslip_settings")
 }

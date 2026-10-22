@@ -1,5 +1,4 @@
 import type { Db } from '../common/prisma.js';
-import { currentContext } from '../common/request-context.js';
 import type { Prisma } from '../generated/prisma/client.js';
 
 export type ActorType = 'USER' | 'LINK' | 'SYSTEM';
@@ -13,13 +12,7 @@ export interface AuditEntry {
   actorType: ActorType;
   actorId?: string;
   employeeId?: string;
-  /** Owning company (denormalised); null for global administration. */
-  companyId?: string | null;
   metadata?: Prisma.InputJsonValue;
-  /** Field-level before / after: { field: { from, to } } — never raw secrets or ID numbers. */
-  changes?: Prisma.InputJsonValue;
-  /** Overrides the source taken from the request context. */
-  source?: string;
 }
 
 /**
@@ -30,29 +23,8 @@ export interface AuditEntry {
 export class AuditLogRepository {
   constructor(private readonly db: Db) {}
 
-  /** Stamps the request id and source of the work in progress (see request-context). */
   append(entry: AuditEntry) {
-    const ctx = currentContext();
-    return this.db.auditLog.create({
-      data: {
-        ...entry,
-        source: entry.source ?? ctx?.source ?? (entry.actorType === 'SYSTEM' ? 'SYSTEM' : null),
-        requestId: ctx?.requestId ?? null,
-      },
-    });
-  }
-
-  /** Many entries at once (a bulk action) — one insert, the same stamps as `append`. */
-  appendMany(entries: AuditEntry[]) {
-    if (entries.length === 0) return Promise.resolve({ count: 0 });
-    const ctx = currentContext();
-    return this.db.auditLog.createMany({
-      data: entries.map((entry) => ({
-        ...entry,
-        source: entry.source ?? ctx?.source ?? (entry.actorType === 'SYSTEM' ? 'SYSTEM' : null),
-        requestId: ctx?.requestId ?? null,
-      })),
-    });
+    return this.db.auditLog.create({ data: entry });
   }
 
   listByEntity(entity: string, entityId: string) {

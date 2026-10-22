@@ -4,8 +4,6 @@ import type { SlaFiringRepository } from './sla-firing.repository.js';
 import type { AuditLogRepository } from './audit-log.repository.js';
 import type { NotificationService } from '../notifications/notification.service.js';
 import { workingDaysBetween } from './working-days.js';
-import type { CompanyFilter } from './company-filter.js';
-import { withContext } from '../common/request-context.js';
 import { config } from '../common/config.js';
 import { logger } from '../common/logger.js';
 
@@ -32,8 +30,7 @@ export interface WatchedRecord {
 /** One per state machine the SLA engine watches. */
 export interface SlaWatcher {
   processKey: string; // EMPLOYEE | OFFBOARDING | GOSI | MEDICAL_INSURANCE | ...
-  /** Records of ONE company (see CompanyFilter) sitting in `status` since before `threshold`. */
-  listInStatusSince(status: string, threshold: Date, limit?: number, company?: CompanyFilter): Promise<WatchedRecord[]>;
+  listInStatusSince(status: string, threshold: Date, limit?: number): Promise<WatchedRecord[]>;
   /**
    * Deadline-style dueness (e.g. "N days BEFORE a document expires").
    * When present it replaces the elapsed-time check entirely — the watcher
@@ -43,7 +40,6 @@ export interface SlaWatcher {
     rule: { status: string; afterValue: number; afterUnit: string },
     now: Date,
     limit?: number,
-    company?: CompanyFilter,
   ): Promise<WatchedRecord[]>;
   /** Subject-facing template key per status (staff always get the generic one). */
   subjectTemplate?(status: string): string | undefined;
@@ -71,11 +67,6 @@ export interface SlaWatcher {
  * once/day), ESCALATEs to a higher group (once), or EXPIREs — with
  * sla_firings as its exact memory, every action audited and every message
  * through the notifications table.
- *
- * Every company runs its own automation: a rule sees only its company's
- * records, counts working days with its company's weekend and holidays, and
- * its messages use its company's wording and mail server. Records that were
- * never placed in a company are handled by the main company's rules.
  */
 export class SlaScheduler {
   private readonly watchers: Map<string, SlaWatcher>;
@@ -87,14 +78,10 @@ export class SlaScheduler {
       firings: SlaFiringRepository;
       audit: AuditLogRepository;
       notifications: NotificationService;
-      /** A company's calendar: which weekdays are its weekend (admin-configured). */
-      calendar?: { getCalendar(companyId: string): Promise<{ weekendDays: number[] }> };
-      /** The main company — it also watches records that have no company. */
-      companies?: { mainCompanyId(): Promise<string | null> };
-      /** Other time-driven work run on every tick (e.g. scheduled employment changes). */
-      jobs?: Array<{ name: string; run(now: Date): Promise<unknown> }>;
+      /** System calendar: which weekdays are the weekend (admin-configured). */
+      calendar?: { getCalendar(): Promise<{ weekendDays: number[] }> };
       /** Named primary owners per process — they receive reminders in addition to the role group. */
-      responsibility?: { get(processKey: string, scope?: { companyId?: string | null }): Promise<string[]> };
+      responsibility?: { get(processKey: string): Promise<string[]> };
     },
     watchers: SlaWatcher[],
   ) {
@@ -102,46 +89,28 @@ export class SlaScheduler {
   }
 
   async tick(now: Date = new Date()): Promise<void> {
-    // Everything this run writes to the audit trail is marked as the scheduler's.
-    return withContext({ requestId: `tick-${now.toISOString()}`, source: 'SCHEDULER' }, () => this.runTick(now));
-  }
-
-  private async runTick(now: Date): Promise<void> {
-    for (const job of this.deps.jobs ?? []) {
-      try {
-        await job.run(now);
-      } catch (err) {
-        logger.error({ err, job: job.name }, 'scheduled job failed');
-      }
-    }
     const rules = await this.deps.rules.listAllActive();
-    const mainId = (await this.deps.companies?.mainCompanyId()) ?? null;
-    // Each company's weekend — fetched once per company per tick.
-    const weekends = new Map<string, number[] | undefined>();
+    // Weekend config is the same for every rule — fetch once per tick.
+    const weekend = (await this.deps.calendar?.getCalendar())?.weekendDays;
     for (const rule of rules) {
       try {
-        if (!weekends.has(rule.companyId)) {
-          weekends.set(rule.companyId, (await this.deps.calendar?.getCalendar(rule.companyId))?.weekendDays);
-        }
-        const company: CompanyFilter = { companyId: rule.companyId, includeUnassigned: rule.companyId === mainId };
-        await this.applyRule(rule, now, company, weekends.get(rule.companyId));
+        await this.applyRule(rule, now, weekend);
       } catch (err) {
         logger.error({ err, ruleId: rule.id }, 'SLA rule application failed');
       }
     }
   }
 
-  private async applyRule(rule: SlaRule, now: Date, company: CompanyFilter, weekend?: number[]): Promise<void> {
+  private async applyRule(rule: SlaRule, now: Date, weekend?: number[]): Promise<void> {
     const watcher = this.watchers.get(rule.processKey);
     if (!watcher) return;
 
     const candidates = watcher.listDue
-      ? await watcher.listDue(rule, now, config.SLA_BATCH_SIZE, company)
+      ? await watcher.listDue(rule, now, config.SLA_BATCH_SIZE)
       : await watcher.listInStatusSince(
           rule.status,
           this.prefilterThreshold(rule, now),
           config.SLA_BATCH_SIZE,
-          company,
         );
     if (candidates.length === 0) return;
 
@@ -157,7 +126,7 @@ export class SlaScheduler {
     let holidays: Date[] = [];
     if (rule.afterUnit === 'WORKING_DAYS') {
       const oldest = candidates.reduce((min, c) => (c.anchorAt < min ? c.anchorAt : min), now);
-      holidays = (await this.deps.holidays.listBetween(rule.companyId, oldest, now)).map((h) => h.date);
+      holidays = (await this.deps.holidays.listBetween(oldest, now)).map((h) => h.date);
     }
 
     for (const record of candidates) {
@@ -278,9 +247,7 @@ export class SlaScheduler {
       ...record.meta,
     };
     const ref = this.ref(rule, record);
-    const ownerIds = preferOwners
-      ? await this.deps.responsibility?.get(rule.processKey, { companyId: rule.companyId })
-      : undefined;
+    const ownerIds = preferOwners ? await this.deps.responsibility?.get(rule.processKey) : undefined;
     await this.deps.notifications.notifyTeam(
       { processKey: rule.processKey, status: rule.status, role, ...(ownerIds ? { ownerIds } : {}) },
       template,
@@ -304,9 +271,8 @@ export class SlaScheduler {
     });
   }
 
-  /** The record the message is about — and its company, which the rule already knows. */
   private ref(rule: SlaRule, record: WatchedRecord) {
-    return { entity: rule.processKey, entityId: record.id, companyId: rule.companyId };
+    return { entity: rule.processKey, entityId: record.id };
   }
 }
 

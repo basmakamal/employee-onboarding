@@ -1,15 +1,11 @@
 ﻿<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 import PageHeader from '../components/PageHeader.vue';
-import FormErrorAlert from '../components/FormErrorAlert.vue';
-import { useForm } from '../composables/useForm';
-import { rules } from '../validation/rules';
 
 interface UserRow {
   id: string;
@@ -57,107 +53,16 @@ const resetDialog = ref({ show: false, userId: '', name: '', password: '' });
 
 const editDialog = ref({ show: false, userId: '', name: '', email: '', role: 'HR', active: true });
 
-/** One form state per dialog: field rules on Save, server errors on the field that caused them. */
-const createUserForm = useForm();
-const editUserForm = useForm();
-const resetForm = useForm();
-const assignForm = useForm();
-
-// ------------------------------------------------------- assignments
-// Where a user holds which role: global, a whole company, or one unit and
-// its descendants. Manager seats (set on the Organisation / Companies
-// pages) appear here too and are kept in step by the server.
-interface AssignmentRow {
-  id?: string;
-  roleCode: string;
-  companyId: string | null;
-  orgUnitId: string | null;
-}
-interface RoleOption { code: string; nameAr: string; nameEn: string; level: string; active: boolean }
-interface CompanyOption { id: string; code: string; nameAr: string; nameEn: string }
-interface UnitOption { id: string; code: string; nameAr: string; nameEn: string; depth: number; active: boolean }
-
-const { locale } = useI18n();
-const ar = computed(() => locale.value.startsWith('ar'));
-const assignDialog = ref<{ show: boolean; userId: string; name: string; rows: AssignmentRow[] }>({ show: false, userId: '', name: '', rows: [] });
-const roleOptions = ref<RoleOption[]>([]);
-const companyOptions = ref<CompanyOption[]>([]);
-const unitsByCompany = ref<Record<string, UnitOption[]>>({});
-
-const roleItems = computed(() =>
-  roleOptions.value.filter((r) => r.active).map((r) => ({ title: ar.value ? r.nameAr : r.nameEn, value: r.code, props: { subtitle: `${r.code} · ${t(`roles.levels.${r.level}`)}` } })),
-);
-const companyItems = computed(() => [
-  { title: t('users.globalScope'), value: null },
-  ...companyOptions.value.map((c) => ({ title: ar.value ? c.nameAr : c.nameEn, value: c.id, props: { subtitle: c.code } })),
-]);
-function unitItems(companyId: string | null) {
-  const units = companyId ? (unitsByCompany.value[companyId] ?? []) : [];
-  return [
-    { title: t('users.wholeCompany'), value: null },
-    ...units.filter((u) => u.active).map((u) => ({ title: `${'— '.repeat(u.depth)}${ar.value ? u.nameAr : u.nameEn}`, value: u.id, props: { subtitle: u.code } })),
-  ];
-}
-
-/** Units of a company are fetched lazily — the org API answers for the ACTIVE company only, so we ask per company through the admin route. */
-async function loadUnits(companyId: string | null) {
-  if (!companyId || unitsByCompany.value[companyId]) return;
-  try {
-    unitsByCompany.value = { ...unitsByCompany.value, [companyId]: await api.get<UnitOption[]>(`/api/companies/${companyId}/units`) };
-  } catch {
-    unitsByCompany.value = { ...unitsByCompany.value, [companyId]: [] };
-  }
-}
-
-async function openAssignments(user: UserRow) {
-  busy.value = `assign:${user.id}`;
-  try {
-    const [rows, roles, companies] = await Promise.all([
-      api.get<Array<{ role: { code: string }; companyId: string | null; orgUnitId: string | null }>>(`/api/users/${user.id}/assignments`),
-      roleOptions.value.length ? Promise.resolve(roleOptions.value) : api.get<RoleOption[]>('/api/roles'),
-      companyOptions.value.length ? Promise.resolve(companyOptions.value) : api.get<CompanyOption[]>('/api/companies'),
-    ]);
-    roleOptions.value = roles;
-    companyOptions.value = companies;
-    const mapped = rows.map((r) => ({ roleCode: r.role.code, companyId: r.companyId, orgUnitId: r.orgUnitId }));
-    await Promise.all([...new Set(mapped.map((r) => r.companyId))].map(loadUnits));
-    assignForm.reset();
-    assignDialog.value = { show: true, userId: user.id, name: user.name, rows: mapped };
-  } catch (e) {
-    notify(errorText(e), 'error');
-  } finally {
-    busy.value = '';
-  }
-}
-function addAssignment() {
-  assignDialog.value.rows.push({ roleCode: roleOptions.value[0]?.code ?? 'HR', companyId: companyOptions.value[0]?.id ?? null, orgUnitId: null });
-  void loadUnits(assignDialog.value.rows.at(-1)?.companyId ?? null);
-}
-function onCompanyPicked(row: AssignmentRow, companyId: string | null) {
-  row.companyId = companyId;
-  row.orgUnitId = null;
-  void loadUnits(companyId);
-}
-function saveAssignments() {
-  return assignForm.submit(async () => {
-    await api.put(`/api/users/${assignDialog.value.userId}/assignments`, {
-      assignments: assignDialog.value.rows.map((r) => ({ roleCode: r.roleCode, companyId: r.companyId, orgUnitId: r.orgUnitId })),
-    });
-    assignDialog.value.show = false;
-    notify(t('common.saved'));
-  });
-}
-
 /** Admins cannot demote or lock themselves out — enforced server-side too. */
 const isSelf = computed(() => editDialog.value.userId === auth.user?.id);
 
 function openEdit(user: UserRow) {
-  editUserForm.reset();
   editDialog.value = { show: true, userId: user.id, ...user, email: user.email };
 }
 
-function saveEdit() {
-  return editUserForm.submit(async () => {
+async function saveEdit() {
+  busy.value = 'edit';
+  try {
     const d = editDialog.value;
     const changes: Record<string, unknown> = { name: d.name.trim(), email: d.email.trim() };
     // Own row: role/active are locked server-side (SELF_LOCKOUT) — don't send them.
@@ -169,7 +74,11 @@ function saveEdit() {
     editDialog.value.show = false;
     notify(t('common.saved'));
     await load();
-  });
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
 }
 
 function notify(text: string, color = 'success') {
@@ -184,13 +93,9 @@ async function load() {
   loading.value = false;
 }
 
-function openCreate() {
-  createUserForm.reset();
-  createDialog.value = true;
-}
-
-function createUser() {
-  return createUserForm.submit(async () => {
+async function createUser() {
+  busy.value = 'create';
+  try {
     const f = createForm.value;
     const created = await api.post<UserRow & { tempPassword?: string }>('/api/users', {
       name: f.name.trim(),
@@ -207,7 +112,11 @@ function createUser() {
       notify(f.sendInvitation ? t('users.invitationSent', { email: created.email }) : t('common.saved'));
     }
     await load();
-  });
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
 }
 
 async function removeUser(user: UserRow) {
@@ -225,7 +134,7 @@ async function removeUser(user: UserRow) {
     notify(t('users.deleted'));
     await load();
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
   }
@@ -239,7 +148,7 @@ async function resendInvitation(user: UserRow) {
     notify(t('users.invitationSent', { email: user.email }));
     await load();
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
   }
@@ -251,26 +160,26 @@ async function updateUser(user: UserRow, changes: Partial<UserRow>) {
     await api.put(`/api/users/${user.id}`, changes);
     notify(t('common.saved'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
     await load();
   }
 }
 
-function openReset(item: UserRow) {
-  resetForm.reset();
-  resetDialog.value = { show: true, userId: item.id, name: item.name, password: '' };
-}
-
-function resetPassword() {
-  return resetForm.submit(async () => {
+async function resetPassword() {
+  busy.value = 'reset';
+  try {
     await api.post(`/api/users/${resetDialog.value.userId}/reset-password`, {
       password: resetDialog.value.password,
     });
     resetDialog.value = { show: false, userId: '', name: '', password: '' };
     notify(t('users.passwordReset'));
-  });
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    busy.value = '';
+  }
 }
 
 const headers = [
@@ -288,7 +197,7 @@ onMounted(load);
 <template>
   <v-container class="py-8" style="max-width: 1100px">
     <PageHeader :title="$t('users.title')" :subtitle="$t('users.subtitle')">
-      <v-btn color="primary" prepend-icon="user-plus" @click="openCreate">
+      <v-btn color="primary" prepend-icon="user-plus" @click="createDialog = true">
         {{ $t('users.new') }}
       </v-btn>
     </PageHeader>
@@ -371,20 +280,6 @@ onMounted(load);
                 />
               </template>
             </v-tooltip>
-            <v-tooltip :text="$t('users.assignments')" location="top">
-              <template #activator="{ props }">
-                <v-btn
-                  v-bind="props"
-                  icon="fluent:people-team"
-                  size="small"
-                  variant="text"
-                  density="comfortable"
-                  :loading="busy === `assign:${item.id}`"
-                  :aria-label="$t('users.assignments')"
-                  @click="openAssignments(item)"
-                />
-              </template>
-            </v-tooltip>
             <v-tooltip :text="$t('users.resetPassword')" location="top">
               <template #activator="{ props }">
                 <v-btn
@@ -394,7 +289,7 @@ onMounted(load);
                   variant="text"
                   density="comfortable"
                   :aria-label="$t('users.resetPassword')"
-                  @click="openReset(item)"
+                  @click="resetDialog = { show: true, userId: item.id, name: item.name, password: '' }"
                 />
               </template>
             </v-tooltip>
@@ -434,49 +329,18 @@ onMounted(load);
     </v-card>
 
     <!-- Create user -->
-    <!-- Assignments: role × scope rows -->
-    <v-dialog v-model="assignDialog.show" max-width="760">
-      <v-card :title="$t('users.assignmentsFor', { name: assignDialog.name })" class="pa-2">
-        <v-card-text>
-          <FormErrorAlert :form="assignForm" />
-          <v-form :ref="assignForm.bind" @submit.prevent="saveAssignments">
-          <p class="text-body-2 text-medium-emphasis mb-3">{{ $t('users.assignmentsHint') }}</p>
-          <div v-if="assignDialog.rows.length === 0" class="text-body-2 text-medium-emphasis mb-3">{{ $t('users.noAssignments') }}</div>
-          <v-row v-for="(row, i) in assignDialog.rows" :key="i" dense class="align-center">
-            <v-col cols="12" sm="4"><v-select v-model="row.roleCode" :items="roleItems" :label="$t('users.role') + ' *'" density="compact" hide-details="auto" :rules="[rules.required]" :error-messages="assignForm.errorsFor(`assignments.${i}.roleCode`)" /></v-col>
-            <v-col cols="12" sm="4"><v-select :model-value="row.companyId" :items="companyItems" :label="$t('users.scopeCompany')" density="compact" hide-details @update:model-value="(v: string | null) => onCompanyPicked(row, v)" /></v-col>
-            <v-col cols="10" sm="3"><v-select v-model="row.orgUnitId" :items="unitItems(row.companyId)" :label="$t('users.scopeUnit')" density="compact" hide-details :disabled="!row.companyId" /></v-col>
-            <v-col cols="2" sm="1" class="text-end"><v-btn icon="x" variant="text" size="small" :aria-label="$t('common.delete')" @click="assignDialog.rows.splice(i, 1)" /></v-col>
-          </v-row>
-          <v-btn size="small" variant="text" prepend-icon="plus" class="mt-2" @click="addAssignment">{{ $t('users.addAssignment') }}</v-btn>
-          </v-form>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="assignDialog.show = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn color="primary" :loading="assignForm.busy.value" @click="saveAssignments">{{ $t('common.save') }}</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
     <v-dialog v-model="createDialog" max-width="520">
       <v-card :title="$t('users.new')" class="pa-2">
         <v-card-text>
-          <FormErrorAlert :form="createUserForm" />
-          <v-form :ref="createUserForm.bind" @submit.prevent="createUser">
-          <v-text-field v-model="createForm.name" :label="$t('fields.name') + ' *'" :rules="[rules.required, rules.maxLength(120)]" :error-messages="createUserForm.errorsFor('name')" />
-          <v-text-field v-model="createForm.email" :label="$t('fields.email') + ' *'" type="email" dir="ltr" :rules="[rules.required, rules.email]" :error-messages="createUserForm.errorsFor('email')" />
+          <v-text-field v-model="createForm.name" :label="$t('fields.name')" />
+          <v-text-field v-model="createForm.email" :label="$t('fields.email')" type="email" />
           <v-select
             v-model="createForm.role"
             :items="ROLES.map((r) => ({ title: roleLabel(r) ?? $t(`roles.${r}`), value: r }))"
-            :label="$t('users.role') + ' *'"
-            :rules="[rules.required]"
-            :error-messages="createUserForm.errorsFor('role')"
+            :label="$t('users.role')"
           />
           <v-text-field
             v-model="createForm.password"
-            :rules="[rules.minLength(8)]"
-            :error-messages="createUserForm.errorsFor('password')"
             :label="$t('users.tempPassword')"
             type="password"
             :hint="createForm.password ? $t('users.passwordHint') : $t('users.tempPasswordOptional')"
@@ -494,7 +358,6 @@ onMounted(load);
               </template>
             </v-switch>
           </div>
-          </v-form>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -503,7 +366,10 @@ onMounted(load);
             variant="flat"
             color="primary"
             class="px-5"
-            :loading="createUserForm.busy.value"
+            :loading="busy === 'create'"
+            :disabled="
+              !createForm.name || !createForm.email || (createForm.password.length > 0 && createForm.password.length < 8)
+            "
             @click="createUser"
           >
             {{ createForm.sendInvitation ? $t('users.sendInvitation') : $t('common.create') }}
@@ -549,21 +415,15 @@ onMounted(load);
         </div>
 
         <v-card-text class="pt-4">
-          <FormErrorAlert :form="editUserForm" />
-          <v-form :ref="editUserForm.bind" @submit.prevent="saveEdit">
           <v-text-field
             v-model="editDialog.name"
-            :rules="[rules.required, rules.maxLength(120)]"
-            :error-messages="editUserForm.errorsFor('name')"
-            :label="$t('fields.name') + ' *'"
+            :label="$t('fields.name')"
             prepend-inner-icon="user"
             class="mb-1"
           />
           <v-text-field
             v-model="editDialog.email"
-            :rules="[rules.required, rules.email]"
-            :error-messages="editUserForm.errorsFor('email')"
-            :label="$t('fields.email') + ' *'"
+            :label="$t('fields.email')"
             type="email"
             prepend-inner-icon="mail"
             dir="ltr"
@@ -606,7 +466,6 @@ onMounted(load);
           >
             {{ $t('users.selfHint') }}
           </v-alert>
-          </v-form>
         </v-card-text>
 
         <v-card-actions class="px-6 pb-5 pt-2">
@@ -616,7 +475,8 @@ onMounted(load);
             variant="flat"
             color="primary"
             class="px-5"
-            :loading="editUserForm.busy.value"
+            :loading="busy === 'edit'"
+            :disabled="!editDialog.name.trim() || !editDialog.email.trim()"
             @click="saveEdit"
           >
             {{ $t('common.save') }}
@@ -629,19 +489,13 @@ onMounted(load);
     <v-dialog v-model="resetDialog.show" max-width="440">
       <v-card :title="`${$t('users.resetPassword')} — ${resetDialog.name}`" class="pa-2">
         <v-card-text>
-          <FormErrorAlert :form="resetForm" />
-          <v-form :ref="resetForm.bind" @submit.prevent="resetPassword">
-            <v-text-field
-              v-model="resetDialog.password"
-              :label="$t('users.newPassword') + ' *'"
-              type="password"
-              dir="ltr"
-              :rules="[rules.required, rules.minLength(8)]"
-              :error-messages="resetForm.errorsFor('password')"
-              :hint="$t('users.passwordHint')"
-              persistent-hint
-            />
-          </v-form>
+          <v-text-field
+            v-model="resetDialog.password"
+            :label="$t('users.newPassword')"
+            type="password"
+            :hint="$t('users.passwordHint')"
+            persistent-hint
+          />
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -650,7 +504,8 @@ onMounted(load);
             variant="flat"
             color="primary"
             class="px-5"
-            :loading="resetForm.busy.value"
+            :loading="busy === 'reset'"
+            :disabled="resetDialog.password.length < 8"
             @click="resetPassword"
           >
             {{ $t('common.save') }}

@@ -16,7 +16,7 @@ function setup(trigger: Record<string, unknown>) {
   const prisma = {
     emailTrigger: {
       findMany: vi.fn().mockResolvedValue([trigger]),
-      findFirst: vi.fn().mockResolvedValue(trigger),
+      findUnique: vi.fn().mockResolvedValue(trigger),
       update: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
         Promise.resolve({ ...trigger, ...data }),
       ),
@@ -52,19 +52,19 @@ describe('trigger copies', () => {
 
   it('create stores a clean, de-duplicated list; update can clear it', async () => {
     const { service, prisma } = setup(base);
-    await service.create('co-a', {
+    await service.create({
       processKey: 'EMPLOYEE', status: 'FORM_RECEIVED', templateKey: 'custom.status_change', recipient: 'ROLE', role: 'HR',
       ccEmails: [' Basma@riyada-ksa.com', 'basma@riyada-ksa.com', ''],
     });
     expect((prisma.emailTrigger.create.mock.calls[0]?.[0] as { data: { ccEmails: string } }).data.ccEmails).toBe('basma@riyada-ksa.com');
 
-    await service.update('co-a', 't1', { ccEmails: [] });
+    await service.update('t1', { ccEmails: [] });
     expect((prisma.emailTrigger.update.mock.calls[0]?.[0] as { data: { ccEmails: string | null } }).data.ccEmails).toBeNull();
   });
 
   it('an update that does not mention cc keeps the existing list', async () => {
     const { service, prisma } = setup(base);
-    await service.update('co-a', 't1', { active: false });
+    await service.update('t1', { active: false });
     expect((prisma.emailTrigger.update.mock.calls[0]?.[0] as { data: { ccEmails: string } }).data.ccEmails).toBe(
       'basma@riyada-ksa.com,admin@riyada-ksa.com',
     );

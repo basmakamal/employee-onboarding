@@ -25,8 +25,6 @@ export class NotificationRepository {
     entityId?: string;
     templateKey?: string | null;
     templateVersion?: number | null;
-    /** The company the message is about — the e-mail log is filtered by it. */
-    companyId?: string | null;
   }) {
     return this.db.notification.create({ data });
   }

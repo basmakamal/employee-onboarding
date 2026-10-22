@@ -38,38 +38,18 @@ const hits = ref<Item[]>([]);
 const searching = ref(false);
 const inputEl = ref<HTMLInputElement | null>(null);
 
-const PAGES: Array<{ to: string; key: string; icon: string; permission?: string }> = [
-  { to: '/', key: 'nav.home', icon: 'fluent:home' },
-  { to: '/employees', key: 'nav.employees', icon: 'fluent:people' },
-  { to: '/reports', key: 'nav.reports', icon: 'fluent:data-trending', permission: 'reports.view' },
-  { to: '/hr-reports', key: 'nav.hrReports', icon: 'fluent:text-bullet-list-square', permission: 'attendance.read' },
-  { to: '/emails', key: 'nav.emailLog', icon: 'fluent:mail', permission: 'emails.view' },
-  { to: '/assistant', key: 'nav.assistant', icon: 'fluent:bot-sparkle', permission: 'ai.use' },
-  { to: '/employee-changes', key: 'nav.employeeChanges', icon: 'fluent:history' },
-  { to: '/workforce/attendance', key: 'nav.attendance', icon: 'fluent:people-list', permission: 'attendance.read' },
-  { to: '/approvals', key: 'nav.approvals', icon: 'fluent:checkmark-circle', permission: 'leave.approve' },
-  { to: '/workforce/overtime', key: 'nav.overtime', icon: 'fluent:clock-alarm', permission: 'attendance.read' },
-  { to: '/payroll/runs', key: 'nav.payrollRuns', icon: 'fluent:data-trending', permission: 'payroll.prepare' },
-  { to: '/payroll/payslips', key: 'nav.payslips', icon: 'fluent:mail-multiple', permission: 'payroll.prepare' },
-  { to: '/payroll/money', key: 'nav.money', icon: 'fluent:toolbox', permission: 'compensation.read' },
-  { to: '/payroll/setup', key: 'nav.payrollSetup', icon: 'fluent:receipt', permission: 'compensation.read' },
-  { to: '/workforce/leave', key: 'nav.leave', icon: 'fluent:receipt', permission: 'leave.read' },
-  { to: '/workforce/leave-types', key: 'nav.leaveTypes', icon: 'fluent:text-bullet-list-square', permission: 'leave.read' },
-  { to: '/workforce/schedule', key: 'nav.teamSchedule', icon: 'fluent:calendar', permission: 'schedule.read' },
-  { to: '/workforce/shifts', key: 'nav.shifts', icon: 'fluent:clock-alarm', permission: 'schedule.read' },
-  { to: '/audit', key: 'nav.audit', icon: 'fluent:shield-checkmark', permission: 'audit.read' },
-  { to: '/contracts', key: 'nav.contracts', icon: 'fluent:document-text', permission: 'contracts.write' },
-  { to: '/documents', key: 'nav.documents', icon: 'fluent:document-folder', permission: 'documents.read' },
-  { to: '/offboardings', key: 'nav.offboardings', icon: 'fluent:clipboard-task', permission: 'offboarding.manage' },
-  { to: '/organisation', key: 'nav.organisation', icon: 'fluent:people-community', permission: 'org.read' },
-  { to: '/companies', key: 'nav.companies', icon: 'fluent:building-people', permission: 'companies.manage' },
-  { to: '/users', key: 'nav.users', icon: 'fluent:person-key', permission: 'users.manage' },
-  { to: '/roles', key: 'nav.roles', icon: 'fluent:shield-checkmark', permission: 'users.manage' },
-  { to: '/ownership', key: 'nav.ownership', icon: 'fluent:people-team', permission: 'settings.manage' },
-  { to: '/automation', key: 'nav.automation', icon: 'fluent:clock-alarm', permission: 'settings.manage' },
-  { to: '/email-templates', key: 'nav.emailTemplates', icon: 'fluent:mail-multiple', permission: 'settings.manage' },
-  { to: '/calendar', key: 'nav.calendar', icon: 'fluent:calendar', permission: 'settings.manage' },
-  { to: '/settings', key: 'nav.settings', icon: 'fluent:settings', permission: 'settings.manage' },
+const PAGES: Array<{ to: string; key: string; icon: string; roles: string[] }> = [
+  { to: '/', key: 'nav.home', icon: 'fluent:home', roles: [] },
+  { to: '/employees', key: 'nav.employees', icon: 'fluent:people', roles: [] },
+  { to: '/reports', key: 'nav.reports', icon: 'fluent:data-trending', roles: ['HR'] },
+  { to: '/emails', key: 'nav.emailLog', icon: 'fluent:mail', roles: ['HR'] },
+  { to: '/assistant', key: 'nav.assistant', icon: 'fluent:bot-sparkle', roles: ['HR'] },
+  { to: '/users', key: 'nav.users', icon: 'fluent:person-key', roles: ['ADMIN'] },
+  { to: '/ownership', key: 'nav.ownership', icon: 'fluent:people-team', roles: ['ADMIN'] },
+  { to: '/automation', key: 'nav.automation', icon: 'fluent:clock-alarm', roles: ['ADMIN'] },
+  { to: '/email-templates', key: 'nav.emailTemplates', icon: 'fluent:mail-multiple', roles: ['ADMIN'] },
+  { to: '/calendar', key: 'nav.calendar', icon: 'fluent:calendar', roles: ['ADMIN'] },
+  { to: '/settings', key: 'nav.settings', icon: 'fluent:settings', roles: ['ADMIN'] },
 ];
 
 const RECENT_KEY = 'cmdk-recent';
@@ -92,13 +72,13 @@ function remember(item: Item) {
 const q = computed(() => query.value.trim().toLowerCase());
 
 const pageItems = computed<Item[]>(() =>
-  PAGES.filter((p) => !p.permission || auth.can(p.permission))
+  PAGES.filter((p) => p.roles.length === 0 || auth.hasRole(...p.roles))
     .map((p) => ({ id: p.to, group: 'pages' as const, title: t(p.key), icon: p.icon, to: p.to }))
     .filter((p) => !q.value || p.title.toLowerCase().includes(q.value)),
 );
 
 const actionItems = computed<Item[]>(() => {
-  if (!auth.can('employees.write')) return [];
+  if (!auth.hasRole('HR')) return [];
   const all: Item[] = [
     { id: 'new-employee', group: 'actions', title: t('nav.newEmployee'), icon: 'user-plus', to: '/employees?new=1' },
   ];

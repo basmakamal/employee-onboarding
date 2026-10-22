@@ -1,5 +1,4 @@
 import type { Db } from '../../common/prisma.js';
-import { employeeCompanyWhere, type CompanyFilter } from '../../workflow/company-filter.js';
 
 export interface EmployeeDocumentInput {
   type: string;
@@ -41,7 +40,7 @@ export class EmployeeDocumentRepository {
    * employees only. The lower bound keeps the scan from re-reading every
    * long-expired document forever; three months of nagging is enough.
    */
-  listExpiring(withinDays: number, type: string | undefined, now: Date, limit = 500, company?: CompanyFilter) {
+  listExpiring(withinDays: number, type: string | undefined, now: Date, limit = 500) {
     const threshold = new Date(now);
     threshold.setUTCDate(threshold.getUTCDate() + withinDays);
     const floor = new Date(now);
@@ -50,7 +49,7 @@ export class EmployeeDocumentRepository {
       where: {
         expiryDate: { lte: threshold, gte: floor },
         ...(type && type !== 'ANY' ? { type } : {}),
-        employee: { status: 'ACTIVE', ...employeeCompanyWhere(company) },
+        employee: { status: 'ACTIVE' },
       },
       include: { employee: { select: { firstName: true, lastName: true, employeeNo: true } } },
       orderBy: { expiryDate: 'asc' },

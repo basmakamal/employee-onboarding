@@ -17,7 +17,7 @@ import {
   verifyUploadedFiles,
 } from '../../common/storage.js';
 import { GuardFailedError } from '../../workflow/errors.js';
-import { contextOf, requirePermission } from '../../auth/authz/authorize.js';
+import { requireRole } from '../../auth/require-auth.middleware.js';
 import type { EmployeeService } from './employee.service.js';
 import type { OnboardingService } from './onboarding.service.js';
 import type { Actor } from '../../workflow/engine.js';
@@ -49,10 +49,6 @@ const createEmployeeSchema = z.object({
   employmentType: z.enum(EMPLOYMENT_TYPES).optional(),
   hireDate: z.coerce.date().optional(),
   preferredLanguage: z.enum(['AR', 'EN']).optional(),
-  /** Placement inside the active company — every id is re-validated server-side. */
-  orgUnitId: z.string().min(1).nullable().optional(),
-  positionId: z.string().min(1).nullable().optional(),
-  managerId: z.string().min(1).nullable().optional(),
   direct: z.boolean().default(false),
   /** Onboarding mode: e-mail the signed data-form link right after creation. */
   sendForm: z.boolean().default(true),
@@ -116,9 +112,6 @@ const updateEmployeeSchema = z.object({
   employmentType: z.enum(EMPLOYMENT_TYPES).optional(),
   hireDate: z.coerce.date().optional(),
   preferredLanguage: z.enum(['AR', 'EN']).optional(),
-  orgUnitId: z.string().min(1).nullable().optional(),
-  positionId: z.string().min(1).nullable().optional(),
-  managerId: z.string().min(1).nullable().optional(),
 });
 
 const createRequestSchema = z.object({
@@ -178,14 +171,14 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
     '/',
     validateQuery(listQuerySchema),
     asyncHandler(async (req, res) => {
-      res.json(await service.list(pagedQuery<EmployeeListQuery>(req), actor(req)));
+      res.json(await service.list(pagedQuery<EmployeeListQuery>(req)));
     }),
   );
 
   /** New hire (onboarding pipeline) by default; `direct: true` for existing staff. */
   router.post(
     '/',
-    requirePermission('employees.write'),
+    requireRole('HR', 'ADMIN'),
     validate(createEmployeeSchema),
     asyncHandler(async (req, res) => {
       const { direct, sendForm, documentTypes, ...rest } = req.body as z.infer<
@@ -210,8 +203,8 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
    *  Registered BEFORE /:id so "options" is never parsed as an id. */
   router.get(
     '/options',
-    asyncHandler(async (req, res) => {
-      res.json(await service.fieldOptions(contextOf(req).companyId));
+    asyncHandler(async (_req, res) => {
+      res.json(await service.fieldOptions());
     }),
   );
 
@@ -235,7 +228,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** Onboarding pipeline actions (BRD stage 1) on the same record. */
   router.post(
     '/:id/actions/:action',
-    requirePermission('onboarding.manage'),
+    requireRole('HR', 'ADMIN'),
     validate(notesSchema),
     asyncHandler(async (req, res) => {
       const method = ONBOARDING_ACTIONS[req.params['action'] as string];
@@ -258,7 +251,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** Contract draft — editable only during CONTRACT_CREATION. */
   router.put(
     '/:id/contract',
-    requirePermission('contracts.write'),
+    requireRole('HR', 'ADMIN'),
     validate(contractSchema),
     asyncHandler(async (req, res) => {
       const { details, externalRef } = req.body as z.infer<typeof contractSchema>;
@@ -276,7 +269,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** The contract document (scan / photo / PDF); typed terms stay optional. */
   router.post(
     '/:id/contract/file',
-    requirePermission('contracts.write'),
+    requireRole('HR', 'ADMIN'),
     (req, _res, next) => {
       req.uploadSubdir = employeeSubdir(req.params['id'] as string);
       next();
@@ -316,7 +309,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
    */
   router.put(
     '/:id/contract/status',
-    requirePermission('contracts.write'),
+    requireRole('HR', 'ADMIN'),
     validate(contractStatusSchema),
     asyncHandler(async (req, res) => {
       const { status, reason } = req.body as z.infer<typeof contractStatusSchema>;
@@ -334,7 +327,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** The trainee withdrew before activation — stops every open action on the file. */
   router.post(
     '/:id/withdraw',
-    requirePermission('onboarding.manage'),
+    requireRole('HR', 'ADMIN'),
     validate(withdrawSchema),
     asyncHandler(async (req, res) => {
       const { reason } = req.body as z.infer<typeof withdrawSchema>;
@@ -345,7 +338,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** Onboarding checklist file download (HR review). */
   router.get(
     '/:id/onboarding-documents/:docId/download',
-    requirePermission('documents.read'),
+    requireRole('HR', 'ADMIN'),
     asyncHandler(async (req, res) => {
       const doc = await onboarding.getDocument(
         req.params['id'] as string,
@@ -358,7 +351,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** DELETE /:id — ADMIN-only hard delete with full child cleanup. */
   router.delete(
     '/:id',
-    requirePermission('employees.delete'),
+    requireRole('ADMIN'),
     asyncHandler(async (req, res) => {
       const storageKeys = await service.remove(req.params['id'] as string, actor(req));
       // Disk cleanup only after the delete committed — files first would
@@ -371,7 +364,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** PUT /:id — HR edits the profile (the reference's "edit data" button). */
   router.put(
     '/:id',
-    requirePermission('employees.write'),
+    requireRole('HR', 'ADMIN'),
     validate(updateEmployeeSchema),
     asyncHandler(async (req, res) => {
       const input = compact(req.body as z.infer<typeof updateEmployeeSchema>);
@@ -382,7 +375,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** Profile photo: upload (HR) and authenticated serving (any staff). */
   router.post(
     '/:id/photo',
-    requirePermission('employees.write'),
+    requireRole('HR', 'ADMIN'),
     (req, _res, next) => {
       // Shard the photo into the employee's directory before multer runs.
       req.uploadSubdir = employeeSubdir(req.params['id'] as string);
@@ -412,7 +405,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   router.get(
     '/:id/photo',
     asyncHandler(async (req, res) => {
-      const key = await service.getPhotoKey(req.params['id'] as string, actor(req));
+      const key = await service.getPhotoKey(req.params['id'] as string);
       res.sendFile(storagePath(key));
     }),
   );
@@ -433,7 +426,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
    */
   router.post(
     '/:id/requests',
-    requirePermission('requests.write'),
+    requireRole('HR', 'ADMIN'),
     (req, _res, next) => {
       req.uploadSubdir = employeeSubdir(req.params['id'] as string);
       next();
@@ -472,7 +465,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
    */
   router.put(
     '/:id/requests/:requestId/document',
-    requirePermission('requests.write'),
+    requireRole('HR', 'ADMIN'),
     (req, _res, next) => {
       req.uploadSubdir = employeeSubdir(req.params['id'] as string);
       next();
@@ -500,7 +493,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
   /** The request's document, for the in-page viewer. */
   router.get(
     '/:id/requests/:requestId/document',
-    requirePermission('documents.read'),
+    requireRole('HR', 'ADMIN'),
     asyncHandler(async (req, res) => {
       const doc = await service.getRequestDocument(
         req.params['id'] as string,
@@ -558,7 +551,7 @@ export function employeeRouter(service: EmployeeService, onboarding: OnboardingS
         res.status(404).json({ error: { code: 'NOT_FOUND', message: `unknown process ${kind}` } });
         return;
       }
-      const key = await service.getProcessCertificateKey(req.params['id'] as string, kind, actor(req));
+      const key = await service.getProcessCertificateKey(req.params['id'] as string, kind);
       res.sendFile(storagePath(key));
     }),
   );

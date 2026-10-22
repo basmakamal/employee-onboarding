@@ -59,8 +59,6 @@ const OPEN_FILE: Record<Locale, string> = { ar: 'فتح ملف الموظف', en
 
 export interface TemplateParams {
   name?: string;
-  /** "October 2026" — the month of a payslip. */
-  payMonth?: string;
   employeeNo?: string;
   department?: string;
   jobTitle?: string;
@@ -210,32 +208,6 @@ const T: Record<string, Record<Locale, Template>> = {
   },
 
   // ────────────────────────────────────────── 2. form not completed (24h)
-  'employee.payslip': {
-    ar: (p) =>
-      toEmployee(
-        'ar',
-        `قسيمة راتب ${p.payMonth ?? ''}`,
-        'قسيمة راتبك جاهزة',
-        [
-          hello('ar', p),
-          `تجد مرفقًا قسيمة راتبك لشهر ${p.payMonth ?? ''}.`,
-          'إن كان لديك أي استفسار عنها فيرجى التواصل مع إدارة الموارد البشرية.',
-        ],
-        { label: '', url: undefined },
-      ),
-    en: (p) =>
-      toEmployee(
-        'en',
-        `Payslip ${p.payMonth ?? ''}`,
-        'Your payslip is ready',
-        [
-          hello('en', p),
-          `Please find attached your payslip for ${p.payMonth ?? ''}.`,
-          'If you have any question about it, please contact Human Resources.',
-        ],
-        { label: '', url: undefined },
-      ),
-  },
   'employee.form_reminder': {
     ar: (p) =>
       toEmployee(

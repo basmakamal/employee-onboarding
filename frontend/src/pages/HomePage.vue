@@ -13,7 +13,6 @@ import { api } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import { useListsStore } from '../stores/lists';
 import SkeletonBlock from '../components/SkeletonBlock.vue';
-import { useApprovalCount } from '../composables/useApprovalCount';
 import StatusChip from '../components/StatusChip.vue';
 
 type CountMap = Record<string, number>;
@@ -41,9 +40,6 @@ interface DashboardData {
   processes: { gosi: CountMap; medical: CountMap; criminal: CountMap };
   attention: AttentionItem[];
   counts: { stalled: number; expiringDocs: number; custodyWaiting: number; joinedThisMonth: number };
-  /** Transfers / promotions taking effect in the next 30 days. */
-  upcomingChanges?: Array<{ batchId: string; category: string; effectiveDate: string; employeeId: string; name: string }>;
-  /** Active people without a self-service login. */
   recentJoiners: Joiner[];
   recent: Array<{
     id: string;
@@ -78,11 +74,9 @@ const today = computed(() =>
 );
 
 // ── attention ────────────────────────────────────────────────────────────
-// Requests waiting for this approver (0 for people who approve nothing).
-const approvals = useApprovalCount();
 const attentionTotal = computed(() => {
   const c = data.value?.counts;
-  return (c ? c.stalled + c.expiringDocs + c.custodyWaiting : 0) + approvals.count.value.total;
+  return c ? c.stalled + c.expiringDocs + c.custodyWaiting : 0;
 });
 
 /** One sentence per kind of problem, each pointing where it is fixed. */
@@ -90,9 +84,7 @@ const attentionSummary = computed(() => {
   const c = data.value?.counts;
   if (!c) return [];
   const one = (n: number, key: string) => (n === 1 ? t(`dashboard.${key}One`) : t(`dashboard.${key}`, { n }));
-  const waiting = approvals.count.value.total;
   return [
-    waiting ? { key: 'approvals', text: one(waiting, 'attnApprovals'), to: '/approvals', tone: 'warning' } : null,
     c.stalled ? { key: 'stalled', text: one(c.stalled, 'attnStalled'), to: '/employees?filter=onboarding', tone: 'warning' } : null,
     c.expiringDocs ? { key: 'expiring', text: one(c.expiringDocs, 'attnExpiring'), to: '/reports', tone: 'warning' } : null,
     c.custodyWaiting ? { key: 'custody', text: one(c.custodyWaiting, 'attnCustody'), to: '/employees?filter=active', tone: 'info' } : null,
@@ -129,10 +121,6 @@ const stages = computed(() => PIPELINE_STAGES.filter((s) => (data.value?.onboard
 const upcoming = computed(() =>
   (data.value?.attention ?? []).filter((a) => a.kind === 'expiring').sort((a, b) => a.days - b.days).slice(0, 6),
 );
-
-const changes = computed(() => data.value?.upcomingChanges ?? []);
-const changeDate = (d: string) =>
-  new Date(`${d}T00:00:00Z`).toLocaleDateString(locale.value === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short' });
 
 // ── helpers ──────────────────────────────────────────────────────────────
 /** One of six soft tints, always the same for the same person. */
@@ -186,7 +174,7 @@ onMounted(async () => {
           </template>
         </p>
       </div>
-      <v-btn v-if="auth.can('employees.write')" color="primary" prepend-icon="plus" to="/employees?new=1">
+      <v-btn v-if="auth.hasRole('HR')" color="primary" prepend-icon="plus" to="/employees?new=1">
         {{ $t('employees.new') }}
       </v-btn>
     </header>
@@ -320,22 +308,6 @@ onMounted(async () => {
               </router-link>
             </div>
             <div v-else class="panel__empty">{{ $t('dashboard.upcomingEmpty') }}</div>
-          </v-card>
-
-          <v-card v-if="changes.length" class="panel mb-4">
-            <div class="panel__head">
-              <h2 class="panel__title">{{ $t('dashboard.upcomingChanges') }}</h2>
-              <router-link to="/employee-changes" class="panel__link">{{ $t('common.viewAll') }}</router-link>
-            </div>
-            <div class="list">
-              <router-link v-for="c in changes" :key="c.batchId + c.category" :to="`/employees/${c.employeeId}`" class="list__row">
-                <div class="min-w-0 flex-grow-1">
-                  <div class="list__text text-truncate">{{ c.name }}</div>
-                  <div class="list__meta text-truncate">{{ $t(`history.categories.${c.category}`) }} · {{ changeDate(c.effectiveDate) }}</div>
-                </div>
-                <v-icon icon="chevron-right" size="16" class="list__chev flip-rtl" />
-              </router-link>
-            </div>
           </v-card>
 
           <v-card class="panel mb-4">

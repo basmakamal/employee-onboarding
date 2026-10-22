@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { errorText } from '../../validation/errors';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { api } from '../../api/client';
+import { api, ApiError } from '../../api/client';
 import { usePreferencesStore } from '../../stores/preferences';
 
 interface AssetItem {
@@ -53,7 +52,7 @@ async function decide(decision: 'APPROVE' | 'REJECT') {
     });
     state.value = decision === 'APPROVE' ? 'approved' : 'rejected';
   } catch (e) {
-    error.value = errorText(e);
+    error.value = e instanceof ApiError ? e.message : t('common.error');
     state.value = 'ready';
   }
 }

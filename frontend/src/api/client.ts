@@ -19,44 +19,15 @@ export class ApiError extends Error {
 let accessToken = '';
 let onSession: (user: SessionUser | null, token: string) => void = () => {};
 
-export interface SessionCompany {
-  id: string;
-  code: string;
-  nameAr: string;
-  nameEn: string;
-}
-
 export interface SessionUser {
   id: string;
   name: string;
   email: string;
-  /** Legacy single role — `roles` and `permissions` are what the UI should read. */
   role: string;
-  /** Role codes in force in the active company (global roles always). */
-  roles: string[];
-  /** Permission codes — decide what to SHOW; the server decides what is allowed. */
-  permissions: string[];
-  /** Companies this user may work in. */
-  companies: SessionCompany[];
-  /** The selected workspace, or null when one still has to be chosen. */
-  activeCompany: SessionCompany | null;
   /** A profile picture exists at /api/auth/me/photo. */
   hasPhoto?: boolean;
   /** Still on a temporary password — the app forces a change before anything else. */
   mustChangePassword?: boolean;
-}
-
-/**
- * For the few raw fetch() calls (multipart uploads): read the API's error
- * envelope into the same ApiError the helpers throw, so the code — and the
- * translated message — survive.
- */
-export async function apiErrorFrom(res: Response): Promise<ApiError> {
-  const data = (await res.json().catch(() => null)) as {
-    error?: { code?: string; message?: string; details?: never };
-  } | null;
-  const err = data?.error;
-  return new ApiError(err?.code ?? 'UNKNOWN', err?.message ?? res.statusText, res.status, err?.details);
 }
 
 export function setAccessToken(token: string) {
@@ -110,11 +81,6 @@ async function request<T>(method: string, url: string, body?: unknown, retried =
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message?: string; details?: never } })?.error;
-    // Company-owned data without a selected company: go and pick one.
-    if (err?.code === 'COMPANY_REQUIRED' && !window.location.pathname.startsWith('/select-company')) {
-      const back = window.location.pathname + window.location.search;
-      window.location.assign(`/select-company?redirect=${encodeURIComponent(back)}`);
-    }
     throw new ApiError(err?.code ?? 'UNKNOWN', err?.message ?? res.statusText, res.status, err?.details);
   }
   return data as T;

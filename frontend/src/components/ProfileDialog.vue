@@ -4,12 +4,10 @@
  * Email and role are shown but owned by the administrator.
  */
 import { computed, ref, watch } from 'vue';
-import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api, getAccessToken, type SessionUser, apiErrorFrom } from '../api/client';
+import { api, ApiError, getAccessToken, type SessionUser } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import { useMyAvatar } from '../composables/useMyAvatar';
-import { rules } from '../validation/rules';
 
 const open = defineModel<boolean>({ default: false });
 const auth = useAuthStore();
@@ -39,22 +37,17 @@ const initials = computed(() =>
     .join('')
     .toUpperCase(),
 );
-/** Save is offered once something changed; an empty name is explained, not silently blocked. */
-const canSave = computed(() => name.value.trim() !== auth.user?.name);
+const canSave = computed(() => name.value.trim().length > 0 && name.value.trim() !== auth.user?.name);
 
 async function save() {
-  error.value = '';
-  if (!name.value.trim()) {
-    error.value = t('errors.fixFields');
-    return;
-  }
   saving.value = true;
+  error.value = '';
   try {
     const res = await api.put<{ user: SessionUser }>('/api/auth/me', { name: name.value.trim() });
     auth.user = res.user;
     open.value = false;
   } catch (e) {
-    error.value = errorText(e);
+    error.value = e instanceof ApiError ? e.message : t('common.error');
   } finally {
     saving.value = false;
   }
@@ -75,13 +68,14 @@ async function onPicked(event: Event) {
       body,
     });
     if (!res.ok) {
-      throw await apiErrorFrom(res);
+      const data = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+      throw new Error(data?.error?.message ?? t('common.error'));
     }
     const data = (await res.json()) as { user: SessionUser };
     auth.user = data.user;
     avatar.bump();
   } catch (e) {
-    error.value = errorText(e);
+    error.value = e instanceof Error ? e.message : t('common.error');
     preview.value = '';
   } finally {
     uploading.value = false;
@@ -118,7 +112,7 @@ async function onPicked(event: Event) {
           </div>
         </div>
 
-        <v-text-field v-model="name" :label="$t('fields.name') + ' *'" prepend-inner-icon="user" :rules="[rules.required, rules.maxLength(120)]" class="mb-1" />
+        <v-text-field v-model="name" :label="$t('fields.name')" prepend-inner-icon="user" class="mb-1" />
         <v-text-field :model-value="auth.user?.email" :label="$t('fields.email')" prepend-inner-icon="mail" readonly dir="ltr" class="mb-1" />
         <v-text-field :model-value="$t(`roles.${auth.user?.role}`)" :label="$t('users.role')" prepend-inner-icon="shield-check" readonly />
         <p class="text-caption text-medium-emphasis mb-0">{{ $t('account.adminOnly') }}</p>

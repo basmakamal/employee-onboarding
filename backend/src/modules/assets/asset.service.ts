@@ -2,7 +2,6 @@ import type { Actor, OwnershipLookup } from '../../workflow/engine.js';
 import { Workflow } from '../../workflow/engine.js';
 import { assetFormMachine } from '../../workflow/machines/asset-form.machine.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
-import { actorScope } from '../../auth/authz/authorize.js';
 import type { AssetForm } from '../../generated/prisma/client.js';
 import type { AssetFormStatus } from '../../generated/prisma/enums.js';
 import type { UnitOfWork } from '../../common/prisma.js';
@@ -52,9 +51,7 @@ export class AssetService {
     private readonly transact: UnitOfWork<AssetTxScope>,
     private readonly ownership?: OwnershipLookup,
     /** Named primary owners of custody — they get every team notice in addition to IT. */
-    private readonly responsibility?: {
-      get(processKey: string, scope?: { companyId?: string | null; ref?: { entity: string; entityId: string } }): Promise<string[]>;
-    },
+    private readonly responsibility?: { get(processKey: string): Promise<string[]> },
   ) {
     // Guards read through the root client — they run before the guarded
     // move, exactly as a pre-check, so they don't need the transaction.
@@ -85,13 +82,12 @@ export class AssetService {
 
   // ------------------------------------------------------------ registry
 
-  /** Each company keeps its own asset registry. */
-  listAssets(companyId: string) {
-    return this.repos.assets.list(companyId);
+  listAssets() {
+    return this.repos.assets.list();
   }
 
-  createAsset(companyId: string, data: { type: string; name: string; serialNumber?: string; notes?: string }) {
-    return this.repos.assets.create({ ...data, companyId });
+  createAsset(data: { type: string; name: string; serialNumber?: string; notes?: string }) {
+    return this.repos.assets.create(data);
   }
 
   // ------------------------------------------------------------ HR side
@@ -104,7 +100,7 @@ export class AssetService {
     },
     actor: Actor,
   ) {
-    const employee = await this.repos.employees.findById(input.employeeId, actorScope(actor));
+    const employee = await this.repos.employees.findById(input.employeeId);
     if (!employee) throw new NotFoundError('employee', input.employeeId);
     // Custody can start at the trainee stage — but not for someone who left.
     if (employee.status === 'WITHDRAWN' || employee.status === 'INACTIVE') {
@@ -126,8 +122,8 @@ export class AssetService {
     });
   }
 
-  async replaceItems(formId: string, items: AssetFormItemInput[], actor: Actor) {
-    const form = await this.mustFind(formId, actor);
+  async replaceItems(formId: string, items: AssetFormItemInput[], _actor: Actor) {
+    const form = await this.mustFind(formId);
     if (form.status !== 'DRAFT') {
       throw new GuardFailedError('NOT_DRAFT', 'items can only be edited while the form is a draft');
     }
@@ -137,7 +133,7 @@ export class AssetService {
 
   /** SEND: machine guards non-empty; then link + email to the employee. */
   async send(formId: string, actor: Actor) {
-    const form = await this.mustFind(formId, actor);
+    const form = await this.mustFind(formId);
     await this.transact(async (s) => {
       await this.workflowFor(s).transition(form, 'SEND', actor);
       await s.forms.moveStatus(formId, 'SENT', 'SENT', { sentAt: new Date() });
@@ -168,12 +164,12 @@ export class AssetService {
   }
 
   async cancel(formId: string, actor: Actor) {
-    const form = await this.mustFind(formId, actor);
+    const form = await this.mustFind(formId);
     return this.transact((s) => this.workflowFor(s).transition(form, 'CANCEL', actor));
   }
 
   async revise(formId: string, actor: Actor) {
-    const form = await this.mustFind(formId, actor);
+    const form = await this.mustFind(formId);
     return this.transact((s) => this.workflowFor(s).transition(form, 'REVISE', actor));
   }
 
@@ -258,7 +254,7 @@ export class AssetService {
     };
     const ref = { entity: 'ASSET_FORM', entityId: form.id };
     const template = decision === 'APPROVE' ? 'hr.asset_approved' : 'hr.asset_rejected';
-    const ownerIds = (await this.responsibility?.get('ASSET_FORM', { companyId: form.employee.companyId })) ?? [];
+    const ownerIds = (await this.responsibility?.get('ASSET_FORM')) ?? [];
     await this.notifications.notifyTeam(
       { processKey: 'ASSET_FORM', status: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED', role: 'IT', ownerIds },
       template,
@@ -270,8 +266,8 @@ export class AssetService {
 
   // ------------------------------------------------------------------ private
 
-  private async mustFind(id: string, actor?: Actor) {
-    const form = await this.repos.forms.findWithItems(id, actorScope(actor));
+  private async mustFind(id: string) {
+    const form = await this.repos.forms.findWithItems(id);
     if (!form) throw new NotFoundError('asset form', id);
     return form;
   }

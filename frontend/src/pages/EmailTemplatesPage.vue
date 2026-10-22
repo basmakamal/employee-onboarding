@@ -9,15 +9,10 @@
  * Triggers: "when <process> enters <status>, send <template> to <recipient>".
  */
 import { computed, nextTick, onMounted, ref } from 'vue';
-import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useConfirm } from '../composables/useConfirm';
 import PageHeader from '../components/PageHeader.vue';
-import { useActiveCompanyName } from '../composables/useActiveCompany';
-import FormErrorAlert from '../components/FormErrorAlert.vue';
-import { useForm } from '../composables/useForm';
-import { rules } from '../validation/rules';
 
 type Audience = 'employee' | 'staff';
 type Lang = 'ar' | 'en';
@@ -90,8 +85,6 @@ interface TriggerOptions {
 }
 
 const { t, locale } = useI18n();
-/** Each company has its own settings here — the header says whose. */
-const companyName = useActiveCompanyName();
 const confirm = useConfirm();
 const lang = computed<Lang>(() => (locale.value === 'ar' ? 'ar' : 'en'));
 
@@ -105,7 +98,7 @@ function notify(text: string, color = 'success') {
   snackbar.value = { show: true, text, color };
 }
 function fail(e: unknown) {
-  notify(errorText(e), 'error');
+  notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
 }
 function templateName(tpl: { nameAr: string; nameEn: string }) {
   return lang.value === 'ar' ? tpl.nameAr : tpl.nameEn;
@@ -153,7 +146,6 @@ function emptyDraft(): Draft {
 }
 
 async function openEditor(key: string) {
-  editorForm.reset();
   try {
     const detail = await api.get<TemplateDetail>(`/api/email-templates/${key}`);
     const r = detail.row;
@@ -236,15 +228,9 @@ async function preview() {
   }
 }
 
-function save() {
-  const problems = editorProblems();
-  if (Object.keys(problems).length) {
-    editorForm.invalid(problems);
-    if (!problems['subjectAr'] && !problems['bodyAr'] && (problems['subjectEn'] || problems['bodyEn'])) editor.value.tab = 'en';
-    else if (problems['subjectAr'] || problems['bodyAr']) editor.value.tab = 'ar';
-    return;
-  }
-  return editorForm.submit(async () => {
+async function save() {
+  editor.value.saving = true;
+  try {
     const d = editor.value.draft;
     await api.put(`/api/email-templates/${editor.value.key}`, {
       ...d,
@@ -254,7 +240,11 @@ function save() {
     notify(t('emailTemplates.saved'));
     editor.value.show = false;
     await load();
-  });
+  } catch (e) {
+    fail(e);
+  } finally {
+    editor.value.saving = false;
+  }
 }
 
 async function sendTest() {
@@ -275,13 +265,11 @@ async function sendTest() {
 const newDialog = ref(false);
 const creating = ref(false);
 const newTemplate = ref({ name: '', audience: 'staff' as Audience });
-const newTplForm = useForm();
-const editorForm = useForm();
-const triggerForm = useForm();
 
 /** Create with placeholder text, then open the editor so the admin writes the real wording. */
-function createTemplate() {
-  return newTplForm.submit(async () => {
+async function createTemplate() {
+  creating.value = true;
+  try {
     const name = newTemplate.value.name.trim();
     const created = await api.post<{ key: string }>('/api/email-templates', {
       name,
@@ -297,7 +285,11 @@ function createTemplate() {
     notify(t('emailTemplates.created'));
     await load();
     await openEditor(created.key);
-  });
+  } catch (e) {
+    fail(e);
+  } finally {
+    creating.value = false;
+  }
 }
 
 async function deleteTemplate(key: string) {
@@ -324,22 +316,10 @@ async function revert(key: string) {
   }
 }
 
-/**
- * Arabic and English live on separate tabs and only one is rendered, so the
- * rules cannot see the hidden one. Check both here; on a problem, show it on
- * the field and switch to the tab that has it.
- */
-function editorProblems(): Record<string, string[]> {
+const canSave = computed(() => {
   const d = editor.value.draft;
-  const req = t('errors.field.required');
-  const out: Record<string, string[]> = {};
-  if (!d.name.trim()) out['name'] = [req];
-  if (!d.subjectAr.trim()) out['subjectAr'] = [req];
-  if (!d.bodyAr.trim()) out['bodyAr'] = [req];
-  if (!d.subjectEn.trim()) out['subjectEn'] = [req];
-  if (!d.bodyEn.trim()) out['bodyEn'] = [req];
-  return out;
-}
+  return !!(d.subjectAr.trim() && d.subjectEn.trim() && d.bodyAr.trim() && d.bodyEn.trim());
+});
 
 // ── triggers ─────────────────────────────────────────────────────────────────
 const triggerDialog = ref(false);
@@ -372,8 +352,9 @@ function statusLabel(processKey: string, status: string): string {
   return t(key, t(`processStatus.${status}`, t(`assetStatus.${status}`, status)));
 }
 
-function createTrigger() {
-  return triggerForm.submit(async () => {
+async function createTrigger() {
+  savingTrigger.value = true;
+  try {
     const n = newTrigger.value;
     await api.post('/api/email-triggers', {
       processKey: n.processKey,
@@ -387,7 +368,11 @@ function createTrigger() {
     triggerDialog.value = false;
     notify(t('emailTemplates.triggers.created'));
     await load();
-  });
+  } catch (e) {
+    fail(e);
+  } finally {
+    savingTrigger.value = false;
+  }
 }
 
 /** Add or remove copy recipients inline — e.g. yourself while checking the wording. */
@@ -434,12 +419,12 @@ async function removeTrigger(trigger: Trigger) {
 
 <template>
   <v-container class="py-8" style="max-width: 1200px">
-    <PageHeader :title="$t('emailTemplates.title')" :subtitle="$t('emailTemplates.subtitleCompany', { company: companyName })">
+    <PageHeader :title="$t('emailTemplates.title')" :subtitle="$t('emailTemplates.subtitle')">
       <!-- The frequent actions live up here, not under the templates list. -->
-      <v-btn variant="tonal" prepend-icon="file-plus" @click="newTplForm.reset(); newDialog = true">
+      <v-btn variant="tonal" prepend-icon="file-plus" @click="newDialog = true">
         {{ $t('emailTemplates.newTemplate') }}
       </v-btn>
-      <v-btn color="primary" prepend-icon="plus" @click="triggerForm.reset(); triggerDialog = true">
+      <v-btn color="primary" prepend-icon="plus" @click="triggerDialog = true">
         {{ $t('emailTemplates.triggers.add') }}
       </v-btn>
     </PageHeader>
@@ -599,18 +584,16 @@ async function removeTrigger(trigger: Trigger) {
         </div>
 
         <v-card-text class="pt-4">
-          <FormErrorAlert :form="editorForm" />
           <v-row>
             <v-col cols="12" md="7">
-              <v-text-field v-model="editor.draft.name" :label="$t('emailTemplates.name') + ' *'" :error-messages="editorForm.errorsFor('name')" class="mb-1" />
+              <v-text-field v-model="editor.draft.name" :label="$t('emailTemplates.name')" class="mb-1" />
 
               <!-- Arabic pane -->
               <template v-if="editor.tab === 'ar'">
                 <v-text-field
                   ref="subjectFieldAr"
                   v-model="editor.draft.subjectAr"
-                  :label="$t('emailTemplates.subject') + ' *'"
-                  :error-messages="editorForm.errorsFor('subjectAr')"
+                  :label="$t('emailTemplates.subject')"
                   dir="rtl"
                   class="mb-1"
                   @focus="focusTarget = 'subject'"
@@ -618,8 +601,7 @@ async function removeTrigger(trigger: Trigger) {
                 <v-textarea
                   ref="bodyFieldAr"
                   v-model="editor.draft.bodyAr"
-                  :label="$t('emailTemplates.body') + ' *'"
-                  :error-messages="editorForm.errorsFor('bodyAr')"
+                  :label="$t('emailTemplates.body')"
                   :hint="$t('emailTemplates.bodyHint')"
                   persistent-hint
                   rows="10"
@@ -643,8 +625,7 @@ async function removeTrigger(trigger: Trigger) {
                 <v-text-field
                   ref="subjectFieldEn"
                   v-model="editor.draft.subjectEn"
-                  :label="$t('emailTemplates.subject') + ' *'"
-                  :error-messages="editorForm.errorsFor('subjectEn')"
+                  :label="$t('emailTemplates.subject')"
                   dir="ltr"
                   class="mb-1"
                   @focus="focusTarget = 'subject'"
@@ -652,8 +633,7 @@ async function removeTrigger(trigger: Trigger) {
                 <v-textarea
                   ref="bodyFieldEn"
                   v-model="editor.draft.bodyEn"
-                  :label="$t('emailTemplates.body') + ' *'"
-                  :error-messages="editorForm.errorsFor('bodyEn')"
+                  :label="$t('emailTemplates.body')"
                   :hint="$t('emailTemplates.bodyHint')"
                   persistent-hint
                   rows="10"
@@ -762,7 +742,7 @@ async function removeTrigger(trigger: Trigger) {
             {{ $t('emailTemplates.test') }}
           </v-btn>
           <v-btn variant="text" @click="editor.show = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn variant="flat" color="primary" class="px-5" :loading="editorForm.busy.value" @click="save">
+          <v-btn variant="flat" color="primary" class="px-5" :loading="editor.saving" :disabled="!canSave" @click="save">
             {{ $t('common.save') }}
           </v-btn>
         </v-card-actions>
@@ -777,9 +757,7 @@ async function removeTrigger(trigger: Trigger) {
           <p class="text-caption text-medium-emphasis mb-0">{{ $t('emailTemplates.newTemplateHint') }}</p>
         </div>
         <v-card-text class="pt-4">
-          <FormErrorAlert :form="newTplForm" />
-          <v-form :ref="newTplForm.bind" @submit.prevent="createTemplate">
-          <v-text-field v-model="newTemplate.name" :label="$t('emailTemplates.name') + ' *'" autofocus class="mb-2" :rules="[rules.required, rules.maxLength(120)]" :error-messages="newTplForm.errorsFor('name')" />
+          <v-text-field v-model="newTemplate.name" :label="$t('emailTemplates.name')" autofocus class="mb-2" />
           <v-select
             v-model="newTemplate.audience"
             :items="[
@@ -788,12 +766,11 @@ async function removeTrigger(trigger: Trigger) {
             ]"
             :label="$t('emailTemplates.audienceLabel')"
           />
-          </v-form>
         </v-card-text>
         <v-card-actions class="px-6 pb-5 pt-2">
           <v-spacer />
           <v-btn variant="text" @click="newDialog = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn variant="flat" color="primary" class="px-5" :loading="newTplForm.busy.value" @click="createTemplate">
+          <v-btn variant="flat" color="primary" class="px-5" :loading="creating" :disabled="!newTemplate.name.trim()" @click="createTemplate">
             {{ $t('common.create') }}
           </v-btn>
         </v-card-actions>
@@ -808,8 +785,6 @@ async function removeTrigger(trigger: Trigger) {
           <p class="text-caption text-medium-emphasis mb-0">{{ $t('emailTemplates.triggers.subtitle') }}</p>
         </div>
         <v-card-text class="pt-4">
-          <FormErrorAlert :form="triggerForm" />
-          <v-form :ref="triggerForm.bind" @submit.prevent="createTrigger">
           <v-row dense>
             <v-col cols="12" sm="6">
               <v-select
@@ -823,18 +798,14 @@ async function removeTrigger(trigger: Trigger) {
               <v-select
                 v-model="newTrigger.status"
                 :items="triggerStatuses.map((s) => ({ title: statusLabel(newTrigger.processKey, s), value: s }))"
-                :label="$t('emailTemplates.triggers.status') + ' *'"
-                :rules="[rules.required]"
-                :error-messages="triggerForm.errorsFor('status')"
+                :label="$t('emailTemplates.triggers.status')"
               />
             </v-col>
             <v-col cols="12">
               <v-select
                 v-model="newTrigger.templateKey"
                 :items="options.templates.map((tpl) => ({ title: templateName(tpl), value: tpl.key, props: { subtitle: tpl.key } }))"
-                :label="$t('emailTemplates.triggers.template') + ' *'"
-                :rules="[rules.required]"
-                :error-messages="triggerForm.errorsFor('templateKey')"
+                :label="$t('emailTemplates.triggers.template')"
               />
             </v-col>
             <v-col cols="12" sm="6">
@@ -852,18 +823,14 @@ async function removeTrigger(trigger: Trigger) {
               <v-select
                 v-model="newTrigger.role"
                 :items="options.roles.map((r) => ({ title: $t(`roles.${r}`), value: r }))"
-                :label="$t('emailTemplates.triggers.role') + ' *'"
-                :rules="[rules.required]"
-                :error-messages="triggerForm.errorsFor('role')"
+                :label="$t('emailTemplates.triggers.role')"
               />
             </v-col>
             <v-col v-if="newTrigger.recipient === 'GROUP'" cols="12" sm="6">
               <v-select
                 v-model="newTrigger.groupId"
                 :items="(options.groups ?? []).map((g) => ({ title: groupName(g.id), value: g.id, props: { subtitle: g.nameEn } }))"
-                :label="$t('emailTemplates.triggers.group') + ' *'"
-                :rules="[rules.required]"
-                :error-messages="triggerForm.errorsFor('groupId')"
+                :label="$t('emailTemplates.triggers.group')"
               />
             </v-col>
             <v-col cols="12">
@@ -872,8 +839,6 @@ async function removeTrigger(trigger: Trigger) {
                 :label="$t('emailTemplates.triggers.cc')"
                 :hint="$t('emailTemplates.triggers.ccHint')"
                 persistent-hint
-                :rules="[rules.emailList]"
-                :error-messages="triggerForm.errorsFor('ccEmails')"
                 multiple
                 chips
                 closable-chips
@@ -882,12 +847,11 @@ async function removeTrigger(trigger: Trigger) {
               />
             </v-col>
           </v-row>
-          </v-form>
         </v-card-text>
         <v-card-actions class="px-6 pb-5 pt-2">
           <v-spacer />
           <v-btn variant="text" @click="triggerDialog = false">{{ $t('common.cancel') }}</v-btn>
-          <v-btn variant="flat" color="primary" class="px-5" :loading="triggerForm.busy.value" @click="createTrigger">
+          <v-btn variant="flat" color="primary" class="px-5" :loading="savingTrigger" @click="createTrigger">
             {{ $t('common.create') }}
           </v-btn>
         </v-card-actions>

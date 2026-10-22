@@ -48,16 +48,8 @@ export interface Actor {
   type: ActorType;
   /** User id when type is USER; token id when type is LINK. */
   id?: string;
-  /** Legacy single role (HR/ADMIN) when type is USER — kept during the multi-company transition. */
+  /** Staff role (HR/ADMIN) when type is USER. */
   role?: string;
-  /** Every role code the user holds in the active company (plus global ones). */
-  roles?: string[];
-  /** Effective permission codes (see auth/authz/permissions.ts). */
-  permissions?: string[];
-  /** The validated active company — absent until one is selected. */
-  companyId?: string;
-  /** Where inside the company the user may reach. */
-  scope?: { companyId: string | null; all: boolean; orgUnitPaths: string[] };
 }
 
 export interface TransitionContext<TRecord> {
@@ -142,13 +134,10 @@ export class Workflow<TRecord> {
   }
 
   private roleAllowed(def: TransitionDef<TRecord>, actor: Actor): boolean {
-    if (actor.type !== 'USER') return true;
-    const held = actor.roles ?? (actor.role ? [actor.role] : []);
-    // Super admins (and the legacy ADMIN role) pass every ownership check.
-    if (held.includes('ADMIN') || held.includes('SUPER_ADMIN')) return true;
+    if (actor.type !== 'USER' || actor.role === 'ADMIN') return true;
     const roles = this.deps.ownership?.rolesFor(this.def.key, def.from) ?? def.roles;
     if (!roles) return true;
-    return roles.some((r) => held.includes(r));
+    return roles.includes(actor.role ?? '');
   }
 
   async transition(

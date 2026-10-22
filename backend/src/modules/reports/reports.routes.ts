@@ -1,6 +1,6 @@
 import { Router, type Response } from 'express';
 import { asyncHandler } from '../../common/http.js';
-import { actorScope, requirePermission } from '../../auth/authz/authorize.js';
+import { requireRole } from '../../auth/require-auth.middleware.js';
 import type { ReportsService } from './reports.service.js';
 
 function excelHeaders(res: Response, filename: string) {
@@ -17,36 +17,36 @@ function excelHeaders(res: Response, filename: string) {
  */
 export function reportsRouter(service: ReportsService): Router {
   const router = Router();
-  router.use(requirePermission('reports.view'));
+  router.use(requireRole('HR', 'ADMIN'));
 
   router.get(
     '/summary',
-    asyncHandler(async (req, res) => {
-      res.json(await service.summary(actorScope(req.actor)));
+    asyncHandler(async (_req, res) => {
+      res.json(await service.summary());
     }),
   );
 
   router.get(
     '/export/employees',
-    asyncHandler(async (req, res) => {
+    asyncHandler(async (_req, res) => {
       excelHeaders(res, 'employees');
-      await service.streamEmployees(res, actorScope(req.actor));
+      await service.streamEmployees(res);
     }),
   );
 
   router.get(
     '/export/onboarding',
-    asyncHandler(async (req, res) => {
+    asyncHandler(async (_req, res) => {
       excelHeaders(res, 'onboarding');
-      await service.streamOnboarding(res, actorScope(req.actor));
+      await service.streamOnboarding(res);
     }),
   );
 
   router.get(
     '/export/expiring-documents',
-    asyncHandler(async (req, res) => {
+    asyncHandler(async (_req, res) => {
       excelHeaders(res, 'expiring-documents');
-      await service.streamExpiringDocuments(res, actorScope(req.actor));
+      await service.streamExpiringDocuments(res);
     }),
   );
 
@@ -55,7 +55,7 @@ export function reportsRouter(service: ReportsService): Router {
     asyncHandler(async (req, res) => {
       const days = Math.min(365, Math.max(1, Number(req.query['days']) || 30));
       excelHeaders(res, `audit-${days}d`);
-      await service.streamAudit(res, days, actorScope(req.actor));
+      await service.streamAudit(res, days);
     }),
   );
 

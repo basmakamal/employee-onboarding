@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import PageHeader from '../components/PageHeader.vue';
-import { useActiveCompanyName } from '../composables/useActiveCompany';
-import FormErrorAlert from '../components/FormErrorAlert.vue';
-import { useForm } from '../composables/useForm';
-import { rules as v } from '../validation/rules';
 
 interface SlaRuleRow {
   id: string;
@@ -51,8 +46,6 @@ const WATCHABLE: Record<string, string[]> = {
 };
 
 const { t } = useI18n();
-/** Each company has its own settings here — the header says whose. */
-const companyName = useActiveCompanyName();
 const rules = ref<SlaRuleRow[]>([]);
 const loaded = ref(false);
 const busy = ref('');
@@ -60,7 +53,6 @@ const snackbar = ref({ show: false, text: '', color: 'success' });
 
 const newDialog = ref(false);
 const saving = ref(false);
-const ruleForm = useForm();
 const newRule = ref({
   processKey: 'EMPLOYEE',
   status: 'AWAITING_FORM',
@@ -115,8 +107,9 @@ async function load() {
   loaded.value = true;
 }
 
-function createRule() {
-  return ruleForm.submit(async () => {
+async function createRule() {
+  saving.value = true;
+  try {
     const body = {
       ...newRule.value,
       escalateToRole: newRule.value.action === 'ESCALATE' ? newRule.value.escalateToRole : null,
@@ -125,7 +118,11 @@ function createRule() {
     newDialog.value = false;
     notify(t('common.saved'));
     await load();
-  });
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function updateRule(rule: SlaRuleRow, changes: Record<string, unknown>) {
@@ -134,7 +131,7 @@ async function updateRule(rule: SlaRuleRow, changes: Record<string, unknown>) {
     await api.put(`/api/settings/sla/${rule.id}`, changes);
     notify(t('common.saved'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     busy.value = '';
     await load();
@@ -146,8 +143,8 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 1100px">
-    <PageHeader :title="$t('sla.title')" :subtitle="$t('sla.subtitleCompany', { company: companyName })">
-      <v-btn color="primary" prepend-icon="plus" @click="ruleForm.reset(); newDialog = true">
+    <PageHeader :title="$t('sla.title')" :subtitle="$t('sla.subtitle')">
+      <v-btn color="primary" prepend-icon="plus" @click="newDialog = true">
         {{ $t('sla.addRule') }}
       </v-btn>
     </PageHeader>
@@ -294,8 +291,6 @@ onMounted(load);
     <v-dialog v-model="newDialog" max-width="560">
       <v-card :title="$t('sla.addRule')" class="pa-2">
         <v-card-text>
-          <FormErrorAlert :form="ruleForm" />
-          <v-form :ref="ruleForm.bind" @submit.prevent="createRule">
           <v-row dense>
             <v-col cols="12" sm="6">
               <v-select
@@ -309,9 +304,7 @@ onMounted(load);
               <v-select
                 v-model="newRule.status"
                 :items="statusOptions.map((s) => ({ title: statusLabel(newRule.processKey, s), value: s }))"
-                :label="$t('sla.status') + ' *'"
-                :rules="[v.required]"
-                :error-messages="ruleForm.errorsFor('status')"
+                :label="$t('sla.status')"
               />
             </v-col>
             <v-col cols="12" sm="6">
@@ -322,7 +315,7 @@ onMounted(load);
               />
             </v-col>
             <v-col cols="6" sm="3">
-              <v-text-field v-model.number="newRule.afterValue" :label="$t('sla.after') + ' *'" type="number" min="1" :rules="[v.required, v.integer(1)]" :error-messages="ruleForm.errorsFor('afterValue')" />
+              <v-text-field v-model.number="newRule.afterValue" :label="$t('sla.after')" type="number" min="1" />
             </v-col>
             <v-col cols="6" sm="3">
               <v-select
@@ -342,9 +335,7 @@ onMounted(load);
                 v-else
                 v-model="newRule.escalateToRole"
                 :items="ROLES.map((r) => ({ title: `⬆ ${$t(`roles.${r}`)}`, value: r }))"
-                :label="$t('sla.notify') + ' *'"
-                :rules="[v.required]"
-                :error-messages="ruleForm.errorsFor('escalateToRole')"
+                :label="$t('sla.notify')"
               />
             </v-col>
             <v-col cols="12" sm="6" class="d-flex align-center">
@@ -375,8 +366,6 @@ onMounted(load);
                 :label="$t('sla.cc')"
                 :hint="$t('sla.ccHint')"
                 persistent-hint
-                :rules="[v.emailList]"
-                :error-messages="ruleForm.errorsFor('ccEmails')"
                 multiple
                 chips
                 closable-chips
@@ -393,14 +382,14 @@ onMounted(load);
           >
             {{ $t('sla.expireHint') }}
           </v-alert>
-          </v-form>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="newDialog = false">{{ $t('common.cancel') }}</v-btn>
           <v-btn
             color="primary"
-            :loading="ruleForm.busy.value"
+            :loading="saving"
+            :disabled="!newRule.status || newRule.afterValue < 1"
             @click="createRule"
           >
             {{ $t('common.create') }}

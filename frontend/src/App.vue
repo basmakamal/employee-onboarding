@@ -5,7 +5,7 @@
  * a bottom navigation bar on phones, the command palette (Ctrl+K) and the
  * single confirmation dialog every page shares.
  */
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
 import { usePreferencesStore } from './stores/preferences';
@@ -16,18 +16,9 @@ import ConfirmDialog from './components/ConfirmDialog.vue';
 import CommandPalette from './components/CommandPalette.vue';
 import ProfileDialog from './components/ProfileDialog.vue';
 import { useMyAvatar } from './composables/useMyAvatar';
-import { useApprovalCount } from './composables/useApprovalCount';
 
 const prefs = usePreferencesStore();
 const auth = useAuthStore();
-// Requests waiting for this approver — the badge on "Approvals".
-const approvals = useApprovalCount();
-const badgeOf = (badge: 'approvals') => (badge === 'approvals' ? approvals.count.value.total : 0);
-watch(
-  () => [auth.user?.id, auth.user?.activeCompany?.id, auth.can('leave.approve', 'attendance.approve', 'pay.approve')] as const,
-  ([user, company, approver]) => (user && company && approver ? approvals.start() : approvals.stop()),
-  { immediate: true },
-);
 const route = useRoute();
 const router = useRouter();
 const display = useDisplay();
@@ -41,85 +32,43 @@ const palette = ref(false);
 
 /** Pages that render without the staff chrome (signed links, login, first password). */
 const isBare = computed(() =>
-  ['/form/', '/contract/', '/approve-assets/', '/exit-interview/', '/login', '/change-password', '/select-company'].some((p) =>
+  ['/form/', '/contract/', '/approve-assets/', '/exit-interview/', '/login', '/change-password'].some((p) =>
     route.path.startsWith(p),
   ),
 );
 const isRail = computed(() => display.mdAndUp.value && rail.value);
 
-/** `permission`: one code, or a list of which any one shows the entry. */
-interface NavItem { to: string; icon: string; key: string; permission?: string | string[]; badge?: 'approvals' }
+interface NavItem { to: string; icon: string; key: string; roles: string[] }
 interface NavGroup { key: string; items: NavItem[] }
 
-// An entry without a permission is for everyone; otherwise the session's
-// permission list decides whether it shows (the server decides whether it works).
-// Grouped by business function (HR Platform Blueprint). Modules still being
-// built (workforce, leave, payroll, approvals) are added only once they work.
+// hasRole() lets ADMIN through on any check; listing only ADMIN makes an
+// entry admin-only.
 const GROUPS: NavGroup[] = [
   {
-    key: 'nav.groupDashboard',
+    key: 'nav.groupWork',
     items: [
-      { to: '/', icon: 'fluent:home', key: 'nav.home' },
-      { to: '/approvals', icon: 'fluent:checkmark-circle', key: 'nav.approvals', permission: ['leave.approve', 'attendance.approve', 'pay.approve'], badge: 'approvals' },
+      { to: '/', icon: 'fluent:home', key: 'nav.home', roles: [] },
+      { to: '/employees', icon: 'fluent:people', key: 'nav.employees', roles: [] },
     ],
-  },
-  {
-    key: 'nav.groupEmployees',
-    items: [
-      { to: '/employees', icon: 'fluent:people', key: 'nav.employees' },
-      { to: '/employee-changes', icon: 'fluent:history', key: 'nav.employeeChanges' },
-      { to: '/contracts', icon: 'fluent:document-text', key: 'nav.contracts', permission: ['contracts.write', 'employees.read'] },
-      { to: '/documents', icon: 'fluent:document-folder', key: 'nav.documents', permission: 'documents.read' },
-      { to: '/offboardings', icon: 'fluent:clipboard-task', key: 'nav.offboardings', permission: ['offboarding.manage', 'settlement.approve'] },
-    ],
-  },
-  {
-    key: 'nav.groupWorkforce',
-    items: [
-      { to: '/workforce/attendance', icon: 'fluent:people-list', key: 'nav.attendance', permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] },
-      { to: '/workforce/overtime', icon: 'fluent:clock-alarm', key: 'nav.overtime', permission: ['attendance.read', 'attendance.manage', 'attendance.approve'] },
-      { to: '/workforce/leave', icon: 'fluent:receipt', key: 'nav.leave', permission: ['leave.read', 'leave.manage', 'leave.approve'] },
-      { to: '/workforce/leave-types', icon: 'fluent:text-bullet-list-square', key: 'nav.leaveTypes', permission: ['leave.read', 'leave.manage', 'leave.approve'] },
-      { to: '/workforce/schedule', icon: 'fluent:calendar', key: 'nav.teamSchedule', permission: ['schedule.read', 'schedule.manage'] },
-      { to: '/workforce/shifts', icon: 'fluent:clock-alarm', key: 'nav.shifts', permission: ['schedule.read', 'schedule.manage'] },
-      { to: '/calendar', icon: 'fluent:calendar', key: 'nav.calendar', permission: 'settings.manage' },
-    ],
-  },
-  {
-    key: 'nav.groupPayroll',
-    items: [
-      { to: '/payroll/runs', icon: 'fluent:data-trending', key: 'nav.payrollRuns', permission: ['payroll.prepare', 'payroll.approve'] },
-      { to: '/payroll/payslips', icon: 'fluent:mail-multiple', key: 'nav.payslips', permission: ['payroll.prepare', 'payroll.approve', 'payroll.manage'] },
-      { to: '/payroll/money', icon: 'fluent:toolbox', key: 'nav.money', permission: ['compensation.read', 'pay.approve'] },
-      { to: '/payroll/setup', icon: 'fluent:receipt', key: 'nav.payrollSetup', permission: ['payroll.manage', 'compensation.read'] },
-    ],
-  },
-  {
-    key: 'nav.groupOrganisation',
-    items: [{ to: '/organisation', icon: 'fluent:people-community', key: 'nav.organisation', permission: 'org.read' }],
   },
   {
     key: 'nav.groupInsights',
     items: [
-      { to: '/emails', icon: 'fluent:mail', key: 'nav.emailLog', permission: 'emails.view' },
-      { to: '/reports', icon: 'fluent:data-trending', key: 'nav.reports', permission: 'reports.view' },
-      { to: '/hr-reports', icon: 'fluent:text-bullet-list-square', key: 'nav.hrReports', permission: ['attendance.read', 'attendance.manage', 'attendance.approve', 'leave.read', 'leave.manage', 'leave.approve', 'payroll.prepare', 'payroll.approve', 'compensation.read'] },
-      { to: '/assistant', icon: 'fluent:bot-sparkle', key: 'nav.assistant', permission: 'ai.use' },
+      { to: '/emails', icon: 'fluent:mail', key: 'nav.emailLog', roles: ['HR'] },
+      { to: '/reports', icon: 'fluent:data-trending', key: 'nav.reports', roles: ['HR'] },
+      { to: '/assistant', icon: 'fluent:bot-sparkle', key: 'nav.assistant', roles: ['HR'] },
     ],
   },
   {
     key: 'nav.groupAdmin',
     items: [
-      { to: '/companies', icon: 'fluent:building-people', key: 'nav.companies', permission: 'companies.manage' },
-      { to: '/users', icon: 'fluent:person-key', key: 'nav.users', permission: 'users.manage' },
-      { to: '/roles', icon: 'fluent:shield-checkmark', key: 'nav.roles', permission: 'users.manage' },
-      { to: '/ownership', icon: 'fluent:people-team', key: 'nav.ownership', permission: 'settings.manage' },
-      { to: '/lists', icon: 'fluent:text-bullet-list-square', key: 'nav.lists', permission: 'lists.manage' },
-      { to: '/automation', icon: 'fluent:clock-alarm', key: 'nav.automation', permission: 'settings.manage' },
-      { to: '/email-templates', icon: 'fluent:mail-multiple', key: 'nav.emailTemplates', permission: 'settings.manage' },
-      { to: '/settings', icon: 'fluent:settings', key: 'nav.settings', permission: 'settings.manage' },
-      { to: '/audit', icon: 'fluent:shield-checkmark', key: 'nav.audit', permission: 'audit.read' },
-      { to: '/system-health', icon: 'fluent:toolbox', key: 'nav.health', permission: 'settings.manage' },
+      { to: '/users', icon: 'fluent:person-key', key: 'nav.users', roles: ['ADMIN'] },
+      { to: '/ownership', icon: 'fluent:people-team', key: 'nav.ownership', roles: ['ADMIN'] },
+      { to: '/lists', icon: 'fluent:text-bullet-list-square', key: 'nav.lists', roles: ['ADMIN'] },
+      { to: '/automation', icon: 'fluent:clock-alarm', key: 'nav.automation', roles: ['ADMIN'] },
+      { to: '/email-templates', icon: 'fluent:mail-multiple', key: 'nav.emailTemplates', roles: ['ADMIN'] },
+      { to: '/calendar', icon: 'fluent:calendar', key: 'nav.calendar', roles: ['ADMIN'] },
+      { to: '/settings', icon: 'fluent:settings', key: 'nav.settings', roles: ['ADMIN'] },
     ],
   },
 ];
@@ -127,35 +76,9 @@ const GROUPS: NavGroup[] = [
 const groups = computed(() =>
   GROUPS.map((g) => ({
     ...g,
-    items: g.items.filter((i) => !i.permission || auth.can(...(Array.isArray(i.permission) ? i.permission : [i.permission]))),
+    items: g.items.filter((i) => i.roles.length === 0 || auth.hasRole(...i.roles)),
   })).filter((g) => g.items.length > 0),
 );
-
-// ------------------------------------------------------------ collapsible groups
-// Remembered per browser; the group holding the current page always stays open.
-const COLLAPSE_KEY = 'nav.collapsed';
-const collapsed = ref<Set<string>>(
-  (() => {
-    try {
-      return new Set<string>(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '[]') as string[]);
-    } catch {
-      return new Set<string>();
-    }
-  })(),
-);
-function toggleGroup(key: string) {
-  const next = new Set(collapsed.value);
-  if (next.has(key)) next.delete(key);
-  else next.add(key);
-  collapsed.value = next;
-  try {
-    localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
-  } catch {
-    /* storage blocked — the choice simply is not remembered */
-  }
-}
-const holdsCurrent = (g: NavGroup) => g.items.some((i) => (i.to === '/' ? route.path === '/' : route.path === i.to || route.path.startsWith(`${i.to}/`)));
-const isOpen = (g: NavGroup) => !collapsed.value.has(g.key) || holdsCurrent(g);
 
 /** Breadcrumb title: the nav entry whose path is the longest prefix of the route. */
 const currentKey = computed(() => {
@@ -164,46 +87,18 @@ const currentKey = computed(() => {
     .filter((i) => route.path === i.to || route.path.startsWith(i.to + '/'))
     .sort((a, b) => b.to.length - a.to.length)[0];
   if (match) return match.key;
-  if (route.path.startsWith('/offboardings/')) return 'nav.offboardings';
+  if (route.path.startsWith('/offboardings')) return 'nav.employees';
   return null;
 });
 
 /** Phone bottom bar: the places HR goes most, plus the one big action. */
 const bottomItems = computed(() =>
   [
-    { to: '/', icon: 'fluent:home', key: 'nav.home', permission: undefined as string | undefined },
-    { to: '/employees', icon: 'fluent:people', key: 'nav.people', permission: undefined as string | undefined },
-    { to: '/emails', icon: 'fluent:mail', key: 'nav.inbox', permission: 'emails.view' as string | undefined },
-  ].filter((i) => !i.permission || auth.can(i.permission)),
+    { to: '/', icon: 'fluent:home', key: 'nav.home', roles: [] as string[] },
+    { to: '/employees', icon: 'fluent:people', key: 'nav.people', roles: [] as string[] },
+    { to: '/emails', icon: 'fluent:mail', key: 'nav.inbox', roles: ['HR'] },
+  ].filter((i) => i.roles.length === 0 || auth.hasRole(...i.roles)),
 );
-
-// ------------------------------------------------------------ company switcher
-const companyName = (c: { nameAr: string; nameEn: string }) =>
-  (prefs.locale ?? 'ar').startsWith('ar') ? c.nameAr : c.nameEn;
-const companySearch = ref('');
-const companyBusy = ref(false);
-const switchable = computed(() => (auth.user?.companies.length ?? 0) > 1);
-const companyChoices = computed(() => {
-  const q = companySearch.value.trim().toLowerCase();
-  const all = auth.user?.companies ?? [];
-  return q ? all.filter((c) => [c.nameAr, c.nameEn, c.code].some((v) => v.toLowerCase().includes(q))) : all;
-});
-
-/**
- * Switching companies reloads the app at the dashboard: the simplest way to
- * guarantee no list, filter, cache or open dialog from company A survives
- * into company B. The session comes back through the refresh cookie.
- */
-async function switchCompany(companyId: string) {
-  if (companyId === auth.user?.activeCompany?.id) return;
-  companyBusy.value = true;
-  try {
-    await auth.selectCompany(companyId);
-    window.location.assign('/');
-  } catch {
-    companyBusy.value = false;
-  }
-}
 
 const initials = computed(() =>
   (auth.user?.name ?? '')
@@ -255,10 +150,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
       >
         <div class="shell-brand" :class="{ 'shell-brand--rail': isRail }">
           <span class="shell-brand__tile"><img src="/riyada-logo.png" alt="Riyada" class="shell-brand__logo" /></span>
-          <span v-if="!isRail" class="shell-brand__text">
-            <b>{{ $t('app.title') }}</b>
-            <small v-if="auth.user?.activeCompany" class="shell-brand__company">{{ companyName(auth.user.activeCompany) }}</small>
-          </span>
+          <b v-if="!isRail" class="shell-brand__text">{{ $t('app.title') }}</b>
           <v-btn
             v-if="display.mdAndUp.value && !rail"
             icon="panel-left-close"
@@ -286,19 +178,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 
         <v-list nav density="comfortable" class="shell-nav">
           <template v-for="group in groups" :key="group.key">
-            <button
-              v-if="!isRail"
-              type="button"
-              class="shell-nav__group label-caps"
-              :aria-expanded="isOpen(group)"
-              @click="toggleGroup(group.key)"
-            >
-              <span class="flex-grow-1 text-start">{{ $t(group.key) }}</span>
-              <v-icon :icon="isOpen(group) ? 'chevron-up' : 'chevron-down'" size="14" />
-            </button>
+            <div v-if="!isRail" class="shell-nav__group label-caps">{{ $t(group.key) }}</div>
             <v-divider v-else class="my-2 mx-3" />
             <v-tooltip
-              v-for="item in isRail || isOpen(group) ? group.items : []"
+              v-for="item in group.items"
               :key="item.to"
               :disabled="!isRail"
               location="end"
@@ -314,11 +197,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
                   rounded="lg"
                   class="shell-nav__item"
                   @click="!display.mdAndUp.value && (drawer = false)"
-                >
-                  <template v-if="item.badge && badgeOf(item.badge)" #append>
-                    <v-badge :content="badgeOf(item.badge)" color="warning" :inline="!isRail" :dot="isRail" />
-                  </template>
-                </v-list-item>
+                />
               </template>
             </v-tooltip>
           </template>
@@ -369,54 +248,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
           </template>
         </nav>
         <v-spacer />
-
-        <!-- Active company — always visible; a searchable switcher when there is more than one -->
-        <v-menu v-if="auth.user?.activeCompany" :disabled="!switchable" :close-on-content-click="false">
-          <template #activator="{ props }">
-            <v-btn
-              v-bind="props"
-              variant="tonal"
-              color="primary"
-              size="small"
-              rounded="pill"
-              class="me-2 text-none shell-company"
-              :loading="companyBusy"
-              :aria-label="$t('company.current')"
-            >
-              <v-icon icon="fluent:building-people" size="18" class="me-1" />
-              <span class="text-truncate">{{ companyName(auth.user.activeCompany) }}</span>
-              <v-icon v-if="switchable" icon="chevron-down" size="14" class="ms-1" />
-            </v-btn>
-          </template>
-          <v-card min-width="280" max-width="360">
-            <div class="px-3 pt-3 pb-1 text-caption text-medium-emphasis">{{ $t('company.switch') }}</div>
-            <v-text-field
-              v-if="(auth.user?.companies.length ?? 0) > 6"
-              v-model="companySearch"
-              :placeholder="$t('company.search')"
-              prepend-inner-icon="search"
-              density="compact"
-              hide-details
-              class="mx-3 mb-2"
-              autofocus
-            />
-            <v-list density="compact" max-height="320" class="pt-0">
-              <v-list-item
-                v-for="c in companyChoices"
-                :key="c.id"
-                :active="c.id === auth.user?.activeCompany?.id"
-                :title="companyName(c)"
-                :subtitle="c.code"
-                @click="switchCompany(c.id)"
-              >
-                <template #append>
-                  <v-icon v-if="c.id === auth.user?.activeCompany?.id" icon="check" size="16" color="primary" />
-                </template>
-              </v-list-item>
-            </v-list>
-          </v-card>
-        </v-menu>
-
         <v-btn
           v-if="display.smAndDown.value"
           icon="search"
@@ -424,6 +255,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
           :aria-label="$t('common.search')"
           @click="palette = true"
         />
+        <LanguageToggle v-if="display.mdAndUp.value" class="me-2" />
         <v-btn
           :icon="prefs.dark ? 'sun' : 'moon'"
           variant="text"
@@ -432,7 +264,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         />
         <NotificationBell />
 
-        <!-- Account menu: profile, language, password, sign out -->
+        <!-- Account menu: profile, password, sign out -->
         <v-menu>
           <template #activator="{ props }">
             <v-btn v-bind="props" icon variant="text" class="ms-1" :aria-label="$t('account.menu')">
@@ -442,7 +274,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
               </v-avatar>
             </v-btn>
           </template>
-          <v-card min-width="300">
+          <v-card min-width="240">
             <div class="d-flex align-center ga-3 px-4 pt-4 pb-2">
               <v-avatar color="primary" variant="tonal" size="40">
                 <v-img v-if="avatar.url.value" :src="avatar.url.value" cover />
@@ -456,12 +288,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
             <v-divider />
             <v-list density="compact">
               <v-list-item prepend-icon="user" :title="$t('account.title')" @click="profileOpen = true" />
-              <!-- Language lives here (not in the top bar). The choice is remembered on this device. -->
-              <v-list-item prepend-icon="languages" :title="$t('account.language')" :ripple="false" class="account-lang">
-                <template #append>
-                  <LanguageToggle class="ms-3" />
-                </template>
-              </v-list-item>
               <v-list-item prepend-icon="key-round" :title="$t('changePassword.menu')" to="/change-password" />
               <v-list-item prepend-icon="log-out" :title="$t('login.signOut')" @click="logout" />
             </v-list>
@@ -477,7 +303,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
           <v-icon :icon="item.icon" size="20" />
           <span class="text-caption">{{ $t(item.key) }}</span>
         </v-btn>
-        <v-btn v-if="auth.can('employees.write')" to="/employees?new=1" :aria-label="$t('nav.newEmployee')">
+        <v-btn v-if="auth.hasRole('HR')" to="/employees?new=1" :aria-label="$t('nav.newEmployee')">
           <span class="shell-bottom__fab"><v-icon icon="plus" size="22" /></span>
           <span class="text-caption">{{ $t('common.new') }}</span>
         </v-btn>
@@ -536,10 +362,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
   flex: none;
 }
 .shell-brand__logo { height: 18px; width: auto; display: block; }
-.shell-brand__text { display: flex; flex-direction: column; min-width: 0; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; line-height: 1.2; }
-.shell-brand__company { font-size: 11px; font-weight: 500; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; }
-.shell-company { max-width: 240px; }
-.shell-company .v-btn__content { max-width: 100%; }
+.shell-brand__text { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
 .shell-brand .v-btn { color: rgba(var(--v-theme-on-primary), 0.85); }
 .shell-search {
   display: flex;
@@ -570,10 +393,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 }
 .shell-nav { padding-inline: 10px; }
 .shell-nav__group { padding: 18px 10px 6px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; color: rgba(var(--v-theme-primary), 0.75); }
-/* Group headers fold their entries away (remembered per browser). */
-button.shell-nav__group { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: transparent; cursor: pointer; font-family: inherit; text-align: start; border-radius: 6px; }
-button.shell-nav__group:hover { color: rgb(var(--v-theme-primary)); }
-button.shell-nav__group:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .shell-nav .v-list-item { margin-bottom: 2px; }
 .shell-nav__item { min-height: 38px; padding-inline: 10px !important; font-size: 13.5px; position: relative; }
 .shell-nav__item .v-list-item-title { font-size: 13.5px; font-weight: 500; letter-spacing: 0; }

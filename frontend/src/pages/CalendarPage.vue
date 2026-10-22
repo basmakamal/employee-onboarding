@@ -1,40 +1,26 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { errorText } from '../validation/errors';
 import { useI18n } from 'vue-i18n';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import YearCalendar from '../components/YearCalendar.vue';
 import PageHeader from '../components/PageHeader.vue';
-import { useActiveCompanyName } from '../composables/useActiveCompany';
-import FormErrorAlert from '../components/FormErrorAlert.vue';
-import { useForm } from '../composables/useForm';
-import { rules } from '../validation/rules';
-import { useOrgOptions } from '../composables/useOrgOptions';
 
 interface HolidayRow {
   id: string;
   date: string;
   name: string;
-  /** Set when only one branch (and the units under it) is off. */
-  orgUnitId: string | null;
 }
 
 /** JS getUTCDay() numbering: 0=Sun … 5=Fri, 6=Sat. */
 const DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 const { t } = useI18n();
-/** Each company has its own settings here — the header says whose. */
-const companyName = useActiveCompanyName();
 const loaded = ref(false);
 const snackbar = ref({ show: false, text: '', color: 'success' });
 
 const weekendDays = ref<number[]>([5, 6]);
 const holidays = ref<HolidayRow[]>([]);
-const newHoliday = ref({ date: '', name: '', orgUnitId: null as string | null });
-const org = useOrgOptions();
-void org.load();
-const unitName = (id: string | null) => (id ? (org.unitItems.value.find((u) => u.value === id)?.title.replace(/^(— )+/, '') ?? '') : '');
-const holidayForm = useForm();
+const newHoliday = ref({ date: '', name: '' });
 const calendarBusy = ref(false);
 const viewYear = ref(new Date().getFullYear());
 const showYearView = ref(false);
@@ -64,24 +50,27 @@ async function saveWeekend(days: number[]) {
     weekendDays.value = days;
     notify(t('common.saved'));
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     calendarBusy.value = false;
   }
 }
 
-function addHoliday() {
-  return holidayForm.submit(async () => {
+async function addHoliday() {
+  calendarBusy.value = true;
+  try {
     await api.post('/api/settings/holidays', {
       date: newHoliday.value.date,
       name: newHoliday.value.name.trim(),
-      ...(newHoliday.value.orgUnitId ? { orgUnitId: newHoliday.value.orgUnitId } : {}),
     });
-    newHoliday.value = { date: '', name: '', orgUnitId: null };
-    holidayForm.reset();
+    newHoliday.value = { date: '', name: '' };
     notify(t('common.saved'));
     await load();
-  });
+  } catch (e) {
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
+  } finally {
+    calendarBusy.value = false;
+  }
 }
 
 async function removeHoliday(id: string) {
@@ -91,7 +80,7 @@ async function removeHoliday(id: string) {
     notify(t('common.done'));
     await load();
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     calendarBusy.value = false;
   }
@@ -107,7 +96,7 @@ async function generateYear() {
     showYearView.value = true;
     await load();
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(e instanceof ApiError ? e.message : t('common.error'), 'error');
   } finally {
     calendarBusy.value = false;
   }
@@ -118,7 +107,7 @@ onMounted(load);
 
 <template>
   <v-container class="py-8" style="max-width: 1100px">
-    <PageHeader :title="$t('calendar.title')" :subtitle="$t('calendar.subtitleCompany', { company: companyName })" />
+    <PageHeader :title="$t('calendar.title')" :subtitle="$t('calendar.subtitle')" />
 
     <v-card v-if="loaded">
       <v-card-text>
@@ -148,7 +137,6 @@ onMounted(load);
             <v-list-item-title>{{ holiday.name }}</v-list-item-title>
             <v-list-item-subtitle>
               {{ new Date(holiday.date).toLocaleDateString() }}
-              <v-chip v-if="holiday.orgUnitId" size="x-small" variant="tonal" color="info" class="ms-1">{{ unitName(holiday.orgUnitId) || $t('calendar.oneBranch') }}</v-chip>
             </v-list-item-subtitle>
             <template #append>
               <v-btn
@@ -164,49 +152,33 @@ onMounted(load);
         </v-list>
         <p v-else class="text-medium-emphasis mb-3">{{ $t('calendar.noHolidays') }}</p>
 
-        <FormErrorAlert :form="holidayForm" class="mt-2" />
-        <v-form :ref="holidayForm.bind" class="d-flex align-start flex-wrap mt-2" style="gap: 8px" @submit.prevent="addHoliday">
+        <div class="d-flex align-center flex-wrap mt-2" style="gap: 8px">
           <v-text-field
             v-model="newHoliday.date"
-            :label="$t('calendar.date') + ' *'"
+            :label="$t('calendar.date')"
             type="date"
             density="compact"
-            hide-details="auto"
-            :rules="[rules.required, rules.date]"
-            :error-messages="holidayForm.errorsFor('date')"
+            hide-details
             style="max-width: 200px"
           />
           <v-text-field
             v-model="newHoliday.name"
-            :label="$t('calendar.name') + ' *'"
+            :label="$t('calendar.name')"
             density="compact"
-            hide-details="auto"
-            :rules="[rules.required, rules.maxLength(120)]"
-            :error-messages="holidayForm.errorsFor('name')"
+            hide-details
             style="max-width: 280px"
-          />
-          <v-select
-            v-model="newHoliday.orgUnitId"
-            :items="org.unitItems.value"
-            :label="$t('calendar.branch')"
-            :placeholder="$t('calendar.allBranches')"
-            persistent-placeholder
-            density="compact"
-            hide-details="auto"
-            clearable
-            :error-messages="holidayForm.errorsFor('orgUnitId')"
-            style="max-width: 260px"
           />
           <v-btn
             color="primary"
             variant="tonal"
             prepend-icon="plus"
-            :loading="holidayForm.busy.value"
-            type="submit"
+            :loading="calendarBusy"
+            :disabled="!newHoliday.date || !newHoliday.name.trim()"
+            @click="addHoliday"
           >
             {{ $t('calendar.add') }}
           </v-btn>
-        </v-form>
+        </div>
 
         <v-divider class="my-4" />
 

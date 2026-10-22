@@ -4,8 +4,6 @@ import type { Actor, Workflow } from '../../workflow/engine.js';
 import type { UnitOfWork } from '../../common/prisma.js';
 import { compact } from '../../common/http.js';
 import { GuardFailedError, NotFoundError } from '../../workflow/errors.js';
-import { actorScope } from '../../auth/authz/authorize.js';
-import { resolvePlacement, type PlacementInput } from './org-placement.js';
 import type { OpenWorkHalter } from '../../workflow/halt-open-work.js';
 import type { EmployeeRepository, CreateOnboardingData } from './employee.repository.js';
 import type { OnboardingDocumentRepository } from './onboarding-document.repository.js';
@@ -17,7 +15,6 @@ import { REQUIRED_DOCUMENT_TYPES, type DataFormInput } from './data-form.schema.
 import { languageFromLocale, localeOf } from '../../notifications/locale.js';
 import { contractParams } from '../../notifications/contract-params.js';
 import type { TemplateParams } from '../../notifications/templates.js';
-import { fieldCrypto } from '../../common/field-crypto.js';
 
 /** What a signed link may see of the record — no ids, no internals. */
 /**
@@ -42,8 +39,7 @@ function publicEmployee(e: Employee) {
     nationality: e.nationality,
     maritalStatus: e.maritalStatus,
     splAddress: e.splAddress,
-    // The employee's own form: shown in full, so they can check it.
-    iban: fieldCrypto().decrypt(e.iban),
+    iban: e.iban,
     qualification: e.qualification,
     major: e.major,
     emergencyContactName: e.emergencyContactName,
@@ -105,25 +101,17 @@ export class OnboardingService {
     /** Stops links / custody forms / process cards when a trainee withdraws. */
     private readonly halter?: OpenWorkHalter,
     /** Named primary owners of the onboarding pipeline — they get every team notice in addition to HR. */
-    private readonly responsibility?: {
-      get(processKey: string, scope?: { companyId?: string | null; ref?: { entity: string; entityId: string } }): Promise<string[]>;
-    },
+    private readonly responsibility?: { get(processKey: string): Promise<string[]> },
     /** Remembers a department / project / title typed on a new record as a list value. */
-    private readonly lists?: {
-      ensureValue(companyId: string | null | undefined, key: string, value: string | null | undefined): Promise<void>;
-    },
+    private readonly lists?: { ensureValue(key: string, value: string | null | undefined): Promise<void> },
   ) {}
 
-  async create(input: CreateOnboardingData & PlacementInput, actor: Actor) {
-    // The company is the actor's validated workspace; unit / title / manager
-    // are checked against it (and the actor's own scope) before anything is written.
-    const placement = await resolvePlacement(this.repos.employees, actor, input);
-    const data = { ...input, ...placement };
-    await this.lists?.ensureValue(actor.companyId, 'DEPARTMENT', data.department);
-    await this.lists?.ensureValue(actor.companyId, 'PROJECT', data.project);
-    await this.lists?.ensureValue(actor.companyId, 'JOB_TITLE', data.jobTitle);
+  async create(input: CreateOnboardingData, actor: Actor) {
+    await this.lists?.ensureValue('DEPARTMENT', input.department);
+    await this.lists?.ensureValue('PROJECT', input.project);
+    await this.lists?.ensureValue('JOB_TITLE', input.jobTitle);
     return this.transact(async (s) => {
-      const employee = await s.employees.createOnboarding(data);
+      const employee = await s.employees.createOnboarding(input);
       await s.audit.append({
         entity: 'EMPLOYEE',
         entityId: employee.id,
@@ -138,7 +126,7 @@ export class OnboardingService {
   }
 
   async sendForm(id: string, actor: Actor) {
-    const employee = await this.mustFind(id, actor);
+    const employee = await this.mustFind(id);
     await this.transact((s) => s.workflow.transition(employee, 'SEND_FORM', actor));
     return this.sendDataFormLink(employee, actor);
   }
@@ -150,7 +138,7 @@ export class OnboardingService {
    * instead of being reset by a resend.
    */
   async resendForm(id: string, actor: Actor) {
-    const employee = await this.mustFind(id, actor);
+    const employee = await this.mustFind(id);
     if (employee.status !== 'AWAITING_FORM') {
       throw new GuardFailedError(
         'WRONG_STATUS',
@@ -175,7 +163,7 @@ export class OnboardingService {
    * is told exactly what to complete (HR's note), and the team gets a copy.
    */
   async requestMissing(id: string, actor: Actor, notes?: string) {
-    const employee = await this.mustFind(id, actor);
+    const employee = await this.mustFind(id);
     const result = await this.transact((s) =>
       s.workflow.transition(employee, 'REQUEST_MISSING', actor, notes ? { notes } : undefined),
     );
@@ -196,7 +184,7 @@ export class OnboardingService {
 
   /** Documents accepted — the file is ready for the contract; the team is told. */
   async acceptDocuments(id: string, actor: Actor) {
-    const employee = await this.mustFind(id, actor);
+    const employee = await this.mustFind(id);
     const result = await this.transact((s) =>
       s.workflow.transition(employee, 'ACCEPT_DOCUMENTS', actor),
     );
@@ -211,7 +199,7 @@ export class OnboardingService {
     actor: Actor,
     externalRef?: string | null,
   ) {
-    const employee = await this.mustFind(id, actor);
+    const employee = await this.mustFind(id);
     if (employee.status !== 'CONTRACT_CREATION') {
       throw new GuardFailedError(
         'WRONG_STATUS',
@@ -234,7 +222,7 @@ export class OnboardingService {
    * previous file key so the caller can delete it from storage.
    */
   async setContractFile(id: string, storageKey: string, actor: Actor) {
-    const employee = await this.mustFind(id, actor);
+    const employee = await this.mustFind(id);
     if (employee.status !== 'CONTRACT_CREATION') {
       throw new GuardFailedError(
         'WRONG_STATUS',
@@ -279,7 +267,7 @@ export class OnboardingService {
     actor: Actor,
     opts: { reason?: string } = {},
   ) {
-    const employee = await this.mustFind(id, actor);
+    const employee = await this.mustFind(id);
     const contract = await this.repos.contracts.findByEmployee(id);
     if (!contract) {
       throw new GuardFailedError('CONTRACT_MISSING', 'enter the contract details first');
@@ -365,7 +353,7 @@ export class OnboardingService {
 
   /** BRD: reopen resumes from the last completed stage. */
   async reopen(id: string, actor: Actor) {
-    const employee = await this.mustFind(id, actor);
+    const employee = await this.mustFind(id);
     const result = await this.transact(async (s) => {
       const r = await s.workflow.transition(employee, 'REOPEN', actor);
       // Back to waiting on the platform — the contract card says so again.
@@ -390,7 +378,7 @@ export class OnboardingService {
    * withdrawal itself being in doubt.
    */
   async withdraw(id: string, actor: Actor, reason: string) {
-    const employee = await this.mustFind(id, actor);
+    const employee = await this.mustFind(id);
     const result = await this.transact((s) =>
       s.workflow.transition(employee, 'WITHDRAW', actor, { reason }),
     );
@@ -585,7 +573,7 @@ export class OnboardingService {
     status: string,
   ) {
     const ref = { entity: 'EMPLOYEE', entityId: employeeId };
-    const ownerIds = (await this.responsibility?.get('EMPLOYEE', { ref })) ?? [];
+    const ownerIds = (await this.responsibility?.get('EMPLOYEE')) ?? [];
     await this.notifications.notifyTeam(
       { processKey: 'EMPLOYEE', status, role: 'HR', ownerIds },
       templateKey,
@@ -594,9 +582,8 @@ export class OnboardingService {
     );
   }
 
-  /** The employee, or 404 — a record outside the actor's scope counts as not found. */
-  private async mustFind(id: string, actor?: Actor): Promise<Employee> {
-    const employee = await this.repos.employees.findById(id, actorScope(actor));
+  private async mustFind(id: string): Promise<Employee> {
+    const employee = await this.repos.employees.findById(id);
     if (!employee) throw new NotFoundError('employee', id);
     return employee;
   }

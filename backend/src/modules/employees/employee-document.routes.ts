@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, compact, validate } from '../../common/http.js';
-import { actorScope, requirePermission, type EmployeeScope } from '../../auth/authz/authorize.js';
+import { requireRole } from '../../auth/require-auth.middleware.js';
 import { NotFoundError } from '../../workflow/errors.js';
 import type { EmployeeDocumentRepository } from './employee-document.repository.js';
 import type { SlaFiringRepository } from '../../workflow/sla-firing.repository.js';
@@ -20,15 +20,8 @@ export function employeeDocumentRouter(deps: {
   documents: EmployeeDocumentRepository;
   firings: SlaFiringRepository;
   audit: AuditLogRepository;
-  /** Scope check: a document is reachable only through an employee the actor may see. */
-  employees: { findById(id: string, scope?: EmployeeScope): Promise<unknown | null> };
 }): { nested: Router; flat: Router } {
   const actor = (req: { actor?: Actor }): Actor => req.actor ?? { type: 'USER' };
-
-  /** 404 unless the employee is in the actor's company and branch scope. */
-  const mustSee = async (req: { actor?: Actor }, employeeId: string) => {
-    if (!(await deps.employees.findById(employeeId, actorScope(actor(req))))) throw new NotFoundError('employee', employeeId);
-  };
 
   const auditDoc = (
     req: { actor?: Actor },
@@ -51,17 +44,15 @@ export function employeeDocumentRouter(deps: {
   nested.get(
     '/',
     asyncHandler(async (req, res) => {
-      await mustSee(req, req.params['id'] as string);
       res.json(await deps.documents.listByEmployee(req.params['id'] as string));
     }),
   );
 
   nested.post(
     '/',
-    requirePermission('documents.write'),
+    requireRole('HR', 'ADMIN'),
     validate(documentSchema),
     asyncHandler(async (req, res) => {
-      await mustSee(req, req.params['id'] as string);
       const input = compact(req.body as z.infer<typeof documentSchema>);
       const doc = await deps.documents.create(req.params['id'] as string, input);
       await auditDoc(req, 'DOCUMENT_ADDED', doc);
@@ -74,13 +65,12 @@ export function employeeDocumentRouter(deps: {
 
   flat.put(
     '/:docId',
-    requirePermission('documents.write'),
+    requireRole('HR', 'ADMIN'),
     validate(documentSchema.partial()),
     asyncHandler(async (req, res) => {
       const id = req.params['docId'] as string;
       const existing = await deps.documents.findById(id);
       if (!existing) throw new NotFoundError('document', id);
-      await mustSee(req, existing.employeeId);
 
       const input = compact(req.body as Partial<z.infer<typeof documentSchema>>);
       const doc = await deps.documents.update(id, input);
@@ -98,12 +88,11 @@ export function employeeDocumentRouter(deps: {
 
   flat.delete(
     '/:docId',
-    requirePermission('documents.write'),
+    requireRole('HR', 'ADMIN'),
     asyncHandler(async (req, res) => {
       const id = req.params['docId'] as string;
       const existing = await deps.documents.findById(id);
       if (!existing) throw new NotFoundError('document', id);
-      await mustSee(req, existing.employeeId);
       await deps.firings.clearForEntity(id);
       await deps.documents.remove(id);
       await auditDoc(req, 'DOCUMENT_REMOVED', existing);

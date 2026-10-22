@@ -1,6 +1,5 @@
 import type { Db } from '../../common/prisma.js';
 import type { ProcessStatus, MedicalHoldReason } from '../../generated/prisma/enums.js';
-import { viaEmployeeCompanyWhere, type CompanyFilter } from '../../workflow/company-filter.js';
 
 export class MedicalInsuranceRepository {
   constructor(private readonly db: Db) {}
@@ -10,9 +9,9 @@ export class MedicalInsuranceRepository {
   }
 
   /** SLA scan input: cards sitting in `status` since before `threshold`. */
-  listInStatusSince(status: string, threshold: Date, limit = 500, company?: CompanyFilter) {
+  listInStatusSince(status: string, threshold: Date, limit = 500) {
     return this.db.medicalInsuranceProcess.findMany({
-      where: { status: status as ProcessStatus, updatedAt: { lt: threshold }, ...viaEmployeeCompanyWhere(company) },
+      where: { status: status as ProcessStatus, updatedAt: { lt: threshold } },
       include: { employee: { select: { firstName: true, lastName: true } } },
       orderBy: { updatedAt: 'asc' },
       take: limit,
